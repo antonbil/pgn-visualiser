@@ -10,66 +10,56 @@ import re
 
 # --- PGN DATA VOOR DEMONSTRATIE ---
 PGN_WITH_BLUNDERS = """
-[Event "13th Norway Chess 2025"]
-[Site "Stavanger NOR"]
-[Date "2025.05.26"]
-[Round "1.3"]
-[White "Carlsen,M"]
-[Black "Gukesh,D"]
+[Event "FIDE World Cup 2025"]
+[Site "Goa IND"]
+[Date "2025.11.08"]
+[Round "3.2"]
+[White "Van Foreest,Jorden"]
+[Black "Sarana,A"]
 [Result "1-0"]
 [WhiteTitle "GM"]
 [BlackTitle "GM"]
-[WhiteElo "2837"]
-[BlackElo "2787"]
-[ECO "D01"]
-[Opening "Queen's Pawn Game: Chigorin Variation"]
-[WhiteFideId "1503014"]
-[BlackFideId "46616543"]
-[EventDate "2025.05.26"]
-[WhiteACPL "1"]
-[BlackACPL "-107"]
+[WhiteElo "2693"]
+[BlackElo "2675"]
+[ECO "C55"]
+[Opening "Italian Game: Two Knights Defense, Modern Bishop's Opening"]
+[WhiteFideId "1039784"]
+[BlackFideId "24133795"]
+[EventDate "2025.11.01"]
+[EventType "k.o."]
+[WhiteACPL "26"]
+[BlackACPL "-698"]
 [Annotator "Stockfish 17"]
 
-{ Stockfish 17 } 1. d4 Nf6 2. Nc3 d5 { D01 Queen's Pawn Game: Chigorin Variation }
-3. Bf4 c5 4. e3 Bg4 5. Be2 { +0.00 } ( 5. f3 Bd7 6. Nb5 Bxb5 7. Bxb5+ Nc6 8. c3
-e6 9. Ne2 Be7 { -0.01/23 } ) 5... Bxe2 6. Ncxe2 $9 { -0.18 } ( 6. Qxe2 a6 {
--0.01/21 } ) 6... Nc6 { -0.08 } ( 6... e6 7. Nf3 Be7 8. O-O O-O 9. c3 Nbd7 10.
-a4 a5 11. h3 { -0.16/23 } ) 7. Nf3 e6 8. c3 Be7 9. Ng3 $9 { -0.18 } ( 9. dxc5
-Bxc5 10. Ned4 Qb6 11. O-O O-O 12. Nxc6 Qxc6 13. Qe2 Ne4 { -0.17/20 } ) 9... O-O
-10. Qe2 h6 $6 { -0.18 } ( 10... Nd7 11. h4 Re8 12. Rd1 Rc8 13. a3 a6 14. Nh5
-cxd4 15. exd4 { -0.23/18 } ) 11. Rd1 $9 { -0.23 } ( 11. Ne5 { -0.18/17 } ) 11...
-Qa5 12. a3 Rfd8 $6 { -0.17 } ( 12... a6 13. O-O Qb5 14. Qc2 Rac8 15. Rfe1 Rfd8
-16. h3 Na5 17. Ne5 { -0.25/20 } ) 13. h4 $9 { -0.24 } ( 13. Ne5 Nxe5 14. Bxe5
-Nd7 15. f4 Qa6 16. Qg4 g6 17. h4 Rac8 { -0.21/20 } ) 13... Qa4 14. Ne5 Nxe5 15.
-Bxe5 Nd7 16. Bf4 Qa6 { +0.07 } ( 16... Rac8 17. Nh5 Bf8 18. O-O g6 19. Ng3 Bg7
-20. Rfe1 Re8 21. e4 { -0.23/22 } ) 17. Qf3 $9 { -0.21 } ( 17. Qxa6 bxa6 18. Kd2
-Nb6 19. Kc2 Rd7 20. h5 Rb7 21. Ra1 f6 { +0.10/24 } ) 17... Bd6 { +0.06 } ( 17...
-Bf8 { -0.24/20 } ) 18. Nh5 Bxf4 19. Qxf4 e5 $9 { +0.32 } ( 19... cxd4 20. Qxd4
-e5 21. Qxd5 Rac8 22. Qd3 Qxd3 23. Rxd3 Nc5 24. Rxd8+ { +0.09/19 } ) 20. Qg3 $6 {
-+0.17 } ( 20. dxe5 Qg6 21. g4 Re8 22. Rxd5 Nxe5 23. O-O Nxg4 24. Ng3 Nf6 {
-+0.28/25 } ) 20... Qg6 21. Qxg6 fxg6 22. Ng3 exd4 $9 { +0.26 } ( 22... Rac8 23.
-Ne2 Rc6 24. O-O cxd4 25. cxd4 Rc2 26. Nc3 Rxb2 27. Nxd5 { +0.22/24 } ) 23. cxd4
-c4 24. Ne2 b5 25. Nc3 $6 { +0.19 } ( 25. Rb1 Nf6 26. f3 a5 27. b3 b4 28. Kd2
-Rab8 29. axb4 axb4 { +0.26/22 } ) 25... Nf6 26. Rb1 Rab8 $9 { +0.27 } ( 26...
-Rdb8 27. b4 a5 28. f3 axb4 29. axb4 Ra3 30. Kd2 Rba8 31. Kc2 { +0.16/25 } ) 27.
-f3 a5 28. b4 cxb3 29. Rxb3 b4 30. axb4 Rxb4 31. Ra3 { +0.10 } ( 31. Rxb4 axb4
-32. Ne2 g5 33. hxg5 hxg5 34. Kd2 Ra8 35. Rb1 Ra4 { +0.19/24 } ) 31... Re8 32.
-Kd2 { +0.00 } ( 32. Kf2 Rb2+ 33. Ne2 Ng4+ 34. fxg4 Rf8+ 35. Kg3 Rxe2 36. Rc1
-Rff2 { +0.10/25 } ) 32... Rb2+ 33. Kd3 Rxg2 34. Rxa5 Rg3 35. Rf1 g5 36. hxg5
-Rxg5 37. Rfa1 h5 38. Ra8 Rxa8 39. Rxa8+ Kh7 40. e4 dxe4+ 41. fxe4 h4 42. e5 h3
-43. exf6 h2 44. f7 Rg3+ 45. Kd2 h1=Q 46. f8=Q Qh6+ $9 { +4.08 } ( 46... Rg2+ 47.
-Kd3 Rg3+ 48. Kc2 Qg2+ 49. Kb3 Qd5+ 50. Kb2 Qg2+ { +0.00/45 } ) 47. Kc2 Qg6+ $9 {
-+4.23 } ( 47... Rg2+ 48. Kb3 Qe6+ 49. Ka3 Rc2 50. Qc5 Rh2 51. d5 Qe1 52. Kb3 {
-+3.79/17 } ) 48. Kb2 Qb6+ 49. Ka2 Rg2+ $9 { +4.35 } ( 49... Qb7 50. Qh8+ Kg6 51.
-Qe8+ Kh6 52. Qe6+ Kh7 53. Qe4+ Qxe4 54. Nxe4 { +3.74/19 } ) 50. Ka3 Qb2+ $9 {
-+6.51 } ( 50... Qc6 51. Qf5+ Rg6 52. Qh3+ Rh6 53. Qd3+ Rg6 54. Ra5 Kg8 55. Kb3 {
-+4.20/15 } ) 51. Ka4 Qxc3 $9 { Mate in 13 } ( 51... Qc2+ 52. Kb4 Qb2+ 53. Kc4
-Rf2 54. Qh8+ Kg6 55. Ra7 Rf7 56. Qe8 { +5.86/16 } ) 52. Qh8+ Kg6 53. Ra6+ Kf5
-54. Qf8+ Ke4 $9 { Mate in 7 } ( 54... Kg4 55. Rg6+ Kh5 56. Qf5+ Kh4 57. Qe4+ Kh5
-58. Rxg2 Qc4+ 59. Ka5 Qc3+ 60. Kb5 Qb3+ 61. Kc6 Qa4+ 62. Kd6 Qb4+ 63. Kd7 Qb5+
-64. Ke7 Qb4+ 65. Kf7 Qc4+ 66. Kf8 Qb4+ 67. Qe7 Qb8+ 68. Qe8+ Qxe8+ 69. Kxe8 g5
-70. Kf7 Kh4 71. Ke6 g4 72. Kf5 g3 73. Kf4 Kh3 74. Rxg3+ Kh2 75. Rg5 Kh3 76. Rg4
-Kh2 77. d5 Kh3 78. d6 Kh2 79. d7 Kh3 80. d8=Q Kh2 81. Qh4# ) 55. Re6+ 1-0
+{ Stockfish 17 } 1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. d3 { C55 Italian Game: Two
+Knights Defense, Modern Bishop's Opening } 4... Be7 $9 { +0.26 } ( 4... Bc5 5.
+O-O d6 6. c3 a6 7. a4 O-O 8. h3 Ba7 9. a5 { +0.15/22 } ) 5. Nc3 $6 { +0.25 } (
+5. a4 O-O 6. O-O a5 7. Nc3 d6 8. Re1 Bg4 9. h3 Bh5 { +0.28/20 } ) 5... d6 6. a4
+a5 $9 { +0.31 } ( 6... O-O 7. O-O Na5 8. Ba2 c5 9. Nd2 Be6 10. Nc4 Nxc4 11. Bxc4
+{ +0.26/20 } ) 7. O-O O-O 8. Re1 h6 9. h3 Re8 $9 { +0.30 } ( 9... Be6 10. b3 Re8
+11. Bb2 Bf8 12. Bb5 Bd7 13. Ne2 Nb8 14. Bxd7 { +0.21/23 } ) 10. Be3 $6 { +0.25 }
+( 10. d4 Nxd4 { +0.25/18 } ) 10... Bf8 $9 { +0.40 } ( 10... Be6 { +0.18/19 } )
+11. g4 Nh7 12. Kh2 Be6 13. Rg1 $6 { +0.09 } ( 13. Bb5 Be7 14. Nd5 Rf8 15. Bxc6
+bxc6 16. Nxe7+ Qxe7 17. Rg1 Bd7 { +0.25/17 } ) 13... Be7 $9 { +0.50 } ( 13...
+Bxc4 14. dxc4 Be7 15. Nd5 Bg5 16. Nxg5 hxg5 17. h4 Nd4 18. Bxd4 { +0.13/21 } )
+14. Nd5 Ng5 $9 { +0.98 } ( 14... Bg5 15. Nxg5 hxg5 16. h4 Ne7 17. Nxe7+ Rxe7 18.
+hxg5 Bxc4 19. dxc4 { +0.45/19 } ) 15. Nd2 $2 { +0.39 } ( 15. Nh4 { +0.92/18 } )
+15... Nh7 16. Nf3 Ng5 $9 { +0.95 } ( 16... Bg5 { +0.51/16 } ) 17. Nh4 Nh7 $9 {
++1.19 } ( 17... Nb4 18. Nxe7+ { +0.75/18 } ) 18. Nf5 $2 { -0.11 } ( 18. Nxe7+
+Qxe7 19. Nf5 Qd8 20. Bb5 d5 21. Qf3 Bd7 22. Bxc6 bxc6 { +1.34/22 } ) 18... Bg5
+19. Bb5 Bd7 $9 { +0.80 } ( 19... Rf8 20. Qe2 Bxd5 21. exd5 Ne7 22. Bxg5 hxg5 23.
+Nxe7+ Qxe7 24. d4 { -0.42/19 } ) 20. Qf3 Nb4 21. Bxd7 Qxd7 22. h4 Nxd5 23. exd5
+Bxe3 24. fxe3 e4 25. dxe4 $2 { +0.64 } ( 25. Qf4 Nf8 26. Qf2 Ng6 27. d4 f6 28.
+Rgf1 Rf8 29. Kg3 Rf7 { +0.76/20 } ) 25... Re5 26. g5 hxg5 27. Qh3 Qd8 28. Rg4 f6
+29. Rh1 $6 { +0.44 } ( 29. Rag1 Qf8 30. hxg5 Nxg5 31. Rxg5 fxg5 32. Rxg5 Rae8
+33. Kg2 Qf6 { +0.55/24 } ) 29... Qe8 30. hxg5 $6 { +0.24 } ( 30. Kg1 Qg6 31. b3
+Rf8 32. Kg2 Rfe8 33. Qf3 Qf7 34. c4 Rf8 { +0.42/22 } ) 30... fxg5 31. Kg2 Qg6
+32. Qg3 Rae8 33. Rxh7 Qxh7 34. Rxg5 Kh8 $9 { +7.54 } ( 34... R8e7 35. Qg4 Rxe4
+36. Nxe7+ Rxe7 37. Qc8+ Kf7 38. Rf5+ Kg6 39. Rf3 { +0.00/42 } ) 35. Rh5 g6 $9 {
+Mate in 3 } ( 35... Rxf5 36. Rxh7+ Kxh7 37. exf5 Kh8 38. Qg6 Re7 39. Kf3 Kg8 40.
+e4 { +7.44/26 } ) 36. Qxg6 1-0
+
+
 """
 
 
@@ -256,7 +246,8 @@ def select_key_positions(all_blunders):
     print(f"Totale halve zetten: {total_half_moves}. Deelgrootte: {part_size}.")
 
     # Selecteer de grootste blunder in elk deel
-    for part_num, (start_index, end_index) in enumerate(ranges):
+    for i in [1,2]:
+      for part_num, (start_index, end_index) in enumerate(ranges):
         best_in_part = None
         max_score = -1
 
