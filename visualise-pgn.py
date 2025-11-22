@@ -13,63 +13,92 @@ PGN_WITH_BLUNDERS = """
 [Event "13th Norway Chess 2025"]
 [Site "Stavanger NOR"]
 [Date "2025.05.26"]
-[Round "1.3"]
-[White "Carlsen,M"]
-[Black "Gukesh,D"]
-[Result "1-0"]
+[Round "1.2"]
+[White "Caruana,F"]
+[Black "Nakamura,Hi"]
+[Result "0-1"]
 [WhiteTitle "GM"]
 [BlackTitle "GM"]
-[WhiteElo "2837"]
-[BlackElo "2787"]
-[ECO "D01"]
-[Opening "Queen's Pawn Game: Chigorin Variation"]
-[WhiteFideId "1503014"]
-[BlackFideId "46616543"]
+[WhiteElo "2776"]
+[BlackElo "2804"]
+[ECO "D10"]
+[Opening "Slav Defense: Exchange Variation"]
+[Variation "exchange variation"]
+[WhiteFideId "2020009"]
+[BlackFideId "2016192"]
 [EventDate "2025.05.26"]
-[WhiteACPL "1"]
-[BlackACPL "-107"]
+[WhiteACPL "-114"]
+[BlackACPL "2"]
 [Annotator "Stockfish 17"]
 
-{ Stockfish 17 } 1. d4 Nf6 2. Nc3 d5 { D01 Queen's Pawn Game: Chigorin Variation }
-3. Bf4 c5 4. e3 Bg4 5. Be2 { +0.00 } ( 5. f3 Bd7 6. Nb5 Bxb5 7. Bxb5+ Nc6 8. c3
-e6 9. Ne2 Be7 { +0.02/23 } ) 5... Bxe2 6. Ncxe2 $9 { -0.18 } ( 6. Qxe2 a6 {
--0.01/21 } ) 6... Nc6 { -0.08 } ( 6... e6 7. Nf3 Be7 8. O-O O-O 9. c3 Nbd7 10.
-a4 a5 11. h3 { -0.16/23 } ) 7. Nf3 e6 8. c3 Be7 9. Ng3 $9 { -0.18 } ( 9. dxc5
-Bxc5 10. Ned4 Qb6 11. O-O O-O 12. Nxc6 Qxc6 13. Qe2 Ne4 { -0.17/20 } ) 9... O-O
-10. Qe2 h6 $6 { -0.18 } ( 10... Nd7 11. h4 Re8 12. Rd1 Rc8 13. a3 a6 14. Nh5
-cxd4 15. exd4 { -0.23/18 } ) 11. Rd1 $9 { -0.23 } ( 11. Ne5 { -0.18/17 } ) 11...
-Qa5 12. a3 Rfd8 $6 { -0.17 } ( 12... a6 13. O-O Qb5 14. Qc2 Rac8 15. Rfe1 Rfd8
-16. h3 Na5 17. Ne5 { -0.25/20 } ) 13. h4 $9 { -0.24 } ( 13. Ne5 Nxe5 14. Bxe5
-Nd7 15. f4 Qa6 16. Qg4 g6 17. h4 Rac8 { -0.21/20 } ) 13... Qa4 14. Ne5 Nxe5 15.
-Bxe5 Nd7 16. Bf4 Qa6 { +0.07 } ( 16... Rac8 17. Nh5 Bf8 18. O-O g6 19. Ng3 Bg7
-20. Rfe1 Re8 21. e4 { -0.23/22 } ) 17. Qf3 $9 { -0.21 } ( 17. Qxa6 bxa6 18. Kd2
-Nb6 19. Kc2 Rd7 20. h5 Rb7 21. Ra1 f6 { +0.10/24 } ) 17... Bd6 { +0.06 } ( 17...
-Bf8 { -0.24/20 } ) 18. Nh5 Bxf4 19. Qxf4 e5 $9 { +0.32 } ( 19... cxd4 20. Qxd4
-e5 21. Qxd5 Rac8 22. Qd3 Qxd3 23. Rxd3 Nc5 24. Rxd8+ { +0.09/19 } ) 20. Qg3 $6 {
-+0.17 } ( 20. dxe5 Qg6 21. g4 Re8 22. Rxd5 Nxe5 23. O-O Nxg4 24. Ng3 Nf6 {
-+0.28/25 } ) 20... Qg6 21. Qxg6 fxg6 22. Ng3 exd4 $9 { +0.26 } ( 22... Rac8 23.
-Ne2 Rc6 24. O-O cxd4 25. cxd4 Rc2 26. Nc3 Rxb2 27. Nxd5 { +0.22/24 } ) 23. cxd4
-c4 24. Ne2 b5 25. Nc3 $6 { +0.19 } ( 25. Rb1 Nf6 26. f3 a5 27. b3 b4 28. Kd2
-Rab8 29. axb4 axb4 { +0.26/22 } ) 25... Nf6 26. Rb1 Rab8 $9 { +0.27 } ( 26...
-Rdb8 27. b4 a5 28. f3 axb4 29. axb4 Ra3 30. Kd2 Rba8 31. Kc2 { +0.16/25 } ) 27.
-f3 a5 28. b4 cxb3 29. Rxb3 b4 30. axb4 Rxb4 31. Ra3 { +0.10 } ( 31. Rxb4 axb4
-32. Ne2 g5 33. hxg5 hxg5 34. Kd2 Ra8 35. Rb1 Ra4 { +0.19/24 } ) 31... Re8 32.
-Kd2 { +0.00 } ( 32. Kf2 Rb2+ 33. Ne2 Ng4+ 34. fxg4 Rf8+ 35. Kg3 Rxe2 36. Rc1
-Rff2 { +0.10/25 } ) 32... Rb2+ 33. Kd3 Rxg2 34. Rxa5 Rg3 35. Rf1 g5 36. hxg5
-Rxg5 37. Rfa1 h5 38. Ra8 Rxa8 39. Rxa8+ Kh7 40. e4 dxe4+ 41. fxe4 h4 42. e5 h3
-43. exf6 h2 44. f7 Rg3+ 45. Kd2 h1=Q 46. f8=Q Qh6+ $9 { +4.08 } ( 46... Rg2+ 47.
-Kd3 Rg3+ 48. Kc2 Qg2+ 49. Kb3 Qd5+ 50. Kb2 Qg2+ { +0.00/45 } ) 47. Kc2 Qg6+ $9 {
-+4.23 } ( 47... Rg2+ 48. Kb3 Qe6+ 49. Ka3 Rc2 50. Qc5 Rh2 51. d5 Qe1 52. Kb3 {
-+3.79/17 } ) 48. Kb2 Qb6+ 49. Ka2 Rg2+ $9 { +4.35 } ( 49... Qb7 50. Qh8+ Kg6 51.
-Qe8+ Kh6 52. Qe6+ Kh7 53. Qe4+ Qxe4 54. Nxe4 { +3.74/19 } ) 50. Ka3 Qb2+ $9 {
-+6.51 } ( 50... Qc6 51. Qf5+ Rg6 52. Qh3+ Rh6 53. Qd3+ Rg6 54. Ra5 Kg8 55. Kb3 {
-+4.20/15 } ) 51. Ka4 Qxc3 $9 { Mate in 13 } ( 51... Qc2+ 52. Kb4 Qb2+ 53. Kc4
-Rf2 54. Qh8+ Kg6 55. Ra7 Rf7 56. Qe8 { +5.86/16 } ) 52. Qh8+ Kg6 53. Ra6+ Kf5
-54. Qf8+ Ke4 $9 { Mate in 7 } ( 54... Kg4 55. Rg6+ Kh5 56. Qf5+ Kh4 57. Qe4+ Kh5
-58. Rxg2 Qc4+ 59. Ka5 Qc3+ 60. Kb5 Qb3+ 61. Kc6 Qa4+ 62. Kd6 Qb4+ 63. Kd7 Qb5+
-64. Ke7 Qb4+ 65. Kf7 Qc4+ 66. Kf8 Qb4+ 67. Qe7 Qb8+ 68. Qe8+ Qxe8+ 69. Kxe8 g5
-70. Kf7 Kh4 71. Ke6 g4 72. Kf5 g3 73. Kf4 Kh3 74. Rxg3+ Kh2 75. Rg5 Kh3 76. Rg4
-Kh2 77. d5 Kh3 78. d6 Kh2 79. d7 Kh3 80. d8=Q Kh2 81. Qh4# ) 55. Re6+ 1-0
+{ Stockfish 17 } 1. d4 d5 2. c4 c6 3. cxd5 { D10 Slav Defense: Exchange
+Variation } 3... cxd5 4. Nc3 Nf6 5. Bf4 Nc6 6. e3 a6 7. Nf3 $6 { +0.12 } ( 7.
+Be2 Bf5 8. Nf3 Nh5 9. Be5 e6 10. O-O Be7 11. Ne1 Nf6 { +0.20/18 } ) 7... Bg4 8.
+h3 Bxf3 9. Qxf3 e6 10. Bd3 Bd6 $9 { +0.14 } ( 10... Rc8 11. O-O Bd6 12. Bg5 Be7
+13. Rac1 O-O 14. a3 h6 15. Bh4 { +0.15/21 } ) 11. Bg5 Be7 12. O-O O-O 13. Rac1
+h6 $9 { +0.19 } ( 13... Rc8 14. Qd1 h6 15. Bh4 Na5 16. Qe2 Ne8 17. Bxe7 Qxe7 18.
+Rc2 { +0.16/15 } ) 14. Bh4 Ne8 15. Bg3 Bd6 16. Na4 $6 { +0.18 } ( 16. a3 Na5 17.
+Na4 Bxg3 18. Qxg3 Nc4 19. Rc2 Ned6 20. Ra1 a5 { +0.26/19 } ) 16... Bxg3 $9 {
++0.31 } ( 16... Qa5 17. Nc5 Bxc5 18. Rxc5 Qxa2 19. Bf4 Qb3 20. Bc2 Qb6 21. Qg3 {
++0.08/19 } ) 17. Qxg3 Nd6 18. Nc5 $6 { +0.11 } ( 18. Rc3 Re8 19. Qg4 Rc8 20.
+Rfc1 Nb4 21. Rxc8 Nxc8 22. Bb1 Re7 { +0.25/15 } ) 18... Rc8 19. a3 a5 $9 { +0.15 }
+( 19... Qe7 20. Rc2 a5 21. Na4 Na7 22. Rfc1 Rxc2 23. Rxc2 Rc8 24. Rc5 { +0.13/22 } )
+20. Qg4 { +0.07 } ( 20. Rc2 Na7 21. Rfc1 Qe7 22. h4 Rfd8 23. h5 Rc6 24. Nb3 Rxc2
+{ +0.16/17 } ) 20... Qe7 $9 { +0.11 } ( 20... Ne7 21. h4 b6 22. Na4 b5 23. Rxc8
+Qxc8 24. Nc5 a4 25. b3 { +0.09/21 } ) 21. Qd1 { +0.09 } ( 21. Rc2 e5 22. dxe5
+Nxe5 23. Qd4 b5 24. Be2 a4 25. Rfc1 Ndc4 { +0.13/14 } ) 21... b6 22. Na4 b5 23.
+Nc3 Na7 $9 { +0.22 } ( 23... Qb7 24. a4 bxa4 25. Nxa4 Rfd8 26. Rc3 e5 27. dxe5
+Nxe5 28. Rxc8 { +0.12/17 } ) 24. Qe2 Qd7 25. b3 Rc6 26. Rc2 $6 { +0.15 } ( 26.
+Qd2 Rfc8 27. Ne2 Qd8 28. h4 Qb6 29. Rxc6 Nxc6 30. Rc1 b4 { +0.20/20 } ) 26...
+Rfc8 27. Rfc1 g6 $9 { +0.20 } ( 27... Qb7 28. Na2 Qb6 29. Qd1 g6 30. Nc3 Kg7 31.
+h4 Qb7 32. Ne2 { +0.14/22 } ) 28. h4 $6 { +0.12 } ( 28. Qd2 Qd8 29. Ne2 Qb6 30.
+h4 b4 31. a4 Rxc2 32. Rxc2 Rc6 { +0.23/20 } ) 28... Kg7 $9 { +0.17 } ( 28...
+R8c7 29. Na2 Rxc2 30. Rxc2 Qc8 31. Rxc7 Qxc7 32. Qe1 Nac8 33. Qd2 { +0.16/18 } )
+29. g3 { +0.10 } ( 29. Na2 { +0.19/19 } ) 29... R8c7 30. Qd2 Qc8 31. Ne2 Rxc2
+32. Rxc2 Rxc2 33. Bxc2 Nc6 34. Qc3 b4 35. axb4 Nxb4 36. Qxc8 Nxc8 37. Bb1 Nd6
+38. Nc3 f5 39. f3 g5 { -0.09 } ( 39... Nc6 40. Bd3 { -0.11/23 } ) 40. hxg5 hxg5
+41. Kf2 Nc6 42. Bd3 $9 { -0.12 } ( 42. Na4 Kf7 43. Nc5 Ke7 44. Bc2 Nb4 45. Bd3
+f4 46. Bb1 Nc6 { -0.12/20 } ) 42... Kf6 43. f4 $9 { -0.60 } ( 43. Na4 f4 44. g4
+Nf7 45. Nc3 Nb4 46. Bb1 Nd8 47. Ne2 Ndc6 { -0.17/20 } ) 43... Nb4 $6 { -0.15 } (
+43... g4 44. Ke1 Ne7 45. Kd1 Ng8 46. Na4 Kf7 47. Nc5 Ke7 48. Ke2 { -0.56/22 } )
+44. Ke2 g4 45. Kd2 $9 { -0.36 } ( 45. Bb5 Nf7 46. Kd1 Nh6 47. Na4 Ke7 48. Nc5
+Ng8 49. Nd7 Kd6 { -0.37/28 } ) 45... Ke7 $6 { -0.36 } ( 45... Ne8 46. Bb5 Ng7
+47. Ke2 Nh5 48. Kf2 Kf7 49. Na4 Nf6 50. Nc5 { -0.37/27 } ) 46. Bb5 Kd8 $6 {
+-0.33 } ( 46... Nf7 47. Na4 Nh6 48. Ke1 Ng8 49. Nc5 Nf6 50. Kf2 Na2 51. Bd3 {
+-0.38/27 } ) 47. Ba4 $9 { -0.42 } ( 47. Ke2 Nf7 48. Kd2 Nh6 49. Na4 Ng8 50. Nc5
+Ke7 51. Ke2 Nf6 { -0.37/26 } ) 47... Na6 48. Bb5 $9 { -0.49 } ( 48. Bc6 Nc7 {
+-0.40/24 } ) 48... Nc7 49. Bc6 Kc8 $6 { -0.30 } ( 49... Nc8 50. Bb5 Ne7 51. Bd3
+Ng8 52. Na4 Nf6 53. Nc5 Nh5 54. Nb7+ { -0.41/25 } ) 50. Ke2 $9 { -0.37 } ( 50.
+Kc2 Kd8 51. Ba4 Na6 52. Kd1 Nb4 53. Ke1 Ke7 54. Kd1 Nf7 { -0.33/27 } ) 50... Kd8
+51. Kd2 $9 { -0.39 } ( 51. Ke1 Ke7 52. Kd2 Nf7 53. Kc2 Na6 54. Bb5 Nb4+ 55. Kd2
+Nh6 { -0.32/26 } ) 51... Na6 52. Ba4 $9 { -0.33 } ( 52. Bb5 Nb4 53. Ke1 Ke7 54.
+Kd2 Nf7 55. Na4 Nh6 56. Ke1 Ng8 { -0.30/24 } ) 52... Ke7 53. Bb5 Nb4 $6 { -0.29 }
+( 53... Nc7 54. Bc6 Nf7 55. Kc1 Na6 56. Bb5 Nb4 57. Kd1 Nh6 58. Na4 { -0.35/27 } )
+54. Ba4 $9 { -0.33 } ( 54. Ke2 Nf7 55. Bd3 Kd7 56. Bb5+ Kd8 57. Na4 Na2 58. Bd3
+Nd6 { -0.31/22 } ) 54... Nf7 55. Bb5 Nh6 56. Bd3 $9 { -0.74 } ( 56. Na4 {
+-0.32/26 } ) 56... Ng8 57. Bb1 Nf6 58. Ke1 $9 { -0.73 } ( 58. Ke2 Nc6 59. Na4
+Nd8 60. Nc5 Nd7 61. Nd3 Kd6 62. Bc2 Kc7 { -0.61/21 } ) 58... Kd6 59. Na4 Nd7 60.
+Ke2 $9 { -0.56 } ( 60. Nb2 Kc6 61. Nd1 Kb6 62. Nc3 Na6 63. Bd3 Nc7 64. Kd2 Kc6 {
+-0.65/25 } ) 60... Kc6 $2 { -0.71 } ( 60... Na6 61. Nc3 Nc7 62. Bd3 Ne8 63. Bb5
+Ng7 64. Na4 Nh5 65. Kf2 { -0.70/26 } ) 61. Ke1 $9 { -0.70 } ( 61. Nc3 Na6 62.
+Bc2 Nc7 63. Bd3 Kd6 64. Ke1 Ne8 65. Bb5 Ng7 { -0.63/23 } ) 61... Na6 62. Bd3 Nc7
+63. Nc3 Nf6 64. Na4 Nce8 $6 { -0.26 } ( 64... Nd7 { -0.41/21 } ) 65. Nc5 Ng7 $6
+{ -0.15 } ( 65... Nd6 66. Nxe6 { -0.27/21 } ) 66. Na4 $9 { -2.46 } ( 66. Ke2 Kb6
+67. Ke1 Nfe8 68. Nxe6 Nxe6 69. Bxf5 N6g7 70. Bxg4 Nf6 { -0.23/21 } ) 66... Ne4
+67. Bxe4 $9 { -4.22 } ( 67. Ba6 Nxg3 68. Nb2 Ne4 69. Bf1 Ne8 70. Nd3 Kb6 71. Ne5
+N8f6 { -2.28/20 } ) 67... fxe4 68. Nc3 $9 { -5.50 } ( 68. Nc5 Nf5 69. Nxe6 Nxe3
+70. Nf8 Nc2+ 71. Kd1 Nxd4 72. Ng6 Kd6 { -3.62/17 } ) 68... Nf5 69. Kf2 $9 {
+-5.76 } ( 69. Kd2 Nxg3 70. Na4 Kb5 71. Nc5 Kb4 72. Nxe6 Kxb3 73. Ng7 a4 {
+-5.20/18 } ) 69... Kb6 70. Na4+ $9 { -6.00 } ( 70. Kf1 Nxe3+ 71. Ke1 Nf5 72. Ne2
+Kb5 73. Kd1 Kb4 74. Kc2 a4 { -5.04/17 } ) 70... Kb5 71. Nc5 Kb4 72. Nb7 $9 {
+-6.50 } ( 72. Ke2 Nxg3+ 73. Ke1 Nf5 74. Kf2 g3+ 75. Kg2 Nxe3+ 76. Kxg3 Nf5+ {
+-5.76/19 } ) 72... Kxb3 73. Nxa5+ Kc3 74. Nb7 $9 { -7.47 } ( 74. Ke1 Nxe3 75.
+Nc6 Nc2+ 76. Kd1 Nxd4 77. Ne5 Nf5 78. Nxg4 d4 { -6.42/19 } ) 74... Kd2 75. Nc5
+$9 { -7.22 } ( 75. Na5 Nxe3 76. Nb3+ Kc3 77. Nc5 Nf5 78. Ke1 Nxd4 79. Nd7 e3 {
+-6.23/18 } ) 75... Nxe3 76. Nb3+ Kc3 77. Nc5 Nf5 78. Nxe6 $9 { Mate in 5 } ( 78.
+Ke1 Nxd4 79. Kd1 e3 80. Na4+ Kd3 81. Nc5+ Kc4 82. Na4 Nf5 { -6.50/17 } ) 78...
+Kd2 0-1
+
 """
 
 
@@ -102,6 +131,156 @@ def get_cp_from_comment(comment):
         # Fout bij parsen, negeer deze comment
         return None
 
+def get_all_significant_blunders(pgn_string):
+    """
+    Identificeert ALLE zetten die een significant verlies in voordeel veroorzaakten (> 50 cp).
+    """
+    pgn_io = io.StringIO(pgn_string)
+    game = chess.pgn.read_game(pgn_io)
+
+    if not game:
+        print("Fout: Kon geen schaakpartij lezen uit de PGN-string.")
+        return []
+
+    blunders = []
+    board = game.board()
+    prev_eval_cp = 0
+    # Lijst van ALLE zetten, inclusief de zet die de blunder veroorzaakte
+    moves_made_so_far = []
+
+    # Itereren over de hoofdlijn
+    for node in game.mainline():
+        if node.move is None:
+            continue
+
+        eval_before_cp = prev_eval_cp
+        eval_after_cp = get_cp_from_comment(node.comment)
+
+        fen_before_move = board.fen()
+        move_number = board.fullmove_number
+        player_who_moved = board.turn
+
+        # --- SAN CONVERSIE ---
+        move_san = None
+        try:
+            move_san = board.san(node.move)
+        except Exception as e:
+            print(f"Waarschuwing: Fout bij SAN-conversie voor zet {move_number} ({e})")
+            continue
+
+        # Voeg de data van de ZET die net is gecontroleerd toe aan de geschiedenis
+        move_data = {
+            'move_number': move_number,
+            'player': player_who_moved,
+            'san': move_san,
+            'comment': node.comment,
+            # Dit is de 0-gebaseerde index in de complete zetlijst
+            'full_move_index': len(moves_made_so_far)
+        }
+        moves_made_so_far.append(move_data)
+
+        # --- BLUNDER BEREKENING ---
+        if eval_after_cp is not None:
+            if player_who_moved == chess.WHITE:
+                # Verlies van voordeel voor Wit is (Vorige Eval - Nieuwe Eval)
+                blunder_score = eval_before_cp - eval_after_cp
+                player_str = "Wit"
+            else:
+                # Verlies van voordeel voor Zwart is (Nieuwe Eval - Vorige Eval)
+                blunder_score = eval_after_cp - eval_before_cp
+                player_str = "Zwart"
+
+            # Als de blunder significant is (verlies van meer dan 50 centipawns)
+            if blunder_score > 0:
+                blunders.append({
+                    'score': blunder_score,
+                    'fen': fen_before_move,
+                    'move_text': f"{move_number}. {'...' if player_who_moved == chess.BLACK else ''}{move_san}",
+                    'player': player_str,
+                    'eval_before': eval_before_cp / 100.0,
+                    'eval_after': eval_after_cp / 100.0,
+                    'full_move_history': list(moves_made_so_far),
+                    'move_index': len(moves_made_so_far) - 1 # Index van de zet
+                })
+
+        # --- ZET UITVOEREN EN EVALUATIE BIJHOUDEN ---
+        try:
+            board.push(node.move)
+        except Exception as e:
+            print(f"!!! FOUT !!! Kan zet '{move_san}' niet uitvoeren op het bord: {e}")
+            return blunders
+
+        if eval_after_cp is not None:
+            # Voor de volgende zet wordt de 'eval_after' van deze zet de 'prev_eval'
+            prev_eval_cp = eval_after_cp
+
+    return blunders
+
+
+def select_key_positions(all_blunders):
+    """
+    Selecteert de blunders op basis van de nieuwe logica:
+    1. Grootste blunder uit elk van de 3 gelijke delen van de partij.
+    2. Top 3 van de overgebleven blunders (wereldwijd).
+    """
+    if not all_blunders:
+        return []
+
+    # Bepaal het totale aantal halve zetten (inclusief de laatste zet in de blunderlijst)
+    total_half_moves = all_blunders[-1]['full_move_history'][-1]['full_move_index'] + 1
+
+    # Gebruik een set om te voorkomen dat we dezelfde blunder twee keer selecteren
+    selected_indices = set()
+    selected_blunders = []
+
+    # 1. Verdeel de partij in 3 (bijna) gelijke delen
+    part_size = total_half_moves // 3
+
+    # Bepaal de bereiken op basis van de 0-gebaseerde zet-index
+    ranges = [
+        (0, part_size),  # Deel 1 (Openings/Vroeg Middenspel)
+        (part_size, 2 * part_size),  # Deel 2 (Middenspel)
+        (2 * part_size, total_half_moves)  # Deel 3 (Laat Middenspel/Eindspel)
+    ]
+
+    print(f"Totale halve zetten: {total_half_moves}. Deelgrootte: {part_size}.")
+
+    # Selecteer de grootste blunder in elk deel
+    for part_num, (start_index, end_index) in enumerate(ranges):
+        best_in_part = None
+        max_score = -1
+
+        for blunder in all_blunders:
+            move_idx = blunder['move_index']
+
+            # Controleer of de zet binnen het huidige bereik valt
+            if start_index <= move_idx < end_index:
+                if blunder['score'] > max_score and move_idx not in selected_indices:
+                    max_score = blunder['score']
+                    best_in_part = blunder
+
+        if best_in_part:
+            best_in_part['source'] = f"Grootste Blunder in Deel {part_num + 1}"
+            selected_blunders.append(best_in_part)
+            selected_indices.add(best_in_part['move_index'])
+
+    # 2. Selecteer de top 3 van de overgebleven blunders
+    remaining_blunders = sorted(
+        [b for b in all_blunders if b['move_index'] not in selected_indices],
+        key=lambda x: x['score'],
+        reverse=True
+    )
+
+    # Voeg de top 3 toe aan de selectie
+    for i in range(min(3, len(remaining_blunders))):
+        remaining_blunders[i]['source'] = f"Wereldwijde Top {i + 1} (Resterend)"
+        selected_blunders.append(remaining_blunders[i])
+        selected_indices.add(remaining_blunders[i]['move_index'])
+
+    # Sorteer de geselecteerde blunders chronologisch voor weergave
+    selected_blunders.sort(key=lambda x: x['move_index'])
+
+    return selected_blunders
 
 def _format_pgn_history(move_list):
     """
@@ -179,7 +358,7 @@ def find_top_blunders(pgn_string, top_n=3):
             print(f"Waarschuwing: Fout bij SAN-conversie voor zet {move_number} ({e})")
             continue
 
-            # Voeg de data van de ZET die net is gecontroleerd toe aan de geschiedenis
+        # Voeg de data van de ZET die net is gecontroleerd toe aan de geschiedenis
         move_data = {
             'move_number': move_number,
             'player': player_who_moved,
@@ -252,7 +431,7 @@ class ChessBlunderViewer:
         blunders = find_top_blunders(pgn_string, self.num_blunders)
         print(f"Analyse voltooid. {len(blunders)} significante blunders gevonden.")
 
-        # NIEUW: Sorteer de geselecteerde blunders op zetnummer (chronologisch)
+        # Sorteer de geselecteerde blunders op zetnummer (chronologisch)
         # De move_text begint met het zetnummer, wat werkt voor simpele sortering.
         self.sorted_blunders = sorted(blunders, key=lambda x: int(x['move_text'].split('.')[0]))
 
@@ -409,7 +588,7 @@ class ChessBlunderViewer:
             last_move_index = current_move_index
 
         # Zorg ervoor dat de scrollregio wordt bijgewerkt
-        self.content_frame.update_idletasks()  # Gebruik de correcte update methode
+        self.content_frame.update_idletasks()
         self.blunder_canvas.config(scrollregion=self.blunder_canvas.bbox("all"))
 
 
@@ -418,6 +597,8 @@ class ChessBlunderViewer:
 if __name__ == "__main__":
     try:
         root = tk.Tk()
+        # Stel de initiële grootte in op 1200x800 (een gangbare laptop resolutie)
+        root.geometry("1200x800")
         app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS)
         root.mainloop()
     except ImportError:
