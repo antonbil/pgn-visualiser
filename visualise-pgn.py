@@ -179,7 +179,7 @@ def get_all_significant_blunders(pgn_string):
         print("Error: Could not read chess game from PGN string.")
         return []
 
-    blunders = []
+    events = []
     board = game.board()
     prev_eval_cp = 0
     # List of ALL moves, including the move that caused the blunder
@@ -221,17 +221,16 @@ def get_all_significant_blunders(pgn_string):
         if eval_after_cp is not None:
             if player_who_moved == chess.WHITE:
                 # Loss of advantage for White is (Previous Eval - New Eval)
-                blunder_score = eval_before_cp - eval_after_cp
+                event_score = abs(eval_before_cp - eval_after_cp)
                 player_str = "White"
             else:
                 # Loss of advantage for Black is (New Eval - Previous Eval)
-                blunder_score = eval_after_cp - eval_before_cp
+                event_score = eval_after_cp - eval_before_cp
                 player_str = "Black"
 
-            # If the blunder is significant (loss of more than 50 centipawns)
-            if blunder_score > 0: # KEEPING THE '0' AS PER USER INSTRUCTION
-                blunders.append({
-                    'score': blunder_score,
+
+            events.append({
+                    'score': event_score,
                     'fen': fen_before_move,
                     'move_text': f"{move_number}. {'. ...' if player_who_moved == chess.BLACK else ''}{move_san}",
                     'player': player_str,
@@ -246,13 +245,13 @@ def get_all_significant_blunders(pgn_string):
             board.push(node.move)
         except Exception as e:
             print(f"!!! ERROR !!! Cannot execute move '{move_san}' on the board: {e}")
-            return blunders
+            return events
 
         if eval_after_cp is not None:
             # For the next move, the 'eval_after' of this move becomes the 'prev_eval'
             prev_eval_cp = eval_after_cp
 
-    return blunders
+    return events
 
 
 def select_key_positions(all_blunders):
@@ -298,7 +297,7 @@ def select_key_positions(all_blunders):
                     best_in_part = blunder
 
         if best_in_part:
-            best_in_part['source'] = f"Biggest Blunder in Part {part_num + 1}"
+            best_in_part['source'] = f"Biggest Event in Part {part_num + 1}"
             selected_blunders.append(best_in_part)
             selected_indices.add(best_in_part['move_index'])
 
@@ -479,27 +478,27 @@ class ChessBlunderViewer:
                         tags="piece"  # Use tags for easy removal/movement later
                     )
                 # If the image is not loaded, the piece is skipped.
-    def draw_blunder_diagram(self, parent_frame, blunder_data, pgn_snippet_text, index):
+    def draw_event_diagram(self, parent_frame, event_data, pgn_snippet_text, index):
         """
         Draws one block with a diagram in column 0 and the cumulative PGN history in column 1.
         """
 
         # --- JOINT CONTAINER FRAME ---
-        blunder_row_frame = tk.Frame(parent_frame, padx=20, pady=15, bd=1, relief=tk.SUNKEN)
-        blunder_row_frame.pack(fill="x", expand=True)  # Use pack for the rows
+        event_row_frame = tk.Frame(parent_frame, padx=20, pady=15, bd=1, relief=tk.SUNKEN)
+        event_row_frame.pack(fill="x", expand=True)  # Use pack for the rows
 
         # --- COLUMN 0: DIAGRAM & INFO (Left) ---
-        title = f"Position {index + 1}: {blunder_data.get('source', 'Blunder')} - {blunder_data['move_text']}"
-        diagram_block = tk.LabelFrame(blunder_row_frame,
+        title = f"Position {index + 1}: {event_data.get('source', 'Event')} - {event_data['move_text']}"
+        diagram_block = tk.LabelFrame(event_row_frame,
                                       text=title,
                                       padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         diagram_block.pack(side=tk.LEFT, padx=10, pady=5, fill="y", anchor="n")
 
         # 1. Info Label
         info_text = (
-            f"Move that caused the blunder: {blunder_data['move_text']}\n"
-            f"Loss: {blunder_data['score'] / 100.0:.2f} P\n"
-            f"Eval BEFORE move: {blunder_data['eval_before']:.2f} | Eval AFTER move: {blunder_data['eval_after']:.2f}"
+            f"Move that caused the event: {event_data['move_text']}\n"
+            f"Change: {event_data['score'] / 100.0:.2f} P\n"
+            f"Eval BEFORE move: {event_data['eval_before']:.2f} | Eval AFTER move: {event_data['eval_after']:.2f}"
         )
         tk.Label(diagram_block, text=info_text, justify=tk.LEFT, pady=5).pack(anchor="w")
 
@@ -509,7 +508,7 @@ class ChessBlunderViewer:
         board_canvas.pack(pady=10)
 
         # Initialize the board with the FEN BEFORE the blunder
-        board = chess.Board(blunder_data['fen'])
+        board = chess.Board(event_data['fen'])
 
         # Draw the board
         for r in range(8):
@@ -530,7 +529,7 @@ class ChessBlunderViewer:
             # We need to parse the FEN, add the move, and then determine the from_square.
             # However, the FEN is the position *BEFORE* the move.
             # We use board.parse_san on the current board state (FEN BEFORE the move)
-            move_san = blunder_data['move_text'].split()[-1].strip('.')
+            move_san = event_data['move_text'].split()[-1].strip('.')
             move_to_highlight = board.parse_san(move_san)
             from_square = move_to_highlight.from_square
 
@@ -547,7 +546,7 @@ class ChessBlunderViewer:
             pass
 
         # --- COLUMN 1: PGN SNIPPET (Right) ---
-        pgn_block = tk.LabelFrame(blunder_row_frame, text="PGN Moves since the last critical position",
+        pgn_block = tk.LabelFrame(event_row_frame, text="PGN Moves since the last critical position",
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.pack(side=tk.RIGHT, padx=10, pady=5, fill=tk.BOTH, expand=True)
 
@@ -586,7 +585,7 @@ class ChessBlunderViewer:
             pgn_snippet = _format_pgn_history(moves_to_display)
 
             # Draw the diagram and the PGN
-            self.draw_blunder_diagram(self.content_frame, blunder, pgn_snippet, i)
+            self.draw_event_diagram(self.content_frame, blunder, pgn_snippet, i)
 
             # Update the counter for the next iteration
             last_move_index = current_move_index
