@@ -44,22 +44,21 @@ This program requires the *python-chess* library.
 
 1.  **Run the script:**
 
-    *python blunder_viewer_v10.py*
+    *python visualise-pgn.py*
 
-2.  **Customize PGN Data:** The program reads the chess game from the
-    *PGN_WITH_BLUNDERS* multiline string within the Python file. To
-    analyze a different game:
+2.  View and Interact:
+    The application will launch and display initial metadata.
+    Load Simulation: Click the "Select PGN FIle" button. This action performs two functions:
 
-    -   Edit the file and replace the content of the *PGN_WITH_BLUNDERS*
-        variable with your PGN.
-    -   **Crucial:** The PGN **must** contain engine evaluations (e.g.,
-        *{ +0.15 }*, *{ -2.31 }*, etc.) and any variations. These are
-        used by the *get_cp_from_comment* function to determine the
-        blunder magnitude.
+    1. It loads a PGN game from file, instantly updating all displayed metadata (players, result, ELOs).
+    2. It saves the PGN file path to the configuration file.
 
-3.  **View Results:** The Tkinter application will launch, displaying
-    the selected critical positions chronologically from the opening to
-    the endgame.
+Configuration File:
+
+The application manages its state using the following configuration file:
+
+    *settings/config.json*
+    This file stores the default_directory and lastLoadedPgnPath settings, which are loaded on startup and updated every time a new PGN is loaded (simulated or real).
 
 ## Code Highlights
 
