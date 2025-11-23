@@ -2,13 +2,15 @@
 # Installation: pip install python-chess
 import os
 import tkinter as tk
-from tkinter import font
+from tkinter import filedialog, font
 import chess
 import chess.pgn
 import io
 import re
 # The Pillow (PIL) library is required to robustly load PNGs in Tkinter.
 from PIL import Image, ImageTk
+from pathlib import Path
+import json
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_EVENTS = """
@@ -68,7 +70,46 @@ Qe7+ 49. Kc8 Qe8+ 50. Kb7 g5 51. hxg5 { +3.46/23 } ) 47. Qc5 Qf5+ $9 { +5.94 } (
 
 """
 
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_FILENAME = "settings/configuration.json"
+CONFIG_FILE_PATH = BASE_DIR / CONFIG_FILENAME
 
+def _load_config():
+    """
+    Loads configuration from the JSON file.
+    Provides robust error handling for missing files or invalid JSON.
+    """
+    print(f"Attempting to load configuration from: {CONFIG_FILE_PATH}")
+
+    if not CONFIG_FILE_PATH.exists():
+        print(f"Error: Configuration file not found at {CONFIG_FILE_PATH}. Using empty/default values.")
+        # Return an empty dictionary to prevent the program from crashing
+        return {}
+
+    try:
+        with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        print("Configuration successfully loaded.", config)
+        return config
+
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON in {CONFIG_FILE_PATH}: {e}. Using empty/default values.")
+        return {}
+    except Exception as e:
+        print(f"Unexpected error loading configuration: {e}. Using empty/default values.")
+        return {}
+
+def get_settings():
+        ## 1. Read configuration data
+        config_data = _load_config()
+
+        # 2. Assignment of Engine Mappings and Directories
+
+        # The PGN directory
+        default_pgn_dir = config_data.get("default_directory", "/home/user/Chess")
+        print(f"Default PGN Directory: {default_pgn_dir}")
+
+        return default_pgn_dir
 # --- UTILITY FUNCTIONS FOR EVALUATION AND PGN ---
 
 def get_cp_from_comment(comment):
@@ -380,19 +421,17 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir):
         self.master = master
         self.image_manager = image_manager
+        self.default_pgn_dir = default_pgn_dir
 
-        # Perform the advanced analysis
-        print("Starting full PGN analysis...")
-        all_events = get_all_significant_events(pgn_string)
-        print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
+        # Variable to hold the selected file path for display
+        self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
-        self.sorted_events = select_key_positions(all_events)
-        self.num_events = len(self.sorted_events)
+        # --- TOP LEVEL FILE READER WIDGET ---
+        self._create_file_reader_widget(master)
 
-        master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
 
         self.square_size = square_size
         self.board_size = self.square_size * 8
@@ -419,7 +458,98 @@ class ChessEventViewer:
         self.content_frame = tk.Frame(self.event_canvas)
         self.event_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
 
+        self.do_new_analysis(pgn_string)
+
+    def _clear_content_frame(self):
+        """HELPER: Verwijdert alle widgets uit het scrollbare content frame."""
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+
+        # Reset de scrollpositie naar de top
+        self.event_canvas.yview_moveto(0)
+
+    def do_new_analysis(self, pgn_string):
+        print(pgn_string)
+        self._clear_content_frame()
+        # Perform the advanced analysis
+        print("Starting full PGN analysis...")
+        all_events = get_all_significant_events(pgn_string)
+        print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
+
+        self.sorted_events = select_key_positions(all_events)
+        self.num_events = len(self.sorted_events)
         self.draw_event_diagrams()
+        self.master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
+
+    def _read_file_and_analyze(self, filepath):
+        """Leest de PGN-inhoud van het bestand en start de analyse."""
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                pgn_content = f.read()
+
+            self.do_new_analysis(pgn_content)
+
+        except Exception as e:
+            error_message = f"ERROR: Failed to read PGN file: {e}"
+            print(error_message)
+            self.pgn_filepath.set(error_message)
+            self._clear_content_frame()
+            tk.Label(self.content_frame, text=error_message, fg="red", pady=50).pack()
+    def _create_file_reader_widget(self, master):
+        """
+        Creates the UI elements for selecting and displaying the PGN file path.
+        This is placed at the top of the window.
+        """
+        file_reader_frame = tk.Frame(master, padx=10, pady=5, bd=1, relief=tk.RIDGE)
+        file_reader_frame.pack(fill="x", padx=10, pady=10)
+
+        # 1. Label/Entry for File Path Display
+        path_label = tk.Label(
+            file_reader_frame,
+            textvariable=self.pgn_filepath,
+            anchor="w",
+            relief=tk.SUNKEN,
+            bg="white",
+            padx=5
+        )
+        path_label.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        # 2. Button to open the file dialog
+        select_button = tk.Button(
+            file_reader_frame,
+            text="Select PGN File",
+            command=self._select_pgn_file
+        )
+        select_button.pack(side="right")
+
+        print("File Reader Widget initialized.")
+
+    def _select_pgn_file(self):
+        """
+        Opens the system's file dialog to choose a PGN file.
+        """
+        # Define the file types allowed
+        filetypes = (
+            ('PGN files', '*.pgn'),
+            ('All files', '*.*')
+        )
+
+        # Open the dialog and store the path
+        filepath = filedialog.askopenfilename(
+            title='Open a PGN file',
+            initialdir=self.default_pgn_dir,  # Start in the current working directory
+            filetypes=filetypes
+        )
+
+        if filepath:
+            # Update the displayed path
+            self.pgn_filepath.set(filepath)
+            print(f"File selected: {filepath}")
+
+            # --- NEXT STEP: Call the function to process the file ---
+            self._read_file_and_analyze(filepath)
+        else:
+            print("File selection cancelled.")
 
     def draw_board(self):
         """Draws the chessboard (only the squares)."""
@@ -608,7 +738,9 @@ if __name__ == "__main__":
         # If this fails (e.g., FileNotFoundError), the program stops here.
         asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager)
+        default_pgn_dir = get_settings()
+
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
