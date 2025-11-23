@@ -11,7 +11,7 @@ import re
 from PIL import Image, ImageTk
 
 # --- PGN DATA FOR DEMONSTRATION ---
-PGN_WITH_BLUNDERS = """
+PGN_WITH_EVENTS = """
 [Event "13th Norway Chess 2025"]
 [Site "Stavanger NOR"]
 [Date "2025.05.29"]
@@ -168,7 +168,7 @@ def _format_pgn_history(move_list):
 
     return "\n".join(output)
 
-def get_all_significant_blunders(pgn_string):
+def get_all_significant_events(pgn_string):
     """
     Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
     """
@@ -182,7 +182,7 @@ def get_all_significant_blunders(pgn_string):
     events = []
     board = game.board()
     prev_eval_cp = 0
-    # List of ALL moves, including the move that caused the blunder
+    # List of ALL moves, including the move that caused the event
     moves_made_so_far = []
 
     # Iterate over the main line
@@ -217,7 +217,7 @@ def get_all_significant_blunders(pgn_string):
         }
         moves_made_so_far.append(move_data)
 
-        # --- BLUNDER CALCULATION ---
+        # --- EVENT CALCULATION ---
         if eval_after_cp is not None:
             if player_who_moved == chess.WHITE:
                 # Loss of advantage for White is (Previous Eval - New Eval)
@@ -254,21 +254,21 @@ def get_all_significant_blunders(pgn_string):
     return events
 
 
-def select_key_positions(all_blunders):
+def select_key_positions(all_events):
     """
-    Selects the blunders based on the new logic:
-    1. Biggest blunder from each of the 3 equal parts of the game.
-    2. Top 3 of the remaining blunders (globally).
+    Selects the events based on the new logic:
+    1. Biggest event from each of the 3 equal parts of the game.
+    2. Top 3 of the remaining event (globally).
     """
-    if not all_blunders:
+    if not all_events:
         return []
 
-    # Determine the total number of half-moves (including the last move in the blunder list)
-    total_half_moves = all_blunders[-1]['full_move_history'][-1]['full_move_index'] + 1
+    # Determine the total number of half-moves (including the last move in the event list)
+    total_half_moves = all_events[-1]['full_move_history'][-1]['full_move_index'] + 1
 
-    # Use a set to prevent selecting the same blunder twice
+    # Use a set to prevent selecting the same event twice
     selected_indices = set()
-    selected_blunders = []
+    selected_events = []
 
     # 1. Divide the game into 3 (almost) equal parts
     part_size = total_half_moves // 3
@@ -282,42 +282,42 @@ def select_key_positions(all_blunders):
 
     print(f"Total half-moves: {total_half_moves}. Part size: {part_size}.")
 
-    # Select the biggest blunder in each part
+    # Select the biggest event in each part
     for part_num, (start_index, end_index) in enumerate(ranges):
         best_in_part = None
         max_score = -1
 
-        for blunder in all_blunders:
-            move_idx = blunder['move_index']
+        for event in all_events:
+            move_idx = event['move_index']
 
             # Check if the move falls within the current range
             if start_index <= move_idx < end_index:
-                if blunder['score'] > max_score and move_idx not in selected_indices:
-                    max_score = blunder['score']
-                    best_in_part = blunder
+                if event['score'] > max_score and move_idx not in selected_indices:
+                    max_score = event['score']
+                    best_in_part = event
 
         if best_in_part:
             best_in_part['source'] = f"Biggest Event in Part {part_num + 1}"
-            selected_blunders.append(best_in_part)
+            selected_events.append(best_in_part)
             selected_indices.add(best_in_part['move_index'])
 
-    # 2. Select the top 3 of the remaining blunders
-    remaining_blunders = sorted(
-        [b for b in all_blunders if b['move_index'] not in selected_indices],
+    # 2. Select the top 3 of the remaining events
+    remaining_events = sorted(
+        [b for b in all_events if b['move_index'] not in selected_indices],
         key=lambda x: x['score'],
         reverse=True
     )
 
     # Add the top 3 to the selection
-    for i in range(min(3, len(remaining_blunders))):
-        remaining_blunders[i]['source'] = f"Global Top {i + 1} (Remaining)"
-        selected_blunders.append(remaining_blunders[i])
-        selected_indices.add(remaining_blunders[i]['move_index'])
+    for i in range(min(3, len(remaining_events))):
+        remaining_events[i]['source'] = f"Global Top {i + 1} (Remaining)"
+        selected_events.append(remaining_events[i])
+        selected_indices.add(remaining_events[i]['move_index'])
 
-    # Sort the selected blunders chronologically for display
-    selected_blunders.sort(key=lambda x: x['move_index'])
+    # Sort the selected events chronologically for display
+    selected_events.sort(key=lambda x: x['move_index'])
 
-    return selected_blunders
+    return selected_events
 
 
 # ----------------------------------------------------------------------
@@ -375,9 +375,9 @@ class PieceImageManager:
             raise
 # --- TKINTER CLASS ---
 
-class ChessBlunderViewer:
+class ChessEventViewer:
     """
-    Tkinter application to display the top blunders from an analyzed PGN.
+    Tkinter application to display the top events from an analyzed PGN.
     """
 
     def __init__(self, master, pgn_string, square_size, image_manager):
@@ -386,13 +386,13 @@ class ChessBlunderViewer:
 
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
-        all_blunders = get_all_significant_blunders(pgn_string)
-        print(f"Full analysis complete. {len(all_blunders)} significant blunders found (> 50 cp loss).")
+        all_events = get_all_significant_events(pgn_string)
+        print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
 
-        self.sorted_blunders = select_key_positions(all_blunders)
-        self.num_blunders = len(self.sorted_blunders)
+        self.sorted_events = select_key_positions(all_events)
+        self.num_events = len(self.sorted_events)
 
-        master.title(f"Chess Game Analysis: {self.num_blunders} Critical Positions Selected")
+        master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
 
         self.square_size = square_size
         self.board_size = self.square_size * 8
@@ -405,21 +405,21 @@ class ChessBlunderViewer:
         main_frame = tk.Frame(master)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.blunder_canvas = tk.Canvas(main_frame)
-        self.blunder_canvas.pack(side="left", fill="both", expand=True)
+        self.event_canvas = tk.Canvas(main_frame)
+        self.event_canvas.pack(side="left", fill="both", expand=True)
 
-        scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=self.blunder_canvas.yview)
+        scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=self.event_canvas.yview)
         scrollbar.pack(side="right", fill="y")
 
-        self.blunder_canvas.configure(yscrollcommand=scrollbar.set)
+        self.event_canvas.configure(yscrollcommand=scrollbar.set)
         # Configure scroll region when the canvas size changes
-        self.blunder_canvas.bind('<Configure>',
-                                 lambda e: self.blunder_canvas.configure(scrollregion=self.blunder_canvas.bbox("all")))
+        self.event_canvas.bind('<Configure>',
+                               lambda e: self.event_canvas.configure(scrollregion=self.event_canvas.bbox("all")))
 
-        self.content_frame = tk.Frame(self.blunder_canvas)
-        self.blunder_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+        self.content_frame = tk.Frame(self.event_canvas)
+        self.event_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
 
-        self.draw_blunder_diagrams()
+        self.draw_event_diagrams()
 
     def draw_board(self):
         """Draws the chessboard (only the squares)."""
@@ -507,7 +507,7 @@ class ChessBlunderViewer:
                                  borderwidth=0, highlightthickness=1, highlightbackground="black")
         board_canvas.pack(pady=10)
 
-        # Initialize the board with the FEN BEFORE the blunder
+        # Initialize the board with the FEN BEFORE the event
         board = chess.Board(event_data['fen'])
 
         # Draw the board
@@ -524,7 +524,7 @@ class ChessBlunderViewer:
         # Draw the pieces
         self.draw_pieces(board_canvas, board)
 
-        # Mark the starting square of the blundering move
+        # Mark the starting square of the event-move
         try:
             # We need to parse the FEN, add the move, and then determine the from_square.
             # However, the FEN is the position *BEFORE* the move.
@@ -563,36 +563,36 @@ class ChessBlunderViewer:
         pgn_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
 
-    def draw_blunder_diagrams(self):
+    def draw_event_diagrams(self):
         """Draws all selected diagrams in chronological order."""
-        if not self.sorted_blunders:
-            tk.Label(self.content_frame, text="No significant blunders (>= 50 cp) found in the PGN data.",
+        if not self.sorted_events:
+            tk.Label(self.content_frame, text="No significant events (>= 50 cp) found in the PGN data.",
                      pady=50, padx=20).pack()
             return
 
         # The index of the last move shown in the PREVIOUS block
         last_move_index = -1
 
-        for i, blunder in enumerate(self.sorted_blunders):
-            # The blundering move is the last move in the full_move_history.
-            # The index of the move that caused the blunder is stored in 'move_index'.
-            current_move_index = blunder['move_index']
+        for i, event in enumerate(self.sorted_events):
+            # The event-move is the last move in the full_move_history.
+            # The index of the move that caused the event is stored in 'move_index'.
+            current_move_index = event['move_index']
 
-            # Select only the moves that are NEW since the last displayed blunder
-            moves_to_display = blunder['full_move_history'][last_move_index + 1: current_move_index + 1]
+            # Select only the moves that are NEW since the last displayed event
+            moves_to_display = event['full_move_history'][last_move_index + 1: current_move_index + 1]
 
             # Format the PGN for display
             pgn_snippet = _format_pgn_history(moves_to_display)
 
             # Draw the diagram and the PGN
-            self.draw_event_diagram(self.content_frame, blunder, pgn_snippet, i)
+            self.draw_event_diagram(self.content_frame, event, pgn_snippet, i)
 
             # Update the counter for the next iteration
             last_move_index = current_move_index
 
         # Ensure the scroll region is updated
         self.content_frame.update_idletasks()
-        self.blunder_canvas.config(scrollregion=self.blunder_canvas.bbox("all"))
+        self.event_canvas.config(scrollregion=self.event_canvas.bbox("all"))
 
 # --- HOOFD EXECUTIE ---
 
@@ -608,7 +608,7 @@ if __name__ == "__main__":
         # If this fails (e.g., FileNotFoundError), the program stops here.
         asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
 
-        app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS, SQUARE_SIZE, asset_manager)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
