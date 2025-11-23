@@ -1,12 +1,14 @@
 # This program requires the 'python-chess' library.
 # Installation: pip install python-chess
-
+import os
 import tkinter as tk
 from tkinter import font
 import chess
 import chess.pgn
 import io
 import re
+# The Pillow (PIL) library is required to robustly load PNGs in Tkinter.
+from PIL import Image, ImageTk
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_BLUNDERS = """
@@ -325,8 +327,19 @@ class ChessBlunderViewer:
     Tkinter application to display the top blunders from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string):
+    def __init__(self, master, pgn_string, image_dir_path):
         self.master = master
+        # ADJUST THIS PATH to the location of your directory 'pgn-visualiser/Images/60'
+
+        self.image_dir_path = image_dir_path
+
+        self.piece_images = {}  # Crucial: here we store the loaded PhotoImage objects
+
+        # Mapping from chess.Piece.symbol() to the filename prefix
+        self.piece_map = {
+            'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+            'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+        }
 
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
@@ -363,32 +376,95 @@ class ChessBlunderViewer:
         self.content_frame = tk.Frame(self.blunder_canvas)
         self.blunder_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
 
+        self._load_piece_images()
+
         self.draw_blunder_diagrams()
 
+    def _load_piece_images(self):
+        """
+        Loads and resizes the PNG images and saves them as ImageTk.PhotoImage objects.
+        This is essential to prevent garbage collection in Tkinter.
+        """
+        try:
+            for symbol, filename_prefix in self.piece_map.items():
+                # Assemble the full path
+                image_path = os.path.join(self.image_dir_path, f"{filename_prefix}.png")
+
+                # 1. Load the image using PIL (Pillow)
+                img = Image.open(image_path)
+
+                # 2. Adjust the size to the size of a square
+                img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
+
+                # 3. Convert to a Tkinter-compatible format and save
+                self.piece_images[symbol] = ImageTk.PhotoImage(img)
+
+            print(f"Chess images successfully loaded from: {self.image_dir_path}")
+
+        except FileNotFoundError:
+            print(f"Error: The directory or files were not found at {self.image_dir_path}.")
+            print("Make sure the path is correct and that the filenames are correct (wK.png, bQ.png, etc.).")
+            print("Also check if you have installed the Pillow (PIL) library (pip install Pillow).")
+        except Exception as e:
+            print(f"An unexpected error occurred while loading the images: {e}")
+
+    def draw_board(self):
+        """Draws the chessboard (only the squares)."""
+        color1 = "#D18B47"  # Light brown
+        color2 = "#FFCE9E"  # Beige
+
+        for r in range(8):
+            for c in range(8):
+                x1 = c * self.square_size
+                y1 = r * self.square_size
+                x2 = x1 + self.square_size
+                y2 = y1 + self.square_size
+
+                # Swap colors
+                color = color1 if (r + c) % 2 == 0 else color2
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
+
+    # THIS IS THE MODIFIED FUNCTION:
     def draw_pieces(self, canvas, board):
-        """Draws the pieces on a given Canvas."""
-        piece_symbols = {
-            'P': '\u2659', 'N': '\u2658', 'B': '\u2657', 'R': '\u2656', 'Q': '\u2655', 'K': '\u2654',
-            'p': '\u265F', 'n': '\u265E', 'b': '\u265D', 'r': '\u265C', 'q': '\u265B', 'k': '\u265A'
-        }
+        """
+        Draws the pieces on a given Canvas, using PNG images.
+
+        The original code that used Unicode characters has been replaced by code
+        that uses the preloaded PNG images via canvas.create_image.
+        """
+        # First, delete any existing pieces
+        canvas.delete("piece")
 
         for square in chess.SQUARES:
             piece = board.piece_at(square)
+
             if piece:
+                # 1. Determine the screen coordinates (x, y)
                 rank = chess.square_rank(square)
                 file = chess.square_file(square)
 
+                # Calculate the row and column on the Tkinter canvas (row 0 = rank 8)
                 tk_row = 7 - rank
                 tk_col = file
 
+                # The coordinates (x, y) must refer to the CENTER of the square
                 x = tk_col * self.square_size + self.square_size / 2
                 y = tk_row * self.square_size + self.square_size / 2
 
-                color = "white" if piece.color == chess.WHITE else "black"
-                symbol = piece_symbols[piece.symbol()]
+                # 2. Determine the key for the image (e.g., 'P', 'n', 'K')
+                symbol = piece.symbol()
 
-                canvas.create_text(x, y, text=symbol, fill=color, font=self.piece_font, tags="piece")
+                # We check if the image for this symbol has been loaded
+                if symbol in self.piece_images:
+                    piece_img = self.piece_images[symbol]
 
+                    # 3. Draw the image in the center of the square
+                    canvas.create_image(
+                        x, y,
+                        image=piece_img,
+                        tags="piece"  # Use tags for easy removal/movement later
+                    )
+                # If the image is not loaded, the piece is skipped.
     def draw_blunder_diagram(self, parent_frame, blunder_data, pgn_snippet_text, index):
         """
         Draws one block with a diagram in column 0 and the cumulative PGN history in column 1.
@@ -512,7 +588,8 @@ if __name__ == "__main__":
         root = tk.Tk()
         # Set the initial size to 1200x800
         root.geometry("1200x800")
-        app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS)
+        IMAGE_DIRECTORY = "Images/60"
+        app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS, IMAGE_DIRECTORY)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
