@@ -1,5 +1,5 @@
-# Dit programma vereist de 'python-chess' bibliotheek.
-# Installatie: pip install python-chess
+# This program requires the 'python-chess' library.
+# Installation: pip install python-chess
 
 import tkinter as tk
 from tkinter import font
@@ -8,7 +8,7 @@ import chess.pgn
 import io
 import re
 
-# --- PGN DATA VOOR DEMONSTRATIE ---
+# --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_BLUNDERS = """
 [Event "13th Norway Chess 2025"]
 [Site "Stavanger NOR"]
@@ -67,11 +67,11 @@ Qe7+ 49. Kc8 Qe8+ 50. Kb7 g5 51. hxg5 { +3.46/23 } ) 47. Qc5 Qf5+ $9 { +5.94 } (
 """
 
 
-# --- UTILITY FUNCTIES VOOR EVALUATIE EN PGN ---
+# --- UTILITY FUNCTIONS FOR EVALUATION AND PGN ---
 
 def get_cp_from_comment(comment):
     """
-    Extraheert de centipawn-waarde uit de PGN-commentaar.
+    Extracts the centipawn value from the PGN comment.
     """
     if not comment:
         return None
@@ -100,22 +100,22 @@ def get_cp_from_comment(comment):
         return int(float(eval_str) * 100)
 
     except Exception:
-        # Fout bij parsen, negeer deze comment
+        # Error during parsing, ignore this comment
         return None
 
 
 def _format_pgn_history(move_list):
     """
-    Formateert een lijst van zet-data in een multi-line PGN snippet voor weergave,
-    inclusief startnotatie voor Zwart, commentaar, en variaties.
+    Formats a list of move data into a multi-line PGN snippet for display,
+    including starting notation for Black, comments, and variations.
     """
     if not move_list:
-        return "Startpositie (eerste zet van de partij)."
+        return "Starting position (first move of the game)."
 
     output = []
     current_line = ""
 
-    # Bepaal of de reeks begint met Zwart
+    # Determine if the sequence starts with Black
     starts_with_black = move_list[0]['player'] == chess.BLACK
 
     last_variation = None
@@ -125,24 +125,24 @@ def _format_pgn_history(move_list):
         move_san = move['san']
         player = move['player']
 
-        # --- 1. Hoofdzetsnotatie ---
+        # --- 1. Main move notation ---
         if player == chess.WHITE:
-            # Start van zet van Wit: Nieuwe regel of wit-zet toevoegen
+            # Start of White's move: New line or add White's move
             if current_line:
                 output.append(current_line.strip())
             current_line = f"{move_number}. {move_san}"
         else:  # player == chess.BLACK
             if i == 0 and starts_with_black:
-                # Eerste zet is Zwart: "Zetnummer..."
+                # First move is Black: "Move number..."
                 current_line = f"{move_number}. ... {move_san}"
             else:
-                # Voeg de zet van Zwart toe
+                # Add Black's move
                 current_line += f" {move_san}"
 
-        # --- 2. Engine Commentaar Opschonen en Toevoegen ---
+        # --- 2. Clean up and Add Engine Comment ---
         if move.get('comment'):
-            # Reguliere expressie om ALLE evaluatie-scores, [%eval ...] en variatie-haakjes te verwijderen.
-            # Dit voorkomt dat de ruwe variatietekst in de commentaar twee keer wordt weergegeven.
+            # Regular expression to remove ALL evaluation scores, [%eval ...] and variation parentheses.
+            # This prevents the raw variation text from being displayed twice in the comment.
             clean_comment = re.sub(
                 r'\s*([#]?[-+]?\d+\.?\d*)(?:/\d+)?\s*|\[%eval\s*([#]?[-]?\d+\.?\d*)\]|\s*\([^\)]*\)',
                 '',
@@ -152,7 +152,7 @@ def _format_pgn_history(move_list):
             if clean_comment:
                 current_line += f" {{{clean_comment}}}"
 
-        # --- 3. Variaties Toevoegen (deze worden apart opgeslagen) ---
+        # --- 3. Add Variations (these are stored separately) ---
         if move.get('variations'):
             previous_variation = last_variation
             last_variation = move["variations"]
@@ -168,22 +168,22 @@ def _format_pgn_history(move_list):
 
 def get_all_significant_blunders(pgn_string):
     """
-    Identificeert ALLE zetten die een significant verlies in voordeel veroorzaakten (> 50 cp).
+    Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
     """
     pgn_io = io.StringIO(pgn_string)
     game = chess.pgn.read_game(pgn_io)
 
     if not game:
-        print("Fout: Kon geen schaakpartij lezen uit de PGN-string.")
+        print("Error: Could not read chess game from PGN string.")
         return []
 
     blunders = []
     board = game.board()
     prev_eval_cp = 0
-    # Lijst van ALLE zetten, inclusief de zet die de blunder veroorzaakte
+    # List of ALL moves, including the move that caused the blunder
     moves_made_so_far = []
 
-    # Itereren over de hoofdlijn
+    # Iterate over the main line
     for node in game.mainline():
         if node.move is None:
             continue
@@ -195,39 +195,39 @@ def get_all_significant_blunders(pgn_string):
         move_number = board.fullmove_number
         player_who_moved = board.turn
 
-        # --- SAN CONVERSIE ---
+        # --- SAN CONVERSION ---
         move_san = None
         try:
             move_san = board.san(node.move)
         except Exception as e:
-            print(f"Waarschuwing: Fout bij SAN-conversie voor zet {move_number} ({e})")
+            print(f"Warning: Error during SAN conversion for move {move_number} ({e})")
             continue
 
-        # Voeg de data van de ZET die net is gecontroleerd toe aan de geschiedenis
+        # Add the data of the MOVE that was just checked to the history
         move_data = {
             'move_number': move_number,
             'player': player_who_moved,
             'san': move_san,
             'comment': node.comment,
             'variations':node.variations,
-            # Dit is de 0-gebaseerde index in de complete zetlijst
+            # This is the 0-based index in the complete move list
             'full_move_index': len(moves_made_so_far)
         }
         moves_made_so_far.append(move_data)
 
-        # --- BLUNDER BEREKENING ---
+        # --- BLUNDER CALCULATION ---
         if eval_after_cp is not None:
             if player_who_moved == chess.WHITE:
-                # Verlies van voordeel voor Wit is (Vorige Eval - Nieuwe Eval)
+                # Loss of advantage for White is (Previous Eval - New Eval)
                 blunder_score = eval_before_cp - eval_after_cp
-                player_str = "Wit"
+                player_str = "White"
             else:
-                # Verlies van voordeel voor Zwart is (Nieuwe Eval - Vorige Eval)
+                # Loss of advantage for Black is (New Eval - Previous Eval)
                 blunder_score = eval_after_cp - eval_before_cp
-                player_str = "Zwart"
+                player_str = "Black"
 
-            # Als de blunder significant is (verlies van meer dan 50 centipawns)
-            if blunder_score > 0:
+            # If the blunder is significant (loss of more than 50 centipawns)
+            if blunder_score > 0: # KEEPING THE '0' AS PER USER INSTRUCTION
                 blunders.append({
                     'score': blunder_score,
                     'fen': fen_before_move,
@@ -236,18 +236,18 @@ def get_all_significant_blunders(pgn_string):
                     'eval_before': eval_before_cp / 100.0,
                     'eval_after': eval_after_cp / 100.0,
                     'full_move_history': list(moves_made_so_far),
-                    'move_index': len(moves_made_so_far) - 1  # Index van de zet
+                    'move_index': len(moves_made_so_far) - 1  # Index of the move
                 })
 
-        # --- ZET UITVOEREN EN EVALUATIE BIJHOUDEN ---
+        # --- EXECUTE MOVE AND TRACK EVALUATION ---
         try:
             board.push(node.move)
         except Exception as e:
-            print(f"!!! FOUT !!! Kan zet '{move_san}' niet uitvoeren op het bord: {e}")
+            print(f"!!! ERROR !!! Cannot execute move '{move_san}' on the board: {e}")
             return blunders
 
         if eval_after_cp is not None:
-            # Voor de volgende zet wordt de 'eval_after' van deze zet de 'prev_eval'
+            # For the next move, the 'eval_after' of this move becomes the 'prev_eval'
             prev_eval_cp = eval_after_cp
 
     return blunders
@@ -255,70 +255,68 @@ def get_all_significant_blunders(pgn_string):
 
 def select_key_positions(all_blunders):
     """
-    Selecteert de blunders op basis van de nieuwe logica:
-    1. Grootste blunder uit elk van de 3 gelijke delen van de partij.
-    2. Top 3 van de overgebleven blunders (wereldwijd).
+    Selects the blunders based on the new logic:
+    1. Biggest blunder from each of the 3 equal parts of the game.
+    2. Top 3 of the remaining blunders (globally).
     """
     if not all_blunders:
         return []
 
-    # Bepaal het totale aantal halve zetten (inclusief de laatste zet in de blunderlijst)
+    # Determine the total number of half-moves (including the last move in the blunder list)
     total_half_moves = all_blunders[-1]['full_move_history'][-1]['full_move_index'] + 1
 
-    # Gebruik een set om te voorkomen dat we dezelfde blunder twee keer selecteren
+    # Use a set to prevent selecting the same blunder twice
     selected_indices = set()
     selected_blunders = []
 
-    # 1. Verdeel de partij in 3 (bijna) gelijke delen
+    # 1. Divide the game into 3 (almost) equal parts
     part_size = total_half_moves // 3
 
-    # Bepaal de bereiken op basis van de 0-gebaseerde zet-index
+    # Determine the ranges based on the 0-based move index
     ranges = [
-        (0, part_size),  # Deel 1 (Openings/Vroeg Middenspel)
-        (part_size, 2 * part_size),  # Deel 2 (Middenspel)
-        (2 * part_size, total_half_moves)  # Deel 3 (Laat Middenspel/Eindspel)
+        (0, part_size),  # Part 1 (Opening/Early Middlegame)
+        (part_size, 2 * part_size),  # Part 2 (Middlegame)
+        (2 * part_size, total_half_moves)  # Part 3 (Late Middlegame/Endgame)
     ]
 
-    print(f"Totale halve zetten: {total_half_moves}. Deelgrootte: {part_size}.")
+    print(f"Total half-moves: {total_half_moves}. Part size: {part_size}.")
 
-    # Selecteer de grootste blunder in elk deel
-    for i in [1,2]:
-      for part_num, (start_index, end_index) in enumerate(ranges):
+    # Select the biggest blunder in each part
+    for part_num, (start_index, end_index) in enumerate(ranges):
         best_in_part = None
         max_score = -1
 
         for blunder in all_blunders:
             move_idx = blunder['move_index']
 
-            # Controleer of de zet binnen het huidige bereik valt
+            # Check if the move falls within the current range
             if start_index <= move_idx < end_index:
                 if blunder['score'] > max_score and move_idx not in selected_indices:
                     max_score = blunder['score']
                     best_in_part = blunder
 
         if best_in_part:
-            best_in_part['source'] = f"Grootste Blunder in Deel {part_num + 1}"
+            best_in_part['source'] = f"Biggest Blunder in Part {part_num + 1}"
             selected_blunders.append(best_in_part)
             selected_indices.add(best_in_part['move_index'])
 
-    # 2. Selecteer de top 3 van de overgebleven blunders
+    # 2. Select the top 3 of the remaining blunders
     remaining_blunders = sorted(
         [b for b in all_blunders if b['move_index'] not in selected_indices],
         key=lambda x: x['score'],
         reverse=True
     )
 
-    # Voeg de top 3 toe aan de selectie
+    # Add the top 3 to the selection
     for i in range(min(3, len(remaining_blunders))):
-        remaining_blunders[i]['source'] = f"Wereldwijde Top {i + 1} (Resterend)"
+        remaining_blunders[i]['source'] = f"Global Top {i + 1} (Remaining)"
         selected_blunders.append(remaining_blunders[i])
         selected_indices.add(remaining_blunders[i]['move_index'])
 
-    # Sorteer de geselecteerde blunders chronologisch voor weergave
+    # Sort the selected blunders chronologically for display
     selected_blunders.sort(key=lambda x: x['move_index'])
 
     return selected_blunders
-
 
 # --- TKINTER KLASSE ---
 
