@@ -59,7 +59,7 @@ The application manages its state using the following configuration file:
 
     *settings/config.json*
     
-    This file stores the default_directory and lastLoadedPgnPath settings, which are loaded on startup and updated every time a new PGN is loaded (simulated or real).
+This file stores the default_directory and lastLoadedPgnPath settings, which are loaded on startup and updated every time a new PGN is loaded (simulated or real).
 
 ## Code Highlights
 
