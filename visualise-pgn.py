@@ -320,6 +320,60 @@ def select_key_positions(all_blunders):
 
     return selected_blunders
 
+
+# ----------------------------------------------------------------------
+# 1. PIECE IMAGE MANAGER (THE FACTORY/SINGLETON)
+# This class is responsible for loading all images once from the disk.
+# ----------------------------------------------------------------------
+class PieceImageManager:
+    """
+    Manages the loading and storage of chess piece images from disk into memory.
+    This ensures images are loaded only once, regardless of how many boards
+    (ChessVisualizer instances) are created.
+    """
+
+    def __init__(self, square_size, image_dir_path):
+        self.square_size = square_size
+        self.image_dir_path = image_dir_path
+        # Dictionary to hold the loaded ImageTk.PhotoImage objects
+        self.images = {}
+
+        # Mapping from chess.Piece.symbol() to the filename prefix
+        self.piece_map = {
+            'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+            'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+        }
+
+        self._load_images()
+
+    def _load_images(self):
+        """
+        Loads and resizes the PNG images and stores them in self.images.
+        """
+        try:
+            for symbol, filename_prefix in self.piece_map.items():
+                # Assemble the full path
+                image_path = os.path.join(self.image_dir_path, f"{filename_prefix}.png")
+
+                # 1. Load the image using PIL (Pillow)
+                img = Image.open(image_path)
+
+                # 2. Resize the image to match the square size
+                img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
+
+                # 3. Convert to a Tkinter-compatible format and store
+                self.images[symbol] = ImageTk.PhotoImage(img)
+
+            print(f"Chess images successfully loaded and cached from: {self.image_dir_path}")
+
+        except FileNotFoundError:
+            print(f"Error: The directory or files were not found at {self.image_dir_path}.")
+            print("Make sure the path is correct and that the filenames are correct (wK.png, bQ.png, etc.).")
+            # Re-raise the error to stop execution since assets are critical
+            raise
+        except Exception as e:
+            print(f"An unexpected error occurred while loading the images: {e}")
+            raise
 # --- TKINTER CLASS ---
 
 class ChessBlunderViewer:
@@ -327,19 +381,9 @@ class ChessBlunderViewer:
     Tkinter application to display the top blunders from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, image_dir_path):
+    def __init__(self, master, pgn_string, square_size, image_manager):
         self.master = master
-        # ADJUST THIS PATH to the location of your directory 'pgn-visualiser/Images/60'
-
-        self.image_dir_path = image_dir_path
-
-        self.piece_images = {}  # Crucial: here we store the loaded PhotoImage objects
-
-        # Mapping from chess.Piece.symbol() to the filename prefix
-        self.piece_map = {
-            'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
-            'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
-        }
+        self.image_manager = image_manager
 
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
@@ -351,7 +395,7 @@ class ChessBlunderViewer:
 
         master.title(f"Chess Game Analysis: {self.num_blunders} Critical Positions Selected")
 
-        self.square_size = 60
+        self.square_size = square_size
         self.board_size = self.square_size * 8
 
         self.color_light = "#F0D9B5"
@@ -376,37 +420,7 @@ class ChessBlunderViewer:
         self.content_frame = tk.Frame(self.blunder_canvas)
         self.blunder_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
 
-        self._load_piece_images()
-
         self.draw_blunder_diagrams()
-
-    def _load_piece_images(self):
-        """
-        Loads and resizes the PNG images and saves them as ImageTk.PhotoImage objects.
-        This is essential to prevent garbage collection in Tkinter.
-        """
-        try:
-            for symbol, filename_prefix in self.piece_map.items():
-                # Assemble the full path
-                image_path = os.path.join(self.image_dir_path, f"{filename_prefix}.png")
-
-                # 1. Load the image using PIL (Pillow)
-                img = Image.open(image_path)
-
-                # 2. Adjust the size to the size of a square
-                img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
-
-                # 3. Convert to a Tkinter-compatible format and save
-                self.piece_images[symbol] = ImageTk.PhotoImage(img)
-
-            print(f"Chess images successfully loaded from: {self.image_dir_path}")
-
-        except FileNotFoundError:
-            print(f"Error: The directory or files were not found at {self.image_dir_path}.")
-            print("Make sure the path is correct and that the filenames are correct (wK.png, bQ.png, etc.).")
-            print("Also check if you have installed the Pillow (PIL) library (pip install Pillow).")
-        except Exception as e:
-            print(f"An unexpected error occurred while loading the images: {e}")
 
     def draw_board(self):
         """Draws the chessboard (only the squares)."""
@@ -424,7 +438,6 @@ class ChessBlunderViewer:
                 color = color1 if (r + c) % 2 == 0 else color2
                 self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
 
-    # THIS IS THE MODIFIED FUNCTION:
     def draw_pieces(self, canvas, board):
         """
         Draws the pieces on a given Canvas, using PNG images.
@@ -455,8 +468,9 @@ class ChessBlunderViewer:
                 symbol = piece.symbol()
 
                 # We check if the image for this symbol has been loaded
-                if symbol in self.piece_images:
-                    piece_img = self.piece_images[symbol]
+                if symbol in self.image_manager.images:
+                    # We retrieve the cached image from the manager
+                    piece_img = self.image_manager.images.get(symbol)
 
                     # 3. Draw the image in the center of the square
                     canvas.create_image(
@@ -588,8 +602,14 @@ if __name__ == "__main__":
         root = tk.Tk()
         # Set the initial size to 1200x800
         root.geometry("1200x800")
+
         IMAGE_DIRECTORY = "Images/60"
-        app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS, IMAGE_DIRECTORY)
+        SQUARE_SIZE = 60  # Size of the squares in pixels
+        # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
+        # If this fails (e.g., FileNotFoundError), the program stops here.
+        asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
+
+        app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS, SQUARE_SIZE, asset_manager)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
