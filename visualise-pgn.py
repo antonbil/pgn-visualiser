@@ -318,25 +318,25 @@ def select_key_positions(all_blunders):
 
     return selected_blunders
 
-# --- TKINTER KLASSE ---
+# --- TKINTER CLASS ---
 
 class ChessBlunderViewer:
     """
-    Tkinter applicatie om de top blunders uit een geanalyseerd PGN weer te geven.
+    Tkinter application to display the top blunders from an analyzed PGN.
     """
 
     def __init__(self, master, pgn_string):
         self.master = master
 
-        # Voer de geavanceerde analyse uit
-        print("Start volledige analyse van PGN...")
+        # Perform the advanced analysis
+        print("Starting full PGN analysis...")
         all_blunders = get_all_significant_blunders(pgn_string)
-        print(f"Volledige analyse voltooid. {len(all_blunders)} significante blunders gevonden (> 50 cp verlies).")
+        print(f"Full analysis complete. {len(all_blunders)} significant blunders found (> 50 cp loss).")
 
         self.sorted_blunders = select_key_positions(all_blunders)
         self.num_blunders = len(self.sorted_blunders)
 
-        master.title(f"Schaakpartij Analyse: {self.num_blunders} Kritieke Posities Geselecteerd")
+        master.title(f"Chess Game Analysis: {self.num_blunders} Critical Positions Selected")
 
         self.square_size = 60
         self.board_size = self.square_size * 8
@@ -356,7 +356,7 @@ class ChessBlunderViewer:
         scrollbar.pack(side="right", fill="y")
 
         self.blunder_canvas.configure(yscrollcommand=scrollbar.set)
-        # Configureer scrollregion wanneer het canvas van grootte verandert
+        # Configure scroll region when the canvas size changes
         self.blunder_canvas.bind('<Configure>',
                                  lambda e: self.blunder_canvas.configure(scrollregion=self.blunder_canvas.bbox("all")))
 
@@ -366,7 +366,7 @@ class ChessBlunderViewer:
         self.draw_blunder_diagrams()
 
     def draw_pieces(self, canvas, board):
-        """Tekent de stukken op een gegeven Canvas."""
+        """Draws the pieces on a given Canvas."""
         piece_symbols = {
             'P': '\u2659', 'N': '\u2658', 'B': '\u2657', 'R': '\u2656', 'Q': '\u2655', 'K': '\u2654',
             'p': '\u265F', 'n': '\u265E', 'b': '\u265D', 'r': '\u265C', 'q': '\u265B', 'k': '\u265A'
@@ -391,15 +391,15 @@ class ChessBlunderViewer:
 
     def draw_blunder_diagram(self, parent_frame, blunder_data, pgn_snippet_text, index):
         """
-        Tekent één blok met diagram in kolom 0 en de cumulatieve PGN-geschiedenis in kolom 1.
+        Draws one block with a diagram in column 0 and the cumulative PGN history in column 1.
         """
 
-        # --- GEZAMENLIJK CONTAINER FRAME ---
+        # --- JOINT CONTAINER FRAME ---
         blunder_row_frame = tk.Frame(parent_frame, padx=20, pady=15, bd=1, relief=tk.SUNKEN)
-        blunder_row_frame.pack(fill="x", expand=True)  # Gebruik pack voor de rijen
+        blunder_row_frame.pack(fill="x", expand=True)  # Use pack for the rows
 
-        # --- KOLOM 0: DIAGRAM & INFO (Links) ---
-        title = f"Positie {index + 1}: {blunder_data.get('source', 'Blunder')} - {blunder_data['move_text']}"
+        # --- COLUMN 0: DIAGRAM & INFO (Left) ---
+        title = f"Position {index + 1}: {blunder_data.get('source', 'Blunder')} - {blunder_data['move_text']}"
         diagram_block = tk.LabelFrame(blunder_row_frame,
                                       text=title,
                                       padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
@@ -407,21 +407,21 @@ class ChessBlunderViewer:
 
         # 1. Info Label
         info_text = (
-            f"Zet die de blunder veroorzaakte: {blunder_data['move_text']}\n"
-            f"Verlies: {blunder_data['score'] / 100.0:.2f} P\n"
-            f"Eval VOOR zet: {blunder_data['eval_before']:.2f} | Eval NA zet: {blunder_data['eval_after']:.2f}"
+            f"Move that caused the blunder: {blunder_data['move_text']}\n"
+            f"Loss: {blunder_data['score'] / 100.0:.2f} P\n"
+            f"Eval BEFORE move: {blunder_data['eval_before']:.2f} | Eval AFTER move: {blunder_data['eval_after']:.2f}"
         )
         tk.Label(diagram_block, text=info_text, justify=tk.LEFT, pady=5).pack(anchor="w")
 
-        # 2. Canvas voor het bord
+        # 2. Canvas for the board
         board_canvas = tk.Canvas(diagram_block, width=self.board_size, height=self.board_size,
                                  borderwidth=0, highlightthickness=1, highlightbackground="black")
         board_canvas.pack(pady=10)
 
-        # Initialiseer het bord met de FEN VOOR de blunder
+        # Initialize the board with the FEN BEFORE the blunder
         board = chess.Board(blunder_data['fen'])
 
-        # Teken het bord
+        # Draw the board
         for r in range(8):
             for c in range(8):
                 x1 = c * self.square_size
@@ -432,14 +432,14 @@ class ChessBlunderViewer:
                 color = self.color_light if (r + c) % 2 == 0 else self.color_dark
                 board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
 
-        # Teken de stukken
+        # Draw the pieces
         self.draw_pieces(board_canvas, board)
 
-        # Markeer het startvierkant van de blunderzet
+        # Mark the starting square of the blundering move
         try:
-            # We moeten de FEN parsen, de move toevoegen, en dan de from_square bepalen.
-            # Echter, de FEN is de positie *VOOR* de zet.
-            # We gebruiken de board.parse_san op de huidige board staat (FEN VOOR de zet)
+            # We need to parse the FEN, add the move, and then determine the from_square.
+            # However, the FEN is the position *BEFORE* the move.
+            # We use board.parse_san on the current board state (FEN BEFORE the move)
             move_san = blunder_data['move_text'].split()[-1].strip('.')
             move_to_highlight = board.parse_san(move_san)
             from_square = move_to_highlight.from_square
@@ -450,21 +450,21 @@ class ChessBlunderViewer:
             x1 = from_file * self.square_size
             y1 = from_rank * self.square_size
 
-            # Voeg een gele markering toe aan het startvierkant
+            # Add a yellow highlight to the starting square
             board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
                                           outline="#FFC300", width=4, tags="highlight")
         except Exception:
             pass
 
-        # --- KOLOM 1: PGN SNIPPET (Rechts) ---
-        pgn_block = tk.LabelFrame(blunder_row_frame, text="PGN Zetten sinds de vorige kritieke positie",
+        # --- COLUMN 1: PGN SNIPPET (Right) ---
+        pgn_block = tk.LabelFrame(blunder_row_frame, text="PGN Moves since the last critical position",
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.pack(side=tk.RIGHT, padx=10, pady=5, fill=tk.BOTH, expand=True)
 
-        # Text widget voor de PGN-tekst
+        # Text widget for the PGN text
         pgn_text_widget = tk.Text(pgn_block, height=14, width=50, wrap=tk.WORD, font=("Consolas", 10))
 
-        # Voeg de cumulatieve tekst in
+        # Insert the cumulative text
         pgn_text_widget.insert(tk.END, pgn_snippet_text)
         pgn_text_widget.config(state=tk.DISABLED)
 
@@ -475,53 +475,52 @@ class ChessBlunderViewer:
         pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
 
     def draw_blunder_diagrams(self):
-        """Tekent alle geselecteerde diagrammen in chronologische volgorde."""
+        """Draws all selected diagrams in chronological order."""
         if not self.sorted_blunders:
-            tk.Label(self.content_frame, text="Geen significante blunders (>= 50 cp) gevonden in de PGN-data.",
+            tk.Label(self.content_frame, text="No significant blunders (>= 50 cp) found in the PGN data.",
                      pady=50, padx=20).pack()
             return
 
-        # De index van de laatste zet die in het VORIGE blok is getoond
+        # The index of the last move shown in the PREVIOUS block
         last_move_index = -1
 
         for i, blunder in enumerate(self.sorted_blunders):
-            # De blunderzet is de laatste zet in de full_move_history.
-            # De index van de zet die de blunder veroorzaakt is opgeslagen in 'move_index'.
+            # The blundering move is the last move in the full_move_history.
+            # The index of the move that caused the blunder is stored in 'move_index'.
             current_move_index = blunder['move_index']
 
-            # Selecteer alleen de zetten die NIEUW zijn sinds de laatste getoonde blunder
+            # Select only the moves that are NEW since the last displayed blunder
             moves_to_display = blunder['full_move_history'][last_move_index + 1: current_move_index + 1]
 
-            # Formatteer de PGN voor weergave
+            # Format the PGN for display
             pgn_snippet = _format_pgn_history(moves_to_display)
 
-            # Teken het diagram en de PGN
+            # Draw the diagram and the PGN
             self.draw_blunder_diagram(self.content_frame, blunder, pgn_snippet, i)
 
-            # Update de teller voor de volgende iteratie
+            # Update the counter for the next iteration
             last_move_index = current_move_index
 
-        # Zorg ervoor dat de scrollregio wordt bijgewerkt
+        # Ensure the scroll region is updated
         self.content_frame.update_idletasks()
         self.blunder_canvas.config(scrollregion=self.blunder_canvas.bbox("all"))
-
 
 # --- HOOFD EXECUTIE ---
 
 if __name__ == "__main__":
     try:
         root = tk.Tk()
-        # Stel de initiële grootte in op 1200x800
+        # Set the initial size to 1200x800
         root.geometry("1200x800")
         app = ChessBlunderViewer(root, PGN_WITH_BLUNDERS)
         root.mainloop()
     except ImportError:
-        error_msg = ("Fout: De 'python-chess' bibliotheek is niet geïnstalleerd.\n"
-                     "Installeer deze met: pip install python-chess")
+        error_msg = ("Error: The 'python-chess' library is not installed.\n"
+                     "Install this with: pip install python-chess")
         error_root = tk.Tk()
-        error_root.title("Installatie Vereist")
+        error_root.title("Installation Required")
         tk.Label(error_root, text=error_msg, padx=20, pady=20).pack()
-        tk.Button(error_root, text="Sluiten", command=error_root.destroy).pack(pady=10)
+        tk.Button(error_root, text="Close", command=error_root.destroy).pack(pady=10)
         error_root.mainloop()
     except Exception as e:
-        print(f"Er is een onverwachte fout opgetreden: {e}")
+        print(f"An unexpected error occurred: {e}")
