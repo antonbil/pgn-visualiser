@@ -99,6 +99,31 @@ def _load_config():
         print(f"Unexpected error loading configuration: {e}. Using empty/default values.")
         return {}
 
+
+def _save_config(default_directory: str, last_pgn_path: str):
+    """
+    Saves the current configuration (default directory and last PGN path)
+    to the configuration JSON file.
+    """
+
+    # Ensure the configuration directory exists (e.g., the '.chess_viewer' folder)
+    CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    # The data structure to be saved
+    new_config = {
+        # Ensure paths are clean (no unnecessary whitespace)
+        "default_directory": default_directory.strip(),
+        "lastLoadedPgnPath": last_pgn_path.strip(),
+    }
+
+    try:
+        with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+            # Use indent=4 for readability in the JSON file
+            json.dump(new_config, f, indent=4)
+        print(f"Configuration successfully saved to {CONFIG_FILE_PATH}")
+    except Exception as e:
+        print(f"ERROR: Failed to save configuration to {CONFIG_FILE_PATH}: {e}")
+
 def get_settings():
         ## 1. Read configuration data
         config_data = _load_config()
@@ -107,9 +132,10 @@ def get_settings():
 
         # The PGN directory
         default_pgn_dir = config_data.get("default_directory", "/home/user/Chess")
+        lastLoadedPgnPath = config_data.get("lastLoadedPgnPath", "")
         print(f"Default PGN Directory: {default_pgn_dir}")
 
-        return default_pgn_dir
+        return default_pgn_dir, lastLoadedPgnPath
 # --- UTILITY FUNCTIONS FOR EVALUATION AND PGN ---
 
 def get_cp_from_comment(comment):
@@ -292,7 +318,7 @@ def get_all_significant_events(pgn_string):
             # For the next move, the 'eval_after' of this move becomes the 'prev_eval'
             prev_eval_cp = eval_after_cp
 
-    return events
+    return events, game
 
 
 def select_key_positions(all_events):
@@ -421,16 +447,19 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath):
         self.master = master
         self.image_manager = image_manager
         self.default_pgn_dir = default_pgn_dir
+        self.default_pgn_string = pgn_string
+        self.lastLoadedPgnPath = lastLoadedPgnPath
 
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
         # --- TOP LEVEL FILE READER WIDGET ---
         self._create_file_reader_widget(master)
+        master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
 
         self.square_size = square_size
@@ -439,6 +468,24 @@ class ChessEventViewer:
         self.color_light = "#F0D9B5"
         self.color_dark = "#B58863"
         self.piece_font = font.Font(family="Arial", size=int(self.square_size * 0.5), weight="bold")
+        # --- 1. INITIALIZE STRINGVARS (THE DATA MODEL) ---
+        # These variables hold the actual text content and are linked to the UI Labels.
+        # When a new PGN is loaded, we only update these variables, and the UI refreshes automatically.
+        self.meta_data_vars = {
+            "Event": tk.StringVar(master, value="Laden..."),
+            "Site": tk.StringVar(master, value="Laden..."),
+            "Date": tk.StringVar(master, value="????.??.??"),
+            "White": tk.StringVar(master, value="Witte Speler"),
+            "Black": tk.StringVar(master, value="Zwarte Speler"),
+            "Result": tk.StringVar(master, value="*"),
+            "WhiteElo": tk.StringVar(master, value="????"),
+            "BlackElo": tk.StringVar(master, value="????"),
+        }
+        # Frame for the PGN Meta-information (top)
+        self.meta_info_frame = tk.Frame(master, bd=2, relief=tk.GROOVE, padx=10, pady=5)
+        self.meta_info_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+
+        self._create_meta_info_widgets(self.meta_info_frame)
 
         # --- UI SETUP ---
         main_frame = tk.Frame(master)
@@ -457,23 +504,143 @@ class ChessEventViewer:
 
         self.content_frame = tk.Frame(self.event_canvas)
         self.event_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+        self.load_initial_pgn(lastLoadedPgnPath)
 
-        self.do_new_analysis(pgn_string)
+    def _create_meta_info_widgets(self, parent_frame):
+        """
+        CREATES the static Label widgets for the PGN metadata fields.
+        This function MUST only be called ONCE (in _setup_ui).
+        It links each value label to a specific StringVar in self.meta_data_vars.
+        """
+
+        label_font = ('Arial', 10)
+        value_font = ('Arial', 10, 'bold')
+
+        # --- Left Column (Event, Site, Date) ---
+        tk.Label(parent_frame, text="Event:", font=label_font).grid(row=0, column=0, sticky='w')
+        # BINDING: The text property of this Label is bound to self.meta_data_vars["Event"]
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["Event"], font=value_font).grid(row=0, column=1,
+                                                                                                sticky='w', padx=5)
+
+        tk.Label(parent_frame, text="Site:", font=label_font).grid(row=1, column=0, sticky='w')
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["Site"], font=value_font).grid(row=1, column=1,
+                                                                                               sticky='w', padx=5)
+
+        tk.Label(parent_frame, text="Date:", font=label_font).grid(row=2, column=0, sticky='w')
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["Date"], font=value_font).grid(row=2, column=1,
+                                                                                               sticky='w', padx=5)
+
+        # --- Right Column (White, Black, Result) ---
+
+        # Add horizontal separation between the columns
+        parent_frame.grid_columnconfigure(2, minsize=50)
+
+        # White Player Info
+        tk.Label(parent_frame, text="White:", font=label_font).grid(row=0, column=3, sticky='w')  # Wit: (White)
+        # Name
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["White"], font=value_font).grid(row=0, column=4,
+                                                                                                sticky='w')
+        # ELO
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["WhiteElo"], font=label_font).grid(row=0, column=5,
+                                                                                                   sticky='w', padx=5)
+
+        # Black Player Info
+        tk.Label(parent_frame, text="Black:", font=label_font).grid(row=1, column=3, sticky='w')  # Zwart: (Black)
+        # Name
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["Black"], font=value_font).grid(row=1, column=4,
+                                                                                                sticky='w')
+        # ELO
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["BlackElo"], font=label_font).grid(row=1, column=5,
+                                                                                                   sticky='w', padx=5)
+
+        # Result Info
+        tk.Label(parent_frame, text="Result:", font=label_font).grid(row=2, column=3, sticky='w')  # Uitslag: (Result)
+        # Result Value (with special formatting/color logic)
+        tk.Label(parent_frame, textvariable=self.meta_data_vars["Result"], font=('Arial', 12, 'bold'),
+                 foreground="red").grid(row=2, column=4, columnspan=2, sticky='w', padx=5)
+
+    def _update_meta_info(self, game):
+        """
+        UPDATES the underlying StringVar objects with the metadata from the newly loaded PGN game.
+        This is the ONLY function that should be called when loading a new PGN.
+        It uses the 'game' object's headers to set the new values.
+        """
+
+        # Mapping from PGN header tag to the internal StringVar key
+        tag_map = {
+            "Event": "Event", "Site": "Site", "Date": "Date",
+            "White": "White", "Black": "Black", "Result": "Result",
+            "WhiteElo": "WhiteElo", "BlackElo": "BlackElo",
+        }
+
+        for tag, var_key in tag_map.items():
+            # Retrieve the value, defaulting to "N/A" if the tag is missing
+            value = game.headers.get(tag, "N/A")
+
+            # CRITICAL STEP: Update the value of the bound StringVar.
+            # Tkinter automatically pushes this change to the linked Label widgets.
+            if var_key in self.meta_data_vars:
+                self.meta_data_vars[var_key].set(str(value))
+
+        # Example of conditional styling: Update the color of the result label based on the outcome
+        result_label = self.meta_info_frame.grid_slaves(row=2, column=4)[0]
+        result_value = game.headers.get("Result")
+
+        if result_value == "1-0":
+            result_label.configure(foreground="green")
+        elif result_value == "0-1":
+            result_label.configure(foreground="blue")
+        elif result_value == "1/2-1/2":
+            result_label.configure(foreground="darkorange")
+        else:
+            result_label.configure(foreground="red")
+
+    def on_closing(self):
+        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath)
+        exit()
+
+    def load_initial_pgn(self, lastLoadedPgnPath):
+        """Loads a simulated PGN game upon application startup."""
+        if not lastLoadedPgnPath:
+            print("INFO: No previous PGN path found in settings. Loading default data.")
+            self.do_new_analysis(self.default_pgn_string)
+            return
+
+        # 1. Strip and create Path object
+        clean_path = lastLoadedPgnPath.strip()
+        file_path = Path(clean_path)
+
+        print(f"DEBUG: Attempting to load previous PGN from path: '{clean_path}'")
+        print(f"DEBUG: Absolute path resolved by Pathlib: '{file_path.resolve()}'")
+
+        # 2. Check if path points to existing file
+        if file_path.is_file():
+            print("SUCCESS: File found and is a valid file. Loading data.")
+
+            self._read_file_and_analyze(clean_path)
+
+            # Update the path string
+            self.pgn_filepath.set(clean_path)
+
+        else:
+            print("WARNING: File not found or is a directory. Loading default data.")
+            # If the file does not exist or is a directory, use the default pgn
+            self.do_new_analysis(self.default_pgn_string)
 
     def _clear_content_frame(self):
-        """HELPER: Verwijdert alle widgets uit het scrollbare content frame."""
+        """HELPER: Removes all widgets from the scrollable content frame."""
         for widget in self.content_frame.winfo_children():
             widget.destroy()
 
-        # Reset de scrollpositie naar de top
+        # Reset scrollposition to top
         self.event_canvas.yview_moveto(0)
 
     def do_new_analysis(self, pgn_string):
-        print(pgn_string)
         self._clear_content_frame()
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
-        all_events = get_all_significant_events(pgn_string)
+        all_events, game = get_all_significant_events(pgn_string)
+        self._update_meta_info(game)
         print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
 
         self.sorted_events = select_key_positions(all_events)
@@ -488,6 +655,7 @@ class ChessEventViewer:
                 pgn_content = f.read()
 
             self.do_new_analysis(pgn_content)
+            self.lastLoadedPgnPath = filepath
 
         except Exception as e:
             error_message = f"ERROR: Failed to read PGN file: {e}"
@@ -738,9 +906,9 @@ if __name__ == "__main__":
         # If this fails (e.g., FileNotFoundError), the program stops here.
         asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
 
-        default_pgn_dir = get_settings()
+        default_pgn_dir, lastLoadedPgnPath = get_settings()
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
