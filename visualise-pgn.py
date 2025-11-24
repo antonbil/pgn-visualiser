@@ -14,59 +14,16 @@ import json
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_EVENTS = """
-[Event "13th Norway Chess 2025"]
-[Site "Stavanger NOR"]
-[Date "2025.05.29"]
-[Round "4.1"]
-[White "Carlsen,M"]
-[Black "Erigaisi,Arjun"]
+[Event "Galaxy"]
+[Site "Star"]
+[Date "2025/01/02"]
+[Round "15"]
+[White "Notorious Man"]
+[Black "Smart Guy"]
 [Result "1-0"]
-[WhiteTitle "GM"]
-[BlackTitle "GM"]
-[WhiteElo "2837"]
-[BlackElo "2782"]
-[ECO "A36"]
-[Opening "English Opening: Symmetrical Variation, Symmetrical Variation"]
-[Variation "ultra-symmetrical variation"]
-[WhiteFideId "1503014"]
-[BlackFideId "35009192"]
-[EventDate "2025.05.26"]
-[WhiteACPL "8"]
-[BlackACPL "-131"]
-[Annotator "Stockfish 17"]
 
-{ Stockfish 17 } 1. c4 c5 2. g3 g6 3. Bg2 Bg7 4. Nc3 Nc6 { A36 English Opening:
-Symmetrical Variation, Symmetrical Variation } 5. Rb1 $6 { +0.16 } ( 5. e3 e6 6.
-Nge2 Nge7 7. d4 cxd4 8. exd4 d5 9. cxd5 Nxd5 { +0.15/21 } ) 5... Nf6 6. a3 a5 7.
-d3 e6 $9 { +0.31 } ( 7... O-O 8. Nh3 Rb8 9. Nf4 Ne8 10. h4 b6 11. Nb5 h6 12. Bd2
-{ +0.06/24 } ) 8. Nf3 O-O 9. Be3 $6 { +0.15 } ( 9. Bf4 d5 10. O-O Re8 11. cxd5
-Nxd5 12. Bg5 Qc7 13. Qd2 b6 { +0.30/20 } ) 9... Qe7 $9 { +0.46 } ( 9... b6 10.
-d4 d6 11. O-O Bb7 12. d5 exd5 13. cxd5 Ne7 14. Bg5 { +0.21/23 } ) 10. Na4 $6 {
-+0.16 } ( 10. Qc1 d6 11. Bg5 Qd7 12. Bh6 b6 13. h4 Bb7 14. h5 Nd4 { +0.47/19 } )
-10... d6 11. O-O Rb8 12. d4 cxd4 13. Nxd4 Nxd4 14. Bxd4 b5 15. cxb5 Rxb5 16. Nc3
-$6 { +0.16 } ( 16. b4 axb4 17. axb4 Nd5 18. Bxg7 Kxg7 19. Qd4+ Qf6 20. Rfd1 Qxd4
-{ +0.27/20 } ) 16... Rb8 17. Qa4 Bb7 18. Bxb7 Qxb7 19. Qxa5 e5 20. Be3 d5 21.
-Bg5 d4 22. Bxf6 Bxf6 23. Nd5 Bg5 24. Nb4 Bd2 25. Qxe5 Bxb4 26. axb4 Qxb4 27.
-Rfd1 Rfe8 28. Qf4 $6 { +0.17 } ( 28. Qf6 Re6 29. Qf4 Rxe2 30. Rxd4 Qb3 31. Qf6
-Ree8 32. Rd2 Rb6 { +0.20/23 } ) 28... Rxe2 29. Rxd4 Qb7 $9 { +0.37 } ( 29... Qb3
-30. Rd7 Rbe8 31. h4 Qe6 32. Rdd1 Re4 33. Qf3 Rb4 34. h5 { +0.25/21 } ) 30. Qf6
-Re6 $9 { +1.42 } ( 30... h5 31. b4 Rbe8 32. Rd8 Rxd8 33. Qxd8+ Kh7 34. Qd3 Re4
-35. b5 { +0.37/24 } ) 31. Rd8+ Rxd8 32. Qxd8+ Kg7 33. Qd4+ Kg8 34. b4 h5 $9 {
-+1.39 } ( 34... Qb8 35. Rd1 Qe8 36. h4 h5 37. Qb2 Kh7 38. b5 Re2 39. Qb3 {
-+1.35/23 } ) 35. b5 Rb6 $9 { +2.70 } ( 35... Re4 36. Qd8+ Kh7 37. h4 Re2 38. Qd4
-Re4 39. Qb2 Qb6 40. Rc1 { +1.38/26 } ) 36. Re1 Qb8 37. Re8+ Qxe8 38. Qxb6 Qe1+
-39. Kg2 Qe4+ 40. Kf1 Qd3+ $9 { +2.82 } ( 40... Qc4+ 41. Ke1 Qb4+ 42. Ke2 h4 43.
-Qc6 Qb2+ 44. Kf3 h3 45. b6 { +2.58/23 } ) 41. Ke1 Qc3+ $9 { +2.77 } ( 41... h4
-42. gxh4 Qc3+ 43. Ke2 Qc4+ 44. Kd2 Qb4+ 45. Kd3 Kh7 46. h5 { +2.54/21 } ) 42.
-Ke2 Qc2+ $9 { +3.01 } ( 42... h4 43. gxh4 Qc4+ 44. Kd2 Kh7 45. Ke3 Qxh4 46. Qc5
-Qxh2 47. b6 { +2.62/20 } ) 43. Ke3 Qc3+ $9 { +3.28 } ( 43... Qb3+ 44. Kd4 h4 45.
-gxh4 Qa2 46. Ke5 Qc4 47. Kd6 Qxh4 48. Kc6 { +2.81/24 } ) 44. Ke4 Qc4+ 45. Ke5
-Kg7 $9 { +3.77 } ( 45... h4 46. Kd6 Qd3+ 47. Kc7 Qf5 48. gxh4 Kh7 49. Kb7 Qd7+
-50. Kb8 { +2.99/25 } ) 46. h4 Qd3 $9 { +4.07 } ( 46... Kh7 47. Kd6 Qe6+ 48. Kc7
-Qe7+ 49. Kc8 Qe8+ 50. Kb7 g5 51. hxg5 { +3.46/23 } ) 47. Qc5 Qf5+ $9 { +5.94 } (
-47... g5 48. hxg5 Qd2 49. Ke4 Qe2+ 50. Kd5 Qe6+ 51. Kd4 Qa2 52. Ke3 { +3.82/23 } )
-48. Kd6 1-0
-
+{ Stockfish 16.1 } 1. e4 e5 2. Nf3 Nc6 3. Bc4 Be7 { C50 Italian Game: Hungarian
+Defense } 4. O-O { 0.41 } ( 4. d4 exd4 { 0.55/20 } ) 4... Nf6 5. d4 Nxd4 { 1.43 } ( 5... exd4 6. Nxd4 O-O 7. Nc3 d6 8. Re1 Nxd4 9. Qxd4 c6 10. Bf4 { 0.43/20 } ) 6. Nxe5 { 0.65 } ( 6. Bxf7+ Kf8 7. Nxe5 Nc6 8. f4 d6 9. Nxc6 bxc6 10. Bb3 Nxe4 { 1.35/22 } ) 6... Ne6 7. Nc3 { 0.31 } ( 7. Nxf7 Kxf7 8. e5 d5 9. exf6 dxc4 10. fxe7 Qxd1 11. Rxd1 b6 { 0.67/21 } ) 7... O-O 8. a3 { 0.24 } ( 8. Nf3 d6 { 0.42/19 } ) 8... d6 9. Nd3 { -0.44 } ( 9. Nf3 c6 { 0.20/19 } ) 9... c6 { 0.35 } ( 9... Nxe4 10. Nxe4 d5 11. Bxd5 Qxd5 12. Re1 Rd8 13. Bd2 b6 14. Nf4 { -0.37/21 } ) 10. Nf4 { -0.04 } ( 10. Ba2 Nc7 11. f4 Bg4 12. Qe1 Be6 13. Bxe6 Nxe6 14. Kh1 Re8 { 0.35/18 } ) 10... Nxf4 { 0.10 } ( 10... Qc7 11. Qf3 b5 12. Ba2 a5 13. Re1 Bd7 14. Nxe6 Bxe6 15. e5 { -0.06/19 } ) 11. Bxf4 b5 { 0.24 } ( 11... Nxe4 12. Nxe4 d5 13. Bxd5 Qxd5 14. Qxd5 cxd5 15. Nc3 Be6 16. Ne2 { 0.08/21 } ) 12. Ba2 { 0.02 } ( 12. Be2 Be6 13. Qd4 Qb8 14. Rad1 Rd8 15. h3 a5 16. Bf3 b4 { 0.26/19 } ) 12... Ba6 { 0.67 } ( 12... a5 13. h3 Be6 14. Bxe6 fxe6 15. e5 dxe5 16. Bxe5 Qxd1 17. Rfxd1 { 0.08/18 } ) 13. Re1 Bb7 { 0.90 } ( 13... Bc8 { 0.63/20 } ) 14. e5 { 0.46 } ( 14. Qd3 Nh5 { 0.92/18 } ) 14... dxe5 15. Bxe5 Qb6 { 1.07 } ( 15... Qxd1 16. Raxd1 { 0.45/19 } ) 16. Ne4 { -0.07 } ( 16. Qd3 Rad8 17. Qg3 Rd7 18. Rad1 Rxd1 19. Rxd1 Nh5 20. Qf3 Nf6 { 1.04/19 } ) 16... Rad8 { 0.00 } ( 16... Nxe4 17. Rxe4 c5 18. Bd5 Bxd5 19. Qxd5 Rad8 20. Qb3 Rfe8 21. Qf3 { -0.08/21 } ) 17. Nxf6+ Bxf6 18. Qg4 { -0.15 } ( 18. Qh5 g6 19. Qf3 Bxe5 20. Rxe5 c5 21. Qe3 Qc6 22. f3 Rfe8 { 0.00/22 } ) 18... Bxe5 { -0.01 } ( 18... c5 19. Qf4 { -0.25/21 } ) 19. Rxe5 Rd6 { 0.37 } ( 19... c5 20. Rae1 c4 21. c3 Rd2 22. R5e2 Rxe2 23. Qxe2 g6 24. Bb1 { -0.06/22 } ) 20. Qf4 { 0.31 } ( 20. Rae1 Rf6 21. Qe2 c5 22. h4 Rg6 23. Bd5 Bxd5 24. Rxd5 Re6 { 0.33/18 } ) 20... Rf6 21. Rf5 { -0.01 } ( 21. Qe3 Rd6 { 0.37/19 } ) 21... Rxf5 22. Qxf5 c5 23. Rd1 Qc6 { Mate in 3 } ( 23... c4 24. c3 g6 25. Qf4 Qe6 26. h4 Qe4 27. Qxe4 Bxe4 28. Bb1 { -0.04/22 } ) 24. f3 { 0.02 } ( 24. Qxf7+ Rxf7 25. Rd8+ Qe8 26. Rxe8# ) 24... Qb6 { 0.08 } ( 24... c4 25. c3 g6 26. Qf4 Re8 27. Bb1 Qc5+ 28. Kf1 Qe7 29. Qd2 { 0.01/23 } ) 25. Kf1 { -0.00 } ( 25. c3 g6 26. Qf4 c4+ 27. Kf1 Rd8 28. Re1 Kg7 29. Bb1 Qc5 { 0.13/22 } ) 25... c4 { 0.10 } ( 25... b4 26. Bc4 bxa3 27. bxa3 Ba6 28. Bxa6 Qxa6+ 29. Qd3 Qf6 30. Qd6 { -0.00/24 } ) 26. c3 Bc8 27. Qe4 { -0.00 } ( 27. Qe5 Rd8 28. Ke2 g6 29. Rxd8+ Qxd8 30. Bb1 Qb6 31. Qe8+ Kg7 { 0.09/21 } ) 27... g6 28. Bb1 Bf5 29. Qd4 { -0.45 } ( 29. Qe5 Bxb1 { -0.08/23 } ) 29... Qxd4 30. cxd4 Bxb1 31. Rxb1 Rd8 32. Rd1 { -0.86 } ( 32. b3 Rxd4 33. bxc4 bxc4 34. Ke2 Kf8 35. Rb4 Ke7 36. Ra4 a5 { -0.48/22 } ) 32... a5 { -0.03 } ( 32... f5 33. Ke2 Kf7 34. Ke3 Ke6 35. Re1 Kd5 36. Kd2 Kxd4 37. Re7 { -0.86/22 } ) 33. Ke2 { -0.50 } ( 33. d5 { -0.13/24 } ) 33... a4 { 0.00 } ( 33... Kf8 34. Kf2 { -0.52/21 } ) 34. Ke3 { -0.14 } ( 34. d5 Kf8 35. d6 Ke8 36. Rd5 Rb8 37. Kd2 b4 38. axb4 Rxb4 { 0.00/27 } ) 34... f5 { 0.90 } ( 34... Kf8 35. g4 { -0.35/20 } ) 35. d5 Kf7 36. Kd4 Rc8 { 1.66 } ( 36... Ke7 37. Re1+ Kd7 38. Re6 Rc8 39. Kc3 Rc5 40. Re5 Kd6 41. Kd4 { 0.73/24 } ) 37. Rd2 { 0.28 } ( 37. Re1 c3 38. bxc3 Rc4+ 39. Kd3 Rc5 40. Re5 f4 41. g3 fxg3 { 1.60/27 } ) 37... Ke7 38. Re2+ Kd7 39. Re6 { -0.00 } ( 39. Re3 Rb8 { 0.64/20 } ) 39... Rb8 { 3.28 } ( 39... c3 40. bxc3 Rc4+ 41. Kd3 Rc5 42. Ra6 Rxd5+ 43. Ke2 Rc5 44. Kd2 { -0.00/29 } ) 40. Kc5 h5 { 3.62 } ( 40... Kd8 41. Rd6+ Ke8 42. Rc6 Ra8 43. h4 Ra7 44. Kxb5 Kd7 45. Kc5 { 3.14/19 } ) 41. Rxg6 c3 { 5.08 } ( 41... Rc8+ 42. Rc6 Rg8 43. Rh6 Rc8+ 44. Kxb5 Rb8+ 45. Rb6 Rg8 46. g3 { 3.33/20 } ) 42. bxc3 Rc8+ 43. Rc6 b4 { 9.21 } ( 43... Rg8 44. g3 h4 45. gxh4 Rg2 46. Rd6+ Ke7 47. Re6+ Kd7 48. Kxb5 { 4.92/21 } ) 44. cxb4 Rxc6+ { Mate in 11 } ( 44... Rg8 45. b5 Rxg2 46. b6 Rc2+ 47. Kb5 Rd2 48. Ka6 Rxd5 49. Rh6 { 5.60/20 } ) 45. dxc6+ Kc7 46. b5 ( 46. h4 Kd8 47. Kd6 Ke8 48. b5 Kf7 49. b6 Kf8 50. b7 Kg7 51. Ke7 Kh6 52. Kf6 Kh7 53. b8=Q f4 54. Qc7+ Kh6 55. Qg7# ) 1-0
 
 """
 
