@@ -624,7 +624,7 @@ class ChessEventViewer:
         self.master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
 
     def _read_file_and_analyze(self, filepath):
-        """Leest de PGN-inhoud van het bestand en start de analyse."""
+        """Reads the PGN-content of the file and start the analysis."""
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 pgn_content = f.read()
@@ -637,7 +637,7 @@ class ChessEventViewer:
             print(error_message)
             self.pgn_filepath.set(error_message)
             self._clear_content_frame()
-            # tk.Label(self.content_frame, text=error_message, fg="red", pady=50).pack()
+
     def _create_file_reader_widget(self, master):
         """
         Creates the UI elements for selecting and displaying the PGN file path.
@@ -751,121 +751,7 @@ class ChessEventViewer:
                         tags="piece"  # Use tags for easy removal/movement later
                     )
                 # If the image is not loaded, the piece is skipped.
-    def draw_event_diagram(self, parent_frame, event_data, pgn_snippet_text, index):
-        """
-        Draws one block with a diagram in column 0 and the cumulative PGN history in column 1.
-        """
 
-        # --- JOINT CONTAINER FRAME ---
-        event_row_frame = tk.Frame(parent_frame, padx=20, pady=15, bd=1, relief=tk.SUNKEN)
-        event_row_frame.pack(fill="x", expand=True)  # Use pack for the rows
-
-        # --- COLUMN 0: DIAGRAM & INFO (Left) ---
-        title = f"Position {index + 1}: {event_data.get('source', 'Event')} - {event_data['move_text']}"
-        diagram_block = tk.LabelFrame(event_row_frame,
-                                      text=title,
-                                      padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
-        diagram_block.pack(side=tk.LEFT, padx=10, pady=5, fill="y", anchor="n")
-
-        # 1. Info Label
-        info_text = (
-            f"Move that caused the event: {event_data['move_text']}\n"
-            f"Change: {event_data['score'] / 100.0:.2f} P\n"
-            f"Eval BEFORE move: {event_data['eval_before']:.2f} | Eval AFTER move: {event_data['eval_after']:.2f}"
-        )
-        tk.Label(diagram_block, text=info_text, justify=tk.LEFT, pady=5).pack(anchor="w")
-
-        # 2. Canvas for the board
-        board_canvas = tk.Canvas(diagram_block, width=self.board_size, height=self.board_size,
-                                 borderwidth=0, highlightthickness=1, highlightbackground="black")
-        board_canvas.pack(pady=10)
-
-        # Initialize the board with the FEN BEFORE the event
-        board = chess.Board(event_data['fen'])
-
-        # Draw the board
-        for r in range(8):
-            for c in range(8):
-                x1 = c * self.square_size
-                y1 = r * self.square_size
-                x2 = x1 + self.square_size
-                y2 = y1 + self.square_size
-
-                color = self.color_light if (r + c) % 2 == 0 else self.color_dark
-                board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
-
-        # Draw the pieces
-        self.draw_pieces(board_canvas, board)
-
-        # Mark the starting square of the event-move
-        try:
-            # We need to parse the FEN, add the move, and then determine the from_square.
-            # However, the FEN is the position *BEFORE* the move.
-            # We use board.parse_san on the current board state (FEN BEFORE the move)
-            move_san = event_data['move_text'].split()[-1].strip('.')
-            move_to_highlight = board.parse_san(move_san)
-            from_square = move_to_highlight.from_square
-
-            from_rank = 7 - chess.square_rank(from_square)
-            from_file = chess.square_file(from_square)
-
-            x1 = from_file * self.square_size
-            y1 = from_rank * self.square_size
-
-            # Add a yellow highlight to the starting square
-            board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
-                                          outline="#FFC300", width=4, tags="highlight")
-        except Exception:
-            pass
-
-        # --- COLUMN 1: PGN SNIPPET (Right) ---
-        pgn_block = tk.LabelFrame(event_row_frame, text="PGN Moves since the last critical position",
-                                  padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
-        pgn_block.pack(side=tk.RIGHT, padx=10, pady=5, fill=tk.BOTH, expand=True)
-
-        # Text widget for the PGN text
-        pgn_text_widget = tk.Text(pgn_block, height=14, width=50, wrap=tk.WORD, font=("Consolas", 10))
-
-        # Insert the cumulative text
-        pgn_text_widget.insert(tk.END, pgn_snippet_text)
-        pgn_text_widget.config(state=tk.DISABLED)
-
-        pgn_text_widget.pack(fill=tk.BOTH, expand=True)
-
-        pgn_scrollbar = tk.Scrollbar(pgn_block, command=pgn_text_widget.yview)
-        pgn_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
-
-    def draw_event_diagrams(self):
-        """Draws all selected diagrams in chronological order."""
-        if not self.sorted_events:
-            tk.Label(self.content_frame, text="No significant events (>= 50 cp) found in the PGN data.",
-                     pady=50, padx=20).pack()
-            return
-
-        # The index of the last move shown in the PREVIOUS block
-        last_move_index = -1
-
-        for i, event in enumerate(self.sorted_events):
-            # The event-move is the last move in the full_move_history.
-            # The index of the move that caused the event is stored in 'move_index'.
-            current_move_index = event['move_index']
-
-            # Select only the moves that are NEW since the last displayed event
-            moves_to_display = event['full_move_history'][last_move_index + 1: current_move_index + 1]
-
-            # Format the PGN for display
-            pgn_snippet = _format_pgn_history(moves_to_display)
-
-            # Draw the diagram and the PGN
-            self.draw_event_diagram(self.content_frame, event, pgn_snippet, i)
-
-            # Update the counter for the next iteration
-            last_move_index = current_move_index
-
-        # Ensure the scroll region is updated
-        self.content_frame.update_idletasks()
-        self.event_canvas.config(scrollregion=self.event_canvas.bbox("all"))
 
     def _add_event_tab(self, index, event_data):
         """
@@ -950,36 +836,36 @@ class ChessEventViewer:
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-        # ESSENTIEEL: Zorgt ervoor dat de kolom die het Text widget bevat, uitzet
+        # ESSENTIAL: Ensures the column containing the Text widget expands
         pgn_block.grid_columnconfigure(0, weight=1)
 
-        # ** FIX I: Configureer RIJ 0 (de enige overgebleven rij) om uit te zetten **
+        # ** Configure ROW 0 (the only remaining row) to expand **
         pgn_block.grid_rowconfigure(0, weight=1)
 
-        # 1. Text widget for the PGN text (Nu in Row 0)
+        # 1. Text widget for the PGN text (Now in Row 0)
         pgn_text_widget = tk.Text(pgn_block, wrap=tk.WORD, font=("Consolas", 10), relief=tk.FLAT)
         pgn_text_widget.insert(tk.END, pgn_snippet_text)
         pgn_text_widget.config(state=tk.DISABLED)
 
-        # Gebruik sticky='nsew' om het widget het volledige cell-oppervlak te laten vullen
+        # Use sticky='nsew' to make the widget fill the entire cell area
         pgn_text_widget.grid(row=0, column=0, sticky='nsew')
 
         # Add a scrollbar next to the Text widget
         pgn_scrollbar = tk.Scrollbar(pgn_block, command=pgn_text_widget.yview)
-        # De scrollbar staat in dezelfde rij (0) als het Text widget en vult verticaal
+        # The scrollbar is in the same row (0) as the Text widget and fills vertically
         pgn_scrollbar.grid(row=0, column=1, sticky='ns')
         pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
 
         # 2. Add the frame to the Notebook
-        tab_title = f"{index}. {event_data['move_text']}"  # Korte titel voor de tab
+        tab_title = f"{index}. {event_data['move_text']}"  # Short title for the tab
         self.notebook.add(tab_frame, text=tab_title)
 
     def populate_event_tabs(self, events):
         """
-        Verwijdert bestaande tabs en vult de Notebook met nieuwe events,
-        waarbij het PGN-fragment voor elk event wordt berekend.
+        Removes existing tabs and populates the Notebook with new events,
+        calculating the PGN snippet for each event.
         """
-        # 1. WIS ALLE BESTAANDE TABS
+        # 1. CLEAR ALL EXISTING TABS
         for tab in self.notebook.tabs():
             self.notebook.forget(tab)
 
@@ -993,19 +879,18 @@ class ChessEventViewer:
         last_move_index = -1
 
         for i, event in enumerate(events):
-            # Dit is de zet-index die de event veroorzaakte
+            # This is the move index that caused the event
             current_move_index = event['move_index']
 
-            # Selecteer de zetten die NIEUW zijn sinds de laatst getoonde event
+            # Select the moves that are NEW since the last displayed event
             moves_to_display = event['full_move_history'][last_move_index + 1: current_move_index + 1]
 
-            # Format de PGN voor weergave
+            # Format the PGN for display
             pgn_snippet = _format_pgn_history(moves_to_display)
 
-            # 2. BEREID DATA VOOR DE TAB VOOR
-            #print("event 1", event)
+            # 2. PREPARE DATA FOR THE TAB
             tab_data = {
-                # Data direct nodig voor de _add_event_tab
+                # Data directly needed for the _add_event_tab
                 "fen": event['fen'],
                 "move_notation": event.get('move_notation', '...'),
                 "move_text": event.get('move_text', '...'),
@@ -1014,20 +899,19 @@ class ChessEventViewer:
                 "eval_after": event.get('eval_after', 0.0),
                 "source": event.get('source', 'Engine'),
                 "event_type": event.get('event_type', 'Event'),
-                "description": event.get('description', 'Geen gedetailleerde uitleg beschikbaar.'),
+                "description": event.get('description', 'No detailed explanation available.'),
                 "move_history": pgn_snippet,
             }
 
-            # 3. ROEP DE TAB-MAKER AAN (Vervangt de draw_event_diagram aanroep)
+            # 3. CALL THE TAB CREATOR (Replaces the draw_event_diagram call)
             self._add_event_tab(i + 1, tab_data)
 
-            # Update de teller voor de volgende iteratie
+            # Update the counter for the next iteration
             last_move_index = current_move_index
 
-        # Selecteer de eerste tab
+        # Select the first tab
         if self.notebook.tabs():
             self.notebook.select(self.notebook.tabs()[0])
-
 
 # --- Main execution ---
 
