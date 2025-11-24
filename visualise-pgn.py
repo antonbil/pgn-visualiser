@@ -479,61 +479,6 @@ class ChessEventViewer:
         for i, event in enumerate(events):
             self._add_event_tab(i + 1, event)
 
-    def _add_event_tab(self, index, event_data):
-        """
-        Creates and adds a single tab containing the diagram and explanation.
-        """
-        # 1. Create the container Frame for the tab content
-        tab_frame = ttk.Frame(self.notebook, padding="15")
-
-        # 2. Setup the content layout (e.g., diagram on left, text on right)
-        content_pane = ttk.PanedWindow(tab_frame, orient=tk.HORIZONTAL)
-        content_pane.pack(fill="both", expand=True)
-
-        # --- Diagram/Board Panel (Left) ---
-        diagram_frame = ttk.Frame(content_pane, padding=10, relief=tk.SUNKEN)
-
-        # Simulate a Chess Board Diagram (using a simple Canvas)
-        board_canvas = tk.Canvas(diagram_frame, width=self.board_size, height=self.board_size, bg="white",
-                                 highlightthickness=0)
-        board_canvas.pack(pady=10)
-
-        # Add a label to simulate the FEN position display
-        tk.Label(diagram_frame, text=f"Position (FEN):\n{event_data['fen']}", justify=tk.LEFT,
-                 foreground="darkgreen").pack(pady=5)
-
-        # NOTE: You would implement the actual board drawing logic here,
-        # using the provided self.square_size and self.color_light/dark properties.
-        # For this example, we just draw a placeholder rectangle:
-        board_canvas.create_rectangle(5, 5, self.board_size - 5, self.board_size - 5, outline="gray", width=2)
-        tk.Label(diagram_frame, text="[Chess Diagram Placeholder]", font=('Arial', 12)).place(x=self.board_size / 2,
-                                                                                              y=self.board_size / 2,
-                                                                                              anchor="center")
-
-        content_pane.add(diagram_frame)
-
-        # --- Explanation Panel (Right) ---
-        explanation_frame = ttk.Frame(content_pane, padding=10)
-        explanation_frame.columnconfigure(0, weight=1)
-
-        # Title
-        tk.Label(explanation_frame, text=event_data['title'], font=('Arial', 14, 'bold')).pack(anchor="nw",
-                                                                                               pady=(0, 10))
-
-        # Explanation Text
-        explanation_label = tk.Label(explanation_frame, text=event_data['explanation'],
-                                     wraplength=400, justify=tk.LEFT)
-        explanation_label.pack(anchor="nw", fill=tk.BOTH, expand=True)
-
-        # Current FEN
-        tk.Label(explanation_frame, text=f"FEN: {event_data['fen']}", font=('Courier', 8), wraplength=400,
-                 foreground="gray").pack(anchor="sw", pady=(10, 0))
-
-        content_pane.add(explanation_frame)
-
-        # 3. Add the frame to the Notebook
-        tab_title = f"{index}. {event_data['title'].split(':')[0]}"  # Use index and simplified title
-        self.notebook.add(tab_frame, text=tab_title)
 
     def _create_meta_info_widgets(self, parent_frame):
         """
@@ -936,7 +881,7 @@ class ChessEventViewer:
         pgn_snippet_text = event_data['move_history']
 
         # --- COLUMN 0: DIAGRAM & INFO (Left) ---
-        title = f"Position {index}: {event_data.get('source', 'Event')} - {event_data['move_notation']}"
+        title = f"{index}: {event_data['move_text']}"
 
         diagram_block = tk.LabelFrame(tab_frame,
                                       text=title,
@@ -945,7 +890,7 @@ class ChessEventViewer:
 
         # 1. Info Label
         info_text = (
-            f"Move: {event_data['move_notation']}\n"
+            f"Move: {event_data['move_text']}\n"
             f"Change: {event_data['score'] / 100.0:.2f} P\n"
             f"Eval BEFORE: {event_data['eval_before']:.2f} | Eval AFTER: {event_data['eval_after']:.2f}"
         )
@@ -981,7 +926,7 @@ class ChessEventViewer:
 
         # Mark the starting square of the event-move
         try:
-            move_san = event_data['move_notation'].split()[-1].strip('.')
+            move_san = event_data['move_text'].split()[-1].strip('.')
             move_to_highlight = board.parse_san(move_san)
             from_square = move_to_highlight.from_square
 
@@ -1001,41 +946,33 @@ class ChessEventViewer:
             pass
 
         # --- COLUMN 1: PGN SNIPPET & DESCRIPTION (Right) ---
-        pgn_block = tk.LabelFrame(tab_frame, text="Event Description & Relevant Moves",
+        pgn_block = tk.LabelFrame(tab_frame, text="Relevant Moves",
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
+
+        # ESSENTIEEL: Zorgt ervoor dat de kolom die het Text widget bevat, uitzet
         pgn_block.grid_columnconfigure(0, weight=1)
-        pgn_block.grid_rowconfigure(2, weight=1)
 
-        # 1. Event Description Label
-        explanation_text = event_data.get('description', 'Geen gedetailleerde uitleg beschikbaar.')
-        tk.Label(pgn_block, text="Event Uitleg:", font=("Helvetica", 10, "italic")).grid(row=0, column=0, sticky='w',
-                                                                                         pady=(0, 5))
-        tk.Label(pgn_block, text=explanation_text, wraplength=450, justify=tk.LEFT).grid(row=1, column=0, sticky='w',
-                                                                                         pady=(0, 10))
+        # ** FIX I: Configureer RIJ 0 (de enige overgebleven rij) om uit te zetten **
+        pgn_block.grid_rowconfigure(0, weight=1)
 
-        # 2. Text widget for the PGN text
-        tk.Label(pgn_block, text="Relevante Zetten (PGN Snippet):", font=("Helvetica", 10, "italic")).grid(row=2,
-                                                                                                           column=0,
-                                                                                                           sticky='w',
-                                                                                                           pady=(10, 5))
-
-        pgn_text_widget = tk.Text(pgn_block, height=10, width=50, wrap=tk.WORD, font=("Consolas", 10), relief=tk.FLAT)
+        # 1. Text widget for the PGN text (Nu in Row 0)
+        pgn_text_widget = tk.Text(pgn_block, wrap=tk.WORD, font=("Consolas", 10), relief=tk.FLAT)
         pgn_text_widget.insert(tk.END, pgn_snippet_text)
         pgn_text_widget.config(state=tk.DISABLED)
 
-        pgn_text_widget.grid(row=3, column=0, sticky='nsew')
+        # Gebruik sticky='nsew' om het widget het volledige cell-oppervlak te laten vullen
+        pgn_text_widget.grid(row=0, column=0, sticky='nsew')
 
         # Add a scrollbar next to the Text widget
         pgn_scrollbar = tk.Scrollbar(pgn_block, command=pgn_text_widget.yview)
-        pgn_scrollbar.grid(row=3, column=1, sticky='ns')
+        # De scrollbar staat in dezelfde rij (0) als het Text widget en vult verticaal
+        pgn_scrollbar.grid(row=0, column=1, sticky='ns')
         pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
 
-        # 3. Add the frame to the Notebook
-        tab_title = f"{index}. {event_data.get('event_type', 'Event')}"  # Korte titel voor de tab
+        # 2. Add the frame to the Notebook
+        tab_title = f"{index}. {event_data['move_text']}"  # Korte titel voor de tab
         self.notebook.add(tab_frame, text=tab_title)
-
-        # --- De nieuwe functie die uw oude draw_event_diagrams vervangt ---
 
     def populate_event_tabs(self, events):
         """
@@ -1066,10 +1003,12 @@ class ChessEventViewer:
             pgn_snippet = _format_pgn_history(moves_to_display)
 
             # 2. BEREID DATA VOOR DE TAB VOOR
+            #print("event 1", event)
             tab_data = {
                 # Data direct nodig voor de _add_event_tab
                 "fen": event['fen'],
                 "move_notation": event.get('move_notation', '...'),
+                "move_text": event.get('move_text', '...'),
                 "score": event.get('score', 0),
                 "eval_before": event.get('eval_before', 0.0),
                 "eval_after": event.get('eval_after', 0.0),
@@ -1090,13 +1029,13 @@ class ChessEventViewer:
             self.notebook.select(self.notebook.tabs()[0])
 
 
-# --- HOOFD EXECUTIE ---
+# --- Main execution ---
 
 if __name__ == "__main__":
     try:
         root = tk.Tk()
         # Set the initial size to 1200x800
-        root.geometry("1200x800")
+        root.geometry("1200x850")
 
         IMAGE_DIRECTORY = "Images/60"
         SQUARE_SIZE = 60  # Size of the squares in pixels
