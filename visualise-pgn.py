@@ -27,6 +27,7 @@ Defense } 4. O-O { 0.41 } ( 4. d4 exd4 { 0.55/20 } ) 4... Nf6 5. d4 Nxd4 { 1.43 
 
 """
 
+#define the whereabouts of the json-settings file
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILENAME = "settings/configuration.json"
 CONFIG_FILE_PATH = BASE_DIR / CONFIG_FILENAME
@@ -93,6 +94,7 @@ def get_settings():
         print(f"Default PGN Directory: {default_pgn_dir}")
 
         return default_pgn_dir, lastLoadedPgnPath
+
 # --- UTILITY FUNCTIONS FOR EVALUATION AND PGN ---
 
 def get_cp_from_comment(comment):
@@ -170,7 +172,7 @@ def _format_pgn_history(move_list):
             # Regular expression to remove ALL evaluation scores, [%eval ...] and variation parentheses.
             # This prevents the raw variation text from being displayed twice in the comment.
             clean_comment = re.sub(
-                r'\s*([#]?[-+]?\d+\.?\d*)(?:/\d+)?\s*|\[%eval\s*([#]?[-]?\d+\.?\d*)\]|\s*\([^\)]*\)',
+                r'\s*(?<![A-Za-z])([#]?[-+]?\d+\.?\d*)(?:/\d+)?\s*|\[%eval\s*([#]?[-]?\d+\.?\d*)\]|\s*\([^\)]*\)',
                 '',
                 move['comment']
             ).strip()
@@ -405,6 +407,8 @@ class ChessEventViewer:
     """
 
     def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath):
+        self.num_events = None
+        self.sorted_events = None
         self.master = master
         self.image_manager = image_manager
         self.default_pgn_dir = default_pgn_dir
@@ -694,21 +698,6 @@ class ChessEventViewer:
         else:
             print("File selection cancelled.")
 
-    def draw_board(self):
-        """Draws the chessboard (only the squares)."""
-        color1 = "#D18B47"  # Light brown
-        color2 = "#FFCE9E"  # Beige
-
-        for r in range(8):
-            for c in range(8):
-                x1 = c * self.square_size
-                y1 = r * self.square_size
-                x2 = x1 + self.square_size
-                y2 = y1 + self.square_size
-
-                # Swap colors
-                color = color1 if (r + c) % 2 == 0 else color2
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
 
     def draw_pieces(self, canvas, board):
         """
@@ -892,14 +881,11 @@ class ChessEventViewer:
             tab_data = {
                 # Data directly needed for the _add_event_tab
                 "fen": event['fen'],
-                "move_notation": event.get('move_notation', '...'),
                 "move_text": event.get('move_text', '...'),
                 "score": event.get('score', 0),
                 "eval_before": event.get('eval_before', 0.0),
                 "eval_after": event.get('eval_after', 0.0),
-                "source": event.get('source', 'Engine'),
                 "event_type": event.get('event_type', 'Event'),
-                "description": event.get('description', 'No detailed explanation available.'),
                 "move_history": pgn_snippet,
             }
 
