@@ -366,16 +366,18 @@ class ChessEventViewer:
             "BlackElo": tk.StringVar(master, value="????"),
         }
         main_frame = tk.Frame(master, padx=10, pady=10)
+        main_frame.grid_columnconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(1, weight=1)
         main_frame.pack(fill='x', anchor='n')
 
         # Frame for the PGN Meta-information (top)
         self.meta_info_frame = tk.Frame(main_frame, bd=2, relief=tk.GROOVE, padx=10, pady=5)
 
-        self.meta_info_frame.grid(row=0, column=0, sticky='nw')
+        self.meta_info_frame.grid(row=0, column=0, sticky='nwes')
 
         # Frame for Navigation (right)
         self.nav_panel = tk.Frame(main_frame, padx=20)
-        self.nav_panel.grid(row=0, column=1, sticky='ne')
+        self.nav_panel.grid(row=0, column=1, sticky='nwes')
 
         # Configure the column-weights so that the navigation will be pushed right
         self.master.grid_columnconfigure(0, weight=1)
