@@ -374,15 +374,15 @@ class ChessEventViewer:
         self.meta_info_frame.grid(row=0, column=0, sticky='nw')
 
         # Frame for Navigation (right)
-        nav_frame = tk.Frame(main_frame, padx=20)
-        nav_frame.grid(row=0, column=1, sticky='ne')
+        self.nav_panel = tk.Frame(main_frame, padx=20)
+        self.nav_panel.grid(row=0, column=1, sticky='ne')
 
         # Configure the column-weights so that the navigation will be pushed right
         self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_columnconfigure(1, weight=1)
 
         self._create_meta_info_widgets(self.meta_info_frame)
-        self._create_navigation_widgets(nav_frame)
+        self._create_navigation_widgets(self.nav_panel)
 
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
@@ -392,7 +392,6 @@ class ChessEventViewer:
 
     def _prev_game(self):
         """Navigates to the previous game in the list."""
-        print("Actie: Naar vorige partij")
         if self.current_game_index > 0:
             self.current_game_index -= 1
             self.set_game_var_descriptions(self.current_game_index)
@@ -447,7 +446,7 @@ class ChessEventViewer:
         )
         self.game_selector.pack(fill='x', padx=5, pady=5)
 
-        # IMPORTANT: Use bind() with the <<ComboboxSelected>> event
+        # Use bind() with the <<ComboboxSelected>> event
         self.game_selector.bind('<<ComboboxSelected>>', self._select_game)
 
         # 3. Navigation Buttons (Previous and Next)
@@ -665,6 +664,12 @@ class ChessEventViewer:
             return []
         else:
             game = self.games[0]
+            if self.num_games == 1:
+                # hide the navigation-panel
+                self.nav_panel.grid_forget()
+            else:
+                # show the navigation-panel
+                self.nav_panel.grid(row=0, column=1, sticky='ne', padx=20)
         return self.get_all_significant_events_game(game)
 
     def get_all_significant_events_game(self, game):
