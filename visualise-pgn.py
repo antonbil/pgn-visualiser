@@ -194,91 +194,6 @@ def _format_pgn_history(move_list):
 
     return "\n".join(output)
 
-def get_all_significant_events(pgn_string):
-    """
-    Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
-    """
-    pgn_io = io.StringIO(pgn_string)
-    game = chess.pgn.read_game(pgn_io)
-
-    if not game:
-        print("Error: Could not read chess game from PGN string.")
-        return []
-
-    events = []
-    board = game.board()
-    prev_eval_cp = 0
-    # List of ALL moves, including the move that caused the event
-    moves_made_so_far = []
-
-    # Iterate over the main line
-    for node in game.mainline():
-        if node.move is None:
-            continue
-
-        eval_before_cp = prev_eval_cp
-        eval_after_cp = get_cp_from_comment(node.comment)
-
-        fen_before_move = board.fen()
-        move_number = board.fullmove_number
-        player_who_moved = board.turn
-
-        # --- SAN CONVERSION ---
-        move_san = None
-        try:
-            move_san = board.san(node.move)
-        except Exception as e:
-            print(f"Warning: Error during SAN conversion for move {move_number} ({e})")
-            continue
-
-        # Add the data of the MOVE that was just checked to the history
-        move_data = {
-            'move_number': move_number,
-            'player': player_who_moved,
-            'san': move_san,
-            'comment': node.comment,
-            'variations':node.variations,
-            # This is the 0-based index in the complete move list
-            'full_move_index': len(moves_made_so_far)
-        }
-        moves_made_so_far.append(move_data)
-
-        # --- EVENT CALCULATION ---
-        if eval_after_cp is not None:
-            if player_who_moved == chess.WHITE:
-                # Loss of advantage for White is (Previous Eval - New Eval)
-                event_score = abs(eval_before_cp - eval_after_cp)
-                player_str = "White"
-            else:
-                # Loss of advantage for Black is (New Eval - Previous Eval)
-                event_score = eval_after_cp - eval_before_cp
-                player_str = "Black"
-
-
-            events.append({
-                    'score': event_score,
-                    'fen': fen_before_move,
-                    'move_text': f"{move_number}. {'. ...' if player_who_moved == chess.BLACK else ''}{move_san}",
-                    'player': player_str,
-                    'eval_before': eval_before_cp / 100.0,
-                    'eval_after': eval_after_cp / 100.0,
-                    'full_move_history': list(moves_made_so_far),
-                    'move_index': len(moves_made_so_far) - 1  # Index of the move
-                })
-
-        # --- EXECUTE MOVE AND TRACK EVALUATION ---
-        try:
-            board.push(node.move)
-        except Exception as e:
-            print(f"!!! ERROR !!! Cannot execute move '{move_san}' on the board: {e}")
-            return events
-
-        if eval_after_cp is not None:
-            # For the next move, the 'eval_after' of this move becomes the 'prev_eval'
-            prev_eval_cp = eval_after_cp
-
-    return events, game
-
 
 def select_key_positions(all_events):
     """
@@ -415,6 +330,8 @@ class ChessEventViewer:
         self.default_pgn_string = pgn_string
         self.lastLoadedPgnPath = lastLoadedPgnPath
 
+        self.games = []
+
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
@@ -422,6 +339,12 @@ class ChessEventViewer:
         self._create_file_reader_widget(master)
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        self.current_game_index = 0
+        self.num_games = 0
+        self.game_counter_var = tk.StringVar(value=f"Game 1 of {self.num_games}")
+        self.game_descriptions = []
+        self.selected_game_var = tk.StringVar(value=None)
+        self.game_selector = None
 
         self.square_size = square_size
         self.board_size = self.square_size * 8
@@ -442,15 +365,119 @@ class ChessEventViewer:
             "WhiteElo": tk.StringVar(master, value="????"),
             "BlackElo": tk.StringVar(master, value="????"),
         }
+        main_frame = tk.Frame(master, padx=10, pady=10)
+        main_frame.pack(fill='x', anchor='n')
+
         # Frame for the PGN Meta-information (top)
-        self.meta_info_frame = tk.Frame(master, bd=2, relief=tk.GROOVE, padx=10, pady=5)
-        self.meta_info_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+        self.meta_info_frame = tk.Frame(main_frame, bd=2, relief=tk.GROOVE, padx=10, pady=5)
+
+        self.meta_info_frame.grid(row=0, column=0, sticky='nw')
+
+        # Frame for Navigation (right)
+        nav_frame = tk.Frame(main_frame, padx=20)
+        nav_frame.grid(row=0, column=1, sticky='ne')
+
+        # Configure the column-weights so that the navigation will be pushed right
+        self.master.grid_columnconfigure(0, weight=1)
+        self.master.grid_columnconfigure(1, weight=1)
 
         self._create_meta_info_widgets(self.meta_info_frame)
+        self._create_navigation_widgets(nav_frame)
 
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
+
+    # --- NAVIGATION FUNCTIONS ---
+
+    def _prev_game(self):
+        """Navigates to the previous game in the list."""
+        print("Actie: Naar vorige partij")
+        if self.current_game_index > 0:
+            self.current_game_index -= 1
+            self.set_game_var_descriptions(self.current_game_index)
+            self.do_new_analysis_game(self.games[self.current_game_index])
+        else:
+            print("First game reached.")
+
+    def _next_game(self):
+        """Navigates to the next game in the list."""
+        if self.current_game_index < self.num_games - 1:
+            self.current_game_index += 1
+            self.set_game_var_descriptions(self.current_game_index)
+            self.do_new_analysis_game(self.games[self.current_game_index])
+        else:
+            print("Last game reached.")
+
+    def _select_game(self, event=None):
+        """
+        Function to select a game via the Combobox dropdown.
+        The 'event' parameter is required by the Combobox binding.
+        """
+        selected_description = self.selected_game_var.get()
+        print(f"Action: Game selected: {selected_description}")
+
+        # Search for the index of the selected description
+        try:
+            new_index = self.game_descriptions.index(selected_description)
+            if new_index != self.current_game_index:
+                self.current_game_index = new_index
+                self.set_game_var_descriptions(new_index)
+                self.do_new_analysis_game(self.games[new_index])
+        except ValueError:
+            print(f"Error: Description '{selected_description}' niet gevonden.")
+
+    def _create_navigation_widgets(self, parent_frame):
+        """
+        CREATES the navigation panel (Game Counter, Dropdown, and Prev/Next buttons).
+        This panel is placed to the right of the metadata.
+        """
+        button_font = ('Arial', 10, 'bold')
+
+        # 1. Game Number (Game X of Y)
+        tk.Label(parent_frame, textvariable=self.game_counter_var, font=button_font).pack(pady=5)
+
+        # 2. Dropdown (Combobox) for Game Selection
+        self.game_selector = ttk.Combobox(
+            parent_frame,
+            textvariable=self.selected_game_var,
+            values=self.game_descriptions,
+            state='readonly',  # Prevents direct user editing
+            width=55  # Extra width for better display of descriptions
+        )
+        self.game_selector.pack(fill='x', padx=5, pady=5)
+
+        # IMPORTANT: Use bind() with the <<ComboboxSelected>> event
+        self.game_selector.bind('<<ComboboxSelected>>', self._select_game)
+
+        # 3. Navigation Buttons (Previous and Next)
+        button_frame = tk.Frame(parent_frame)
+        button_frame.pack(pady=10)
+
+        # 'Previous' button
+        tk.Button(
+            button_frame,
+            text="<< Prev",
+            command=self._prev_game,
+            font=button_font,
+            width=8
+        ).pack(side=tk.LEFT, padx=5)
+
+        # 'Next' button
+        tk.Button(
+            button_frame,
+            text="Next >>",
+            command=self._next_game,
+            font=button_font,
+            width=8
+        ).pack(side=tk.RIGHT, padx=5)
+
+    def set_game_var_descriptions(self, current_game_index: int):
+        # Updates the index, the selected Combobox variable, and the game counter text.
+        self.current_game_index = current_game_index
+        self.selected_game_var.set(self.game_descriptions[current_game_index])
+
+        self.game_counter_var.set(f"Game {self.current_game_index + 1} of {self.num_games}")
 
     def _create_tabbed_event_viewer(self, master):
         """
@@ -614,11 +641,112 @@ class ChessEventViewer:
         # Reset scrollposition to top
         self.event_canvas.yview_moveto(0)
 
+    def get_all_significant_events(self, pgn_string):
+        """
+        Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
+        """
+        pgn_io = io.StringIO(pgn_string)
+        self.games = []
+        self.game_descriptions = []
+        while True:
+            game = chess.pgn.read_game(pgn_io)
+            if game is not None:
+                self.games.append(game)
+                self.game_descriptions.append(f"{game.headers.get("White")}-{game.headers.get("Black")}({game.headers.get("Result")})")
+            else:
+                break
+        self.game_selector.config(values=self.game_descriptions)
+        self.num_games = len(self.game_descriptions)
+        current_game_index = 0
+        self.set_game_var_descriptions(current_game_index)
+
+        if len(self.games) == 0:
+            print("Error: Could not read chess game from PGN string.")
+            return []
+        else:
+            game = self.games[0]
+        return self.get_all_significant_events_game(game)
+
+    def get_all_significant_events_game(self, game):
+        events = []
+        board = game.board()
+        prev_eval_cp = 0
+        # List of ALL moves, including the move that caused the event
+        moves_made_so_far = []
+
+        # Iterate over the main line
+        for node in game.mainline():
+            if node.move is None:
+                continue
+
+            eval_before_cp = prev_eval_cp
+            eval_after_cp = get_cp_from_comment(node.comment)
+
+            fen_before_move = board.fen()
+            move_number = board.fullmove_number
+            player_who_moved = board.turn
+
+            # --- SAN CONVERSION ---
+            move_san = None
+            try:
+                move_san = board.san(node.move)
+            except Exception as e:
+                print(f"Warning: Error during SAN conversion for move {move_number} ({e})")
+                continue
+
+            # Add the data of the MOVE that was just checked to the history
+            move_data = {
+                'move_number': move_number,
+                'player': player_who_moved,
+                'san': move_san,
+                'comment': node.comment,
+                'variations': node.variations,
+                # This is the 0-based index in the complete move list
+                'full_move_index': len(moves_made_so_far)
+            }
+            moves_made_so_far.append(move_data)
+
+            # --- EVENT CALCULATION ---
+            if eval_after_cp is not None:
+                if player_who_moved == chess.WHITE:
+                    # Loss of advantage for White is (Previous Eval - New Eval)
+                    event_score = abs(eval_before_cp - eval_after_cp)
+                    player_str = "White"
+                else:
+                    # Loss of advantage for Black is (New Eval - Previous Eval)
+                    event_score = eval_after_cp - eval_before_cp
+                    player_str = "Black"
+
+                events.append({
+                    'score': event_score,
+                    'fen': fen_before_move,
+                    'move_text': f"{move_number}. {'. ...' if player_who_moved == chess.BLACK else ''}{move_san}",
+                    'player': player_str,
+                    'eval_before': eval_before_cp / 100.0,
+                    'eval_after': eval_after_cp / 100.0,
+                    'full_move_history': list(moves_made_so_far),
+                    'move_index': len(moves_made_so_far) - 1  # Index of the move
+                })
+
+            # --- EXECUTE MOVE AND TRACK EVALUATION ---
+            try:
+                board.push(node.move)
+            except Exception as e:
+                print(f"!!! ERROR !!! Cannot execute move '{move_san}' on the board: {e}")
+                return events
+
+            if eval_after_cp is not None:
+                # For the next move, the 'eval_after' of this move becomes the 'prev_eval'
+                prev_eval_cp = eval_after_cp
+
+        return events, game
+
+
     def do_new_analysis(self, pgn_string):
         self._clear_content_frame()
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
-        all_events, game = get_all_significant_events(pgn_string)
+        all_events, game = self.get_all_significant_events(pgn_string)
         self._update_meta_info(game)
         print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
 
@@ -626,6 +754,17 @@ class ChessEventViewer:
         self.num_events = len(self.sorted_events)
         self.populate_event_tabs(self.sorted_events)
         self.master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
+
+    def do_new_analysis_game(self, game):
+        self._clear_content_frame()
+
+        all_events, game = self.get_all_significant_events_game(game)
+        self._update_meta_info(game)
+        print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
+
+        self.sorted_events = select_key_positions(all_events)
+        self.num_events = len(self.sorted_events)
+        self.populate_event_tabs(self.sorted_events)
 
     def _read_file_and_analyze(self, filepath):
         """Reads the PGN-content of the file and start the analysis."""
@@ -905,7 +1044,7 @@ if __name__ == "__main__":
     try:
         root = tk.Tk()
         # Set the initial size to 1200x800
-        root.geometry("1200x850")
+        root.geometry("1200x900")
 
         IMAGE_DIRECTORY = "Images/60"
         SQUARE_SIZE = 60  # Size of the squares in pixels
