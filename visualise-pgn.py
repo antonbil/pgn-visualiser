@@ -95,6 +95,27 @@ def get_settings():
 
         return default_pgn_dir, lastLoadedPgnPath
 
+
+# Functie om de zet-index uit de oorspronkelijke data te halen
+def _get_move_number(move_string):
+    """
+    Haalt het zetnummer op uit de PGN-string (bijv. '1.' of '45.' -> 1 of 45).
+    Deze is verbeterd om meercijferige zetnummers te ondersteunen.
+    """
+    parts = move_string.strip().split()
+    if not parts:
+        return None
+
+    first_part = parts[0]
+
+    # Controleer of de eerste token eindigt op '.' en meer dan alleen de punt is
+    if first_part.endswith('.') and len(first_part) > 1:
+        num_part = first_part[:-1]  # Alles behalve de punt
+        if num_part.isdigit():
+            return int(num_part)
+
+    return None
+
 # --- UTILITY FUNCTIONS FOR EVALUATION AND PGN ---
 
 def get_cp_from_comment(comment):
@@ -148,6 +169,7 @@ def _format_pgn_history(move_list):
 
     last_variation = None
     previous_variation = None
+    move_nr = 0
     for i, move in enumerate(move_list):
         move_number = move['move_number']
         move_san = move['san']
@@ -165,7 +187,7 @@ def _format_pgn_history(move_list):
                 current_line = f"{move_number}. ... {move_san}"
             else:
                 # Add Black's move
-                current_line += f" {move_san}"
+                current_line += f" {move_san}".replace('\n',  ' ')
 
         # --- 2. Clean up and Add Engine Comment ---
         if move.get('comment'):
@@ -192,7 +214,7 @@ def _format_pgn_history(move_list):
     if current_line:
         output.append(current_line.strip())
 
-    return "\n".join(output)
+    return output
 
 
 def select_key_positions(all_events):
@@ -322,6 +344,11 @@ class ChessEventViewer:
     """
 
     def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath):
+        self.all_moves_chess = None
+        self.current_move_index = None
+        self.game = None
+        self.board_canvases = []
+        self.current_board_canvas = None
         self.num_events = None
         self.sorted_events = None
         self.master = master
@@ -345,6 +372,30 @@ class ChessEventViewer:
         self.game_descriptions = []
         self.selected_game_var = tk.StringVar(value=None)
         self.game_selector = None
+
+        self.current_game_moves = [
+            "1. e4 e5",
+            "2. Nf3 Nc6",
+            "3. Bb5 a6",
+            "4. Ba4 Nf6",
+            "5. O-O Be7",
+            "6. Re1 b5",
+            "7. Bb3 d6",
+            "8. c3 O-O",
+            "9. h3 Na5",
+            "10. Bc2 c5",
+            "11. d4 exd4",
+            "12. cxd4 d5",
+            "13. e5 Ne4",
+            "14. Nc3 Nxc3",
+            "15. bxc3 cxd4",
+            "16. cxd4 Bb4",
+        ]
+
+        self.move_listbox = None
+        self.move_listboxes = []
+        self.current_movelistbox = None
+        self.current_tab = 0
 
         self.square_size = square_size
         self.board_size = self.square_size * 8
@@ -375,22 +426,249 @@ class ChessEventViewer:
 
         self.meta_info_frame.grid(row=0, column=0, sticky='nwes')
 
-        # Frame for Navigation (right)
+        # Frame for Game Navigation (right)
         self.nav_panel = tk.Frame(main_frame, padx=20)
         self.nav_panel.grid(row=0, column=1, sticky='nwes')
 
+        # NIEUW: Frame for Move Navigation (onder Game Navigation, rechts)
+        self.move_nav_panel = tk.Frame(main_frame, padx=20, pady=10)
+        # Plaats in rij 1, kolom 1
+        self.move_nav_panel.grid(row=1, column=1, sticky='new')
         # Configure the column-weights so that the navigation will be pushed right
         self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_columnconfigure(1, weight=1)
+        # Optioneel: de rij waar de zetnavigatie komt ook gewicht 0 geven
+        main_frame.grid_rowconfigure(1, weight=0)
 
         self._create_meta_info_widgets(self.meta_info_frame)
         self._create_navigation_widgets(self.nav_panel)
+        self._create_move_navigation_widgets(self.move_nav_panel)
 
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
 
-    # --- NAVIGATION FUNCTIONS ---
+    def _move_selected(self, event):
+        """
+        Determines the move and move number based on the Listbox content,
+        even if a comment or variation line is clicked.
+        """
+        try:
+            # 1. Determine the Listbox index based on the vertical click position (event.y)
+            # This is the row index in the Listbox (incl. comment lines)
+            print("event", event)
+            # 1. Determine the row height and the y-position of the first item.
+            # bbox(0) returns (x, y, width, height) of the item with index 0.
+            bbox_result = self.current_movelistbox.bbox(0)
+
+            if not bbox_result:
+                # Can happen if Listbox is empty
+                print("Cannot determine row height (Listbox empty).")
+                return
+
+            # The height of one row in pixels (index 3 of the bbox tuple)
+            row_height = bbox_result[3]
+            # The y-position of the first visible row relative to the Listbox top (index 1)
+            y_offset_of_first_item = bbox_result[1]
+
+            if row_height <= 0:
+                print("Error: Row height is zero or negative.")
+                return
+
+            # 2. Determine the base index (the index of the item currently at the top of the Listbox).
+            # We use 'nearest(0)' to get the scroll position. Although 'nearest(event.y)'
+            # failed, 'nearest(0)' should work for the scroll offset.
+            try:
+                first_visible_index = self.current_movelistbox.nearest(0)
+            except tk.TclError:
+                # Fall back to 0 if nearest(0) fails
+                first_visible_index = 0
+
+            # 3. Calculate the index of the clicked row.
+            # event.y is the click coordinate relative to the Listbox top.
+            # We subtract the y-position of the first row to normalize the starting point.
+            # We divide this by the row height (integer division).
+            visible_index_offset = (event.y - y_offset_of_first_item) // row_height
+
+            # The total Listbox index
+            listbox_index = first_visible_index + visible_index_offset
+
+            # 2. Clear existing selections
+            self.current_movelistbox.selection_clear(0, tk.END)
+
+            # 3. Search upwards to find the move line
+            target_move_number = None
+            original_move_index = None
+            found_move_line_index = -1
+
+            # Loop backwards from the clicked index to the beginning (index 0)
+            for i in range(listbox_index, -1, -1):
+                line_content = self.current_movelistbox.get(i).strip()
+
+                # Check if the line starts with a number followed by a period
+                # (e.g., "1." or "12.")
+                move_match = re.match(r'^(\d+)\.', line_content)
+
+                if move_match:
+                    # This is the move line!
+                    found_move_line_index = i
+                    target_move_number = int(move_match.group(1))
+
+                    # Retrieve the index for the 'game moves' array from the mapping
+                    original_move_index = i
+                    break
+
+            # 4. Process results
+            if target_move_number is not None:
+                # Re-select all lines belonging to this move (incl. comments/variations)
+
+                # Update status
+                print(
+                    f"Selected move: {target_move_number}. (Index {original_move_index})"
+                )
+
+                # Call internal logic (e.g., update board position)
+                # self._update_board(original_move_index)
+
+                real_move_index = (target_move_number - 1) * 2
+                self.display_diagram_move(real_move_index)
+
+            else:
+                # This should only happen if there are no moves in the list at all.
+                print("No move found.")
+                print("No valid move found for this selection.")
+
+        except tk.TclError:
+            # Activated by a click in the empty space below the items.
+            print("Click detected outside a valid Listbox item.")
+        except Exception as e:
+            # Unexpected error
+            print(f"An unexpected error occurred: {e}")
+
+    def display_diagram_move(self, real_move_index: int):
+        board = self.game.board()
+        # Simulate every move in the mainline up to the desired index
+        try:
+            # Loop over all moves up to the real_move_index
+            for i in range(real_move_index + 1):
+                if i < len(self.all_moves_chess):
+                    move = self.all_moves_chess[i]
+                    # Execute the move on the board
+                    board.push(move)
+                else:
+                    # This happens if the target move index is too high
+                    print(f"Warning: Move sequence ends after index {i}.")
+                    break
+
+        except IndexError:
+            print(f"Error: The requested index is out of range.")
+            return
+
+        except Exception as e:
+            # This catches illegal moves if the pgn were corrupt
+            print(f"Error while simulating the moves: {e}")
+            return
+
+        self.current_move_index = real_move_index
+        # Clear the entire self.current_board_canvas
+        self.current_board_canvas.delete("all")
+        # Initialize the board with the FEN BEFORE the event
+
+        # Draw the board squares
+        for r in range(8):
+            for c in range(8):
+                x1 = c * self.square_size
+                y1 = r * self.square_size
+                x2 = x1 + self.square_size
+                y2 = y1 + self.square_size
+
+                color = self.color_light if (r + c) % 2 == 0 else self.color_dark
+                self.current_board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
+
+        # Draw the pieces
+        self.draw_pieces(self.current_board_canvas, board)
+
+    # --- WIDGET: MOVE LIST (Listbox) ---
+    def _create_move_list_widget(self, parent_frame):
+        """
+        Creates the Listbox for displaying the moves (PGN).
+        """
+        pgn_block = tk.LabelFrame(parent_frame, text="Move History",
+                                  padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
+        # Use pack with fill/expand to make the LabelFrame fill the entire parent_frame
+        pgn_block.pack(fill='both', expand=True)
+
+        # ESSENTIAL: Ensures that column 0 and row 0 expand within the LabelFrame
+        pgn_block.grid_columnconfigure(0, weight=1)
+        pgn_block.grid_rowconfigure(0, weight=1)
+
+        # 1. Listbox for a structured, clickable list of moves
+        self.move_listbox = tk.Listbox(
+            pgn_block,
+            selectmode=tk.SINGLE,
+            font=("Consolas", 10),
+            relief=tk.FLAT
+        )
+        self.move_listboxes.append(self.move_listbox)
+        self.move_listbox.grid(row=0, column=0, sticky='nsew')
+
+        # 2. Scrollbar
+        move_list_scrollbar = tk.Scrollbar(pgn_block, command=self.move_listbox.yview)
+        move_list_scrollbar.grid(row=0, column=1, sticky='ns')
+        self.move_listbox.config(yscrollcommand=move_list_scrollbar.set)
+
+        # 3. Populate the Listbox with move data from the model
+        for move_pair in self.current_game_moves:
+            self.move_listbox.insert(tk.END, move_pair)
+
+        # 4. Add binding for action upon selection (clicking a move)
+        self.move_listbox.bind('<ButtonRelease-1>', self._move_selected)
+
+    def _go_to_first_move(self):
+        """Go to the first move of the current game."""
+        print("Action: Go to the first move.")
+
+    def _go_to_previous_move(self):
+        """Go to the previous move in the game."""
+        if self.current_move_index > 0:
+            self.display_diagram_move(self.current_move_index - 1)
+
+    def _go_to_next_move(self):
+        """Go to the next move in the game."""
+        if self.current_move_index < len(self.all_moves_chess):
+            self.display_diagram_move(self.current_move_index + 1)
+        #
+
+    def _go_to_last_move(self):
+        """Go to the last move of the game."""
+        print("Action: Go to the last move.")
+
+        # --- Widget Creation Functions (New) ---
+
+    def _create_move_navigation_widgets(self, parent_frame):
+        """Creates buttons for move navigation within the current game."""
+
+        # Use a single frame to arrange both the label and the buttons horizontally
+        button_container = tk.Frame(parent_frame)
+        # Anchor='w' (West/Left) to keep the whole block left-aligned
+        button_container.pack(pady=10, anchor='center')
+
+        # 1. Label on the left side (side=tk.LEFT)
+        tk.Label(button_container,
+                 text="Move Navigation:",
+                 font=('Arial', 10, 'bold')
+                 ).pack(side=tk.LEFT, padx=(0, 10))  # Add some space between the label and buttons
+
+        # 2. The buttons immediately after, also on the left side (side=tk.LEFT)
+
+        tk.Button(button_container, text="|<", command=self._go_to_first_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(button_container, text="<", command=self._go_to_previous_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(button_container, text=">", command=self._go_to_next_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(button_container, text=">|", command=self._go_to_last_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)    # --- NAVIGATION FUNCTIONS ---
 
     def _prev_game(self):
         """Navigates to the previous game in the list."""
@@ -431,29 +709,43 @@ class ChessEventViewer:
     def _create_navigation_widgets(self, parent_frame):
         """
         CREATES the navigation panel (Game Counter, Dropdown, and Prev/Next buttons).
-        This panel is placed to the right of the metadata.
+        Aangepast: Label en knoppen zijn horizontaal gegroepeerd en gecentreerd.
         """
         button_font = ('Arial', 10, 'bold')
 
-        # 1. Game Number (Game X of Y)
-        tk.Label(parent_frame, textvariable=self.game_counter_var, font=button_font).pack(pady=5)
-
-        # 2. Dropdown (Combobox) for Game Selection
+        # 1. Dropdown (Combobox) for Game Selection (blijft boven de navigatie)
         self.game_selector = ttk.Combobox(
             parent_frame,
             textvariable=self.selected_game_var,
             values=self.game_descriptions,
-            state='readonly',  # Prevents direct user editing
-            width=55  # Extra width for better display of descriptions
+            state='readonly',
+            width=55
         )
-        self.game_selector.pack(fill='x', padx=5, pady=5)
+        self.game_selector.pack(fill='x', padx=5, pady=5)  # Vult de breedte van nav_panel
 
-        # Use bind() with the <<ComboboxSelected>> event
         self.game_selector.bind('<<ComboboxSelected>>', self._select_game)
 
-        # 3. Navigation Buttons (Previous and Next)
-        button_frame = tk.Frame(parent_frame)
-        button_frame.pack(pady=10)
+        # 2. Container voor Horizontale groepering (Label + Knoppen)
+        # Gebruik deze frame om de teller en de navigatieknoppen naast elkaar te zetten
+        horizontal_nav_frame = tk.Frame(parent_frame)
+        # pack() zonder side en met anchor='center' zorgt voor centrering in de parent (nav_panel)
+        horizontal_nav_frame.pack(pady=10, anchor='center')
+
+        # 2a. Game Number (Game X of Y) - Links van de knoppen
+        tk.Label(
+            horizontal_nav_frame,
+            textvariable=self.game_counter_var,
+            font=button_font
+        ).pack(side=tk.LEFT, padx=(5, 15))  # Extra padx rechts voor afstand tot knoppen
+
+        # 2b. Navigation Buttons (Previous and Next) - Direct ernaast
+        # We gebruiken hier button_frame NIET als de container, maar plaatsen de knoppen
+        # direct in horizontal_nav_frame, of we laten button_frame de knoppen groeperen
+        # en packen button_frame links.
+
+        # We laten button_frame bestaan voor de structuur, maar packen hem nu met side=LEFT
+        button_frame = tk.Frame(horizontal_nav_frame)
+        button_frame.pack(side=tk.LEFT)
 
         # 'Previous' button
         tk.Button(
@@ -471,7 +763,7 @@ class ChessEventViewer:
             command=self._next_game,
             font=button_font,
             width=8
-        ).pack(side=tk.RIGHT, padx=5)
+        ).pack(side=tk.LEFT, padx=5)
 
     def set_game_var_descriptions(self, current_game_index: int):
         # Updates the index, the selected Combobox variable, and the game counter text.
@@ -490,27 +782,30 @@ class ChessEventViewer:
         # The Notebook widget is the container for the tabs
         self.notebook = ttk.Notebook(main_frame)
         self.notebook.pack(expand=True, fill="both")
+        self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_change)
 
         # Load the simulated events into tabs
         # self._populate_tabs(SIMULATED_EVENTS)
 
-    def _populate_tabs(self, events):
+    def _on_tab_change(self, event):
         """
-        Clears existing tabs and populates the Notebook with new events.
+        Deze functie wordt aangeroepen wanneer de gebruiker naar een ander tabblad klikt.
         """
-        # Clear all existing tabs if any
-        for tab in self.notebook.tabs():
-            self.notebook.forget(tab)
 
-        if not events:
-            empty_frame = ttk.Frame(self.notebook, padding=20)
-            tk.Label(empty_frame, text="No annotated critical events found in PGN.", foreground="gray").pack()
-            self.notebook.add(empty_frame, text="No Events")
-            return
+        # 1. Haal de widget ID op van het nieuw geselecteerde tabblad
+        selected_tab_id = self.notebook.select()
 
-        for i, event in enumerate(events):
-            self._add_event_tab(i + 1, event)
+        # 2. Vertaal de widget ID naar de nul-gebaseerde index
+        new_index = self.notebook.index(selected_tab_id)
 
+        # 3. Update de statusvariabele
+        self.current_tab = new_index
+
+        # 4. Update de UI en log de verandering
+        print(f"Tabblad gewijzigd. Nieuwe index: {self.current_tab}")
+
+        self.current_movelistbox = self.move_listboxes[self.current_tab]
+        self.current_board_canvas = self.board_canvases[self.current_tab]
 
     def _create_meta_info_widgets(self, parent_frame):
         """
@@ -672,9 +967,18 @@ class ChessEventViewer:
             else:
                 # show the navigation-panel
                 self.nav_panel.grid(row=0, column=1, sticky='ne', padx=20)
+        self.game = game
         return self.get_all_significant_events_game(game)
 
     def get_all_significant_events_game(self, game):
+        # 1. Reset de lijst voor het huidige spel
+        self.all_moves_chess = []
+
+        # 2. Gebruik de ingebouwde methode om door de hoofdlijn te itereren
+        # Elke iteratie geeft een chess.Move object terug.
+        for move in game.mainline_moves():
+            self.all_moves_chess.append(move)
+
         events = []
         board = game.board()
         prev_eval_cp = 0
@@ -921,6 +1225,7 @@ class ChessEventViewer:
         board_canvas = tk.Canvas(diagram_block, width=self.board_size, height=self.board_size,
                                  borderwidth=0, highlightthickness=1, highlightbackground="black")
         board_canvas.pack(pady=10)
+        self.board_canvases.append(board_canvas)
 
         # Initialize the board with the FEN BEFORE the event
         try:
@@ -944,7 +1249,6 @@ class ChessEventViewer:
 
         # Draw the pieces
         self.draw_pieces(board_canvas, board)
-
         # Mark the starting square of the event-move
         try:
             move_san = event_data['move_text'].split()[-1].strip('.')
@@ -977,23 +1281,42 @@ class ChessEventViewer:
         # ** Configure ROW 0 (the only remaining row) to expand **
         pgn_block.grid_rowconfigure(0, weight=1)
 
-        # 1. Text widget for the PGN text (Now in Row 0)
-        pgn_text_widget = tk.Text(pgn_block, wrap=tk.WORD, font=("Consolas", 10), relief=tk.FLAT)
-        pgn_text_widget.insert(tk.END, pgn_snippet_text)
-        pgn_text_widget.config(state=tk.DISABLED)
-
-        # Use sticky='nsew' to make the widget fill the entire cell area
-        pgn_text_widget.grid(row=0, column=0, sticky='nsew')
-
-        # Add a scrollbar next to the Text widget
-        pgn_scrollbar = tk.Scrollbar(pgn_block, command=pgn_text_widget.yview)
-        # The scrollbar is in the same row (0) as the Text widget and fills vertically
-        pgn_scrollbar.grid(row=0, column=1, sticky='ns')
-        pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
-
+        self._create_move_list_widget(pgn_block)
+        # # 1. Text widget for the PGN text (Now in Row 0)
+        # pgn_text_widget = tk.Text(pgn_block, wrap=tk.WORD, font=("Consolas", 10), relief=tk.FLAT)
+        # pgn_text_widget.insert(tk.END, pgn_snippet_text)
+        # pgn_text_widget.config(state=tk.DISABLED)
+        #
+        # # Use sticky='nsew' to make the widget fill the entire cell area
+        # pgn_text_widget.grid(row=0, column=0, sticky='nsew')
+        #
+        # # Add a scrollbar next to the Text widget
+        # pgn_scrollbar = tk.Scrollbar(pgn_block, command=pgn_text_widget.yview)
+        # # The scrollbar is in the same row (0) as the Text widget and fills vertically
+        # pgn_scrollbar.grid(row=0, column=1, sticky='ns')
+        # pgn_text_widget.config(yscrollcommand=pgn_scrollbar.set)
+        #
         # 2. Add the frame to the Notebook
+        self._update_move_listbox_content(self.current_game_moves)
         tab_title = f"{index}. {event_data['move_text']}"  # Short title for the tab
         self.notebook.add(tab_frame, text=tab_title)
+
+    def _update_move_listbox_content(self, moves):
+        """
+        Leegt de Listbox, en vult deze opnieuw.
+        """
+        # 1. Listbox en map volledig leegmaken
+        self.move_listbox.delete(0, tk.END)
+
+        # 2. Vullen met de nieuwe zetten en de map opbouwen
+        for move_index, move_pair in enumerate(moves):
+            # Splitst de string op elke newline
+            lines = move_pair.split('\n')
+
+            for line in lines:
+                # Voeg elke resulterende regel (line) toe als een afzonderlijke Listbox item
+                self.move_listbox.insert(tk.END, line)
+
 
     def populate_event_tabs(self, events):
         """
@@ -1003,6 +1326,9 @@ class ChessEventViewer:
         # 1. CLEAR ALL EXISTING TABS
         for tab in self.notebook.tabs():
             self.notebook.forget(tab)
+
+        self.move_listboxes = []
+        self.board_canvases = []
 
         if not events:
             empty_frame = ttk.Frame(self.notebook, padding=20)
@@ -1022,6 +1348,7 @@ class ChessEventViewer:
 
             # Format the PGN for display
             pgn_snippet = _format_pgn_history(moves_to_display)
+            self.current_game_moves = pgn_snippet
 
             # 2. PREPARE DATA FOR THE TAB
             tab_data = {
