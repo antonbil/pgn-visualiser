@@ -1,4 +1,5 @@
 {
     "default_directory": "/home/user/Schaken",
-    "lastLoadedPgnPath": "/home/user/Schaken/2024-wr-chess-masters-cup.pgn"
+    "lastLoadedPgnPath": "/home/user/Schaken/2024-wr-chess-masters-cup.pgn",
+    "engine_path": "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2"
 }

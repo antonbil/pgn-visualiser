@@ -11,6 +11,8 @@ import re
 from PIL import Image, ImageTk
 from pathlib import Path
 import json
+from pgn_editor.pgn_editor import ChessAnnotatorApp
+from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_EVENTS = """
@@ -58,7 +60,7 @@ def _load_config():
         return {}
 
 
-def _save_config(default_directory: str, last_pgn_path: str):
+def _save_config(default_directory: str, last_pgn_path: str, engine_path: str):
     """
     Saves the current configuration (default directory and last PGN path)
     to the configuration JSON file.
@@ -72,6 +74,7 @@ def _save_config(default_directory: str, last_pgn_path: str):
         # Ensure paths are clean (no unnecessary whitespace)
         "default_directory": default_directory.strip(),
         "lastLoadedPgnPath": last_pgn_path.strip(),
+        "engine_path": engine_path.strip(),
     }
 
     try:
@@ -91,9 +94,10 @@ def get_settings():
         # The PGN directory
         default_pgn_dir = config_data.get("default_directory", "/home/user/Chess")
         lastLoadedPgnPath = config_data.get("lastLoadedPgnPath", "")
+        engine_path = config_data.get("engine_path", "")
         print(f"Default PGN Directory: {default_pgn_dir}")
 
-        return default_pgn_dir, lastLoadedPgnPath
+        return default_pgn_dir, lastLoadedPgnPath, engine_path
 
 
 # Functie om de zet-index uit de oorspronkelijke data te halen
@@ -343,8 +347,9 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path):
         self.current_movelistbox_info = None
+        self.engine_path = engine_path
         self.all_moves_chess = None
         self.current_move_index = None
         self.game = None
@@ -400,6 +405,7 @@ class ChessEventViewer:
             "WhiteElo": tk.StringVar(master, value="????"),
             "BlackElo": tk.StringVar(master, value="????"),
         }
+        self._setup_menu_bar(master)
         main_frame = tk.Frame(master, padx=10, pady=10)
         main_frame.grid_columnconfigure(0, weight=1)
         main_frame.grid_columnconfigure(1, weight=1)
@@ -431,6 +437,87 @@ class ChessEventViewer:
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
+
+    # --- Menu Logic ---
+
+    def _setup_menu_bar(self, master):
+        """
+        Creates the menu bar with File and Game options.
+        """
+        menubar = tk.Menu(master)
+        master.config(menu=menubar)
+
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
+        file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=master.quit)
+
+        # Game Menu
+        game_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=game_menu)
+        game_menu.add_command(label="Editor", command=lambda: self.start_editor(), state=tk.NORMAL, accelerator="Ctrl+Left")
+        game_menu.add_command(label="Enter new Game", command=lambda: self.enter_new_game(), state=tk.NORMAL, accelerator="Ctrl+Right")
+
+        self.game_menu = game_menu
+
+
+    def load_pgn_file(self):
+        """
+        Opens a dialog to select a PGN file and loads all games from it.
+        """
+        filepath = filedialog.askopenfilename(
+            defaultextension=".pgn",
+            filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
+            title="Choose a PGN file to load"
+        )
+        if filepath:
+            try:
+                pass
+            except Exception as e:
+                messagebox.showerror("Loading Error", f"Could not read the file: {e}")
+
+    def start_editor(self):
+        root = tk.Tk()
+        try:
+            string_var_value = self.pgn_filepath.get()
+        except:
+            string_var_value = ""
+        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True)
+
+    def enter_new_game(self):
+        root = tk.Tk()
+        IMAGE_DIRECTORY = "Images/60"
+        SQUARE_SIZE = 60  # Size of the squares in pixels
+        # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
+        # If this fails (e.g., FileNotFoundError), the program stops here.
+        asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY)
+
+        app = PGNEntryApp(root,asset_manager , self.pgn_filepath)#self.image_manager
+        root.mainloop()
+
+    def save_pgn_file(self):
+        """
+        Saves the current game, including headers and commentary, to a PGN file.
+        """
+        if not self.game:
+            messagebox.showwarning("Save Failed", "No game loaded to save.")
+            return
+
+        # Ask the user where to save the file
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".pgn",
+            filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
+            title="Save PGN Game"
+        )
+
+        if filepath:
+            try:
+                pass
+            except Exception as e:
+                messagebox.showerror("Saving Error", f"Could not save the file: {e}")
 
     def _move_selected(self, event):
         """
@@ -948,7 +1035,7 @@ class ChessEventViewer:
             result_label.configure(foreground="red")
 
     def on_closing(self):
-        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath)
+        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path)
         exit()
 
     def load_initial_pgn(self, lastLoadedPgnPath):
@@ -1424,9 +1511,9 @@ if __name__ == "__main__":
         # If this fails (e.g., FileNotFoundError), the program stops here.
         asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
 
-        default_pgn_dir, lastLoadedPgnPath = get_settings()
+        default_pgn_dir, lastLoadedPgnPath, engine_path = get_settings()
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
