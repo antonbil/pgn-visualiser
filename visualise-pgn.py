@@ -383,7 +383,9 @@ class PieceImageManager:
         if self.images:
             print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
         else:
-            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")# --- TKINTER CLASS ---
+            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
+
+# --- TKINTER CLASS ---
 
 class ChessEventViewer:
     """
