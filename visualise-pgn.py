@@ -13,6 +13,8 @@ from pathlib import Path
 import json
 from pgn_editor.pgn_editor import ChessAnnotatorApp
 from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
+import cairosvg
+from io import BytesIO
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_EVENTS = """
@@ -60,7 +62,7 @@ def _load_config():
         return {}
 
 
-def _save_config(default_directory: str, last_pgn_path: str, engine_path: str):
+def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, piece_set: str):
     """
     Saves the current configuration (default directory and last PGN path)
     to the configuration JSON file.
@@ -75,6 +77,7 @@ def _save_config(default_directory: str, last_pgn_path: str, engine_path: str):
         "default_directory": default_directory.strip(),
         "lastLoadedPgnPath": last_pgn_path.strip(),
         "engine_path": engine_path.strip(),
+        "piece_set": piece_set.strip(),
     }
 
     try:
@@ -94,10 +97,11 @@ def get_settings():
         # The PGN directory
         default_pgn_dir = config_data.get("default_directory", "/home/user/Chess")
         lastLoadedPgnPath = config_data.get("lastLoadedPgnPath", "")
+        piece_set = config_data.get("piece_set", "")
         engine_path = config_data.get("engine_path", "")
         print(f"Default PGN Directory: {default_pgn_dir}")
 
-        return default_pgn_dir, lastLoadedPgnPath, engine_path
+        return default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set
 
 
 # Functie om de zet-index uit de oorspronkelijke data te halen
@@ -293,18 +297,21 @@ def select_key_positions(all_events):
 # ----------------------------------------------------------------------
 class PieceImageManager:
     """
-    Manages the loading and storage of chess piece images from disk into memory.
-    This ensures images are loaded only once, regardless of how many boards
-    (ChessVisualizer instances) are created.
+    Beheert het laden en cachen van schaakstukafbeeldingen.
+    Ondersteunt nu het kiezen van een specifieke set (bijv. set '2' voor bK2.svg).
     """
 
-    def __init__(self, square_size, image_dir_path):
+    def __init__(self, square_size, image_dir_path, set_identifier="staunty"):
+        """
+        :param set_identifier: De ID van de gewenste set ('1', '2', '3', etc.).
+                               Dit wordt gebruikt om de juiste bestandsnaam te kiezen.
+        """
         self.square_size = square_size
         self.image_dir_path = image_dir_path
-        # Dictionary to hold the loaded ImageTk.PhotoImage objects
-        self.images = {}
+        self.set_identifier = str(set_identifier) # Zorg ervoor dat het een string is
+        self.images = {} # Dictionary om de ImageTk.PhotoImage objecten vast te houden
 
-        # Mapping from chess.Piece.symbol() to the filename prefix
+        # We gebruiken de basisprefixen (wK, bQ)
         self.piece_map = {
             'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
             'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
@@ -314,42 +321,79 @@ class PieceImageManager:
 
     def _load_images(self):
         """
-        Loads and resizes the PNG images and stores them in self.images.
+        Laadt en wijzigt de afmetingen van de afbeeldingen van de GESELECTEERDE SET.
+        Zoekt eerst naar een SVG, dan naar een PNG, met de set-identifier eraan vast.
         """
-        try:
-            for symbol, filename_prefix in self.piece_map.items():
-                # Assemble the full path
-                image_path = os.path.join(self.image_dir_path, f"{filename_prefix}.png")
+        # Wis oude afbeeldingen om Garbage Collector problemen te voorkomen bij herladen
+        self.images = {}
 
-                # 1. Load the image using PIL (Pillow)
-                img = Image.open(image_path)
+        print(f"Laden van schaakset '{self.set_identifier}' uit: {self.image_dir_path}")
 
-                # 2. Resize the image to match the square size
+        for symbol, base_prefix in self.piece_map.items():
+
+            # De dynamische prefix: bijv. 'wK2' of 'bN3'
+            filename_prefix = f"{base_prefix}"
+
+            # Lijst van te proberen bestandsformaten, in volgorde van voorkeur
+            # Zoals u in uw map heeft: wK2.svg, wK3.svg, of wK1.png
+            extensions = ['.svg', '.png']
+
+            img = None
+            image_path = None
+
+            for ext in extensions:
+                image_path = os.path.join(self.image_dir_path, self.set_identifier, f"{filename_prefix}{ext}")
+
+                if os.path.exists(image_path):
+                    try:
+                        if ext == '.svg':
+                            # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
+                            print(f"Laden SVG: {image_path}")
+                            # Hieronder moet u de cairosvg import en logica toevoegen
+                            # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
+
+                            # Tenzij u de cairosvg logica al heeft toegevoegd:
+                            png_bytes = cairosvg.svg2png(url=image_path)
+                            img = Image.open(BytesIO(png_bytes))
+
+                            # Fallback: We laten de SVG-laadlogica weg uit dit voorbeeld
+                            # om afhankelijkheden te minimaliseren, tenzij u het expliciet vraagt.
+                            # We gaan verder met het proberen van PNG.
+                            # continue # Skip SVG load for simplicity if cairosvg not set up
+
+                        elif ext == '.png':
+                            # Laad de PNG (werkt altijd met Pillow)
+                            img = Image.open(image_path)
+                            break # Bestand gevonden, stop de lus
+
+                    except Exception as e:
+                        print(f"Fout bij het laden van {image_path}: {e}")
+                        img = None # Bij fout, probeer volgende extensie
+
+            # Controleer of we een afbeelding hebben geladen
+            if img:
+                # 2. Afmetingen aanpassen
                 img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
 
-                # 3. Convert to a Tkinter-compatible format and store
+                # 3. Converteren naar Tkinter-formaat en opslaan
                 self.images[symbol] = ImageTk.PhotoImage(img)
+            else:
+                print(f"Waarschuwing: Geen afbeelding gevonden voor set {self.set_identifier} en stuk {symbol}. Laat leeg.")
 
-            print(f"Chess images successfully loaded and cached from: {self.image_dir_path}")
-
-        except FileNotFoundError:
-            print(f"Error: The directory or files were not found at {self.image_dir_path}.")
-            print("Make sure the path is correct and that the filenames are correct (wK.png, bQ.png, etc.).")
-            # Re-raise the error to stop execution since assets are critical
-            raise
-        except Exception as e:
-            print(f"An unexpected error occurred while loading the images: {e}")
-            raise
-# --- TKINTER CLASS ---
+        if self.images:
+            print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
+        else:
+            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")# --- TKINTER CLASS ---
 
 class ChessEventViewer:
     """
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set):
         self.current_movelistbox_info = None
         self.engine_path = engine_path
+        self.piece_set = piece_set
         self.all_moves_chess = None
         self.current_move_index = None
         self.game = None
@@ -489,13 +533,13 @@ class ChessEventViewer:
 
     def enter_new_game(self):
         root = tk.Tk()
-        IMAGE_DIRECTORY = "Images/60"
+        IMAGE_DIRECTORY = "pgn_entry/Images/60"
         SQUARE_SIZE = 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
-        asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY)
+        # asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, "2")
 
-        app = PGNEntryApp(root,asset_manager , self.pgn_filepath)#self.image_manager
+        app = PGNEntryApp(root,None , self.pgn_filepath)#self.image_manager
         root.mainloop()
 
     def save_pgn_file(self):
@@ -1035,7 +1079,7 @@ class ChessEventViewer:
             result_label.configure(foreground="red")
 
     def on_closing(self):
-        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path)
+        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set)
         exit()
 
     def load_initial_pgn(self, lastLoadedPgnPath):
@@ -1505,15 +1549,14 @@ if __name__ == "__main__":
         # Set the initial size to 1200x800
         root.geometry("1200x900")
 
-        IMAGE_DIRECTORY = "Images/60"
+        IMAGE_DIRECTORY = "Images/piece"
         SQUARE_SIZE = 60  # Size of the squares in pixels
+        default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set = get_settings()
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
-        asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY)
+        asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
 
-        default_pgn_dir, lastLoadedPgnPath, engine_path = get_settings()
-
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
