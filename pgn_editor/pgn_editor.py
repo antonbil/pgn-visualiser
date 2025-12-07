@@ -5,13 +5,21 @@ import chess
 import chess.pgn
 import re # For simple PGN cleaning
 import asyncio
+import argparse
+from PIL import Image, ImageTk
+import os
+import cairosvg
+from io import BytesIO
+
 
 # Required: pip install python-chess
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75):
         print("parameters:",pgn_game, engine_name)
         self.master = master
+        self.square_size = square_size
+        self.image_manager = image_manager
         self.hide_file_load = hide_file_load
         master.title("PGN Chess Annotator")
 
@@ -24,6 +32,7 @@ class ChessAnnotatorApp:
         self.current_move_index = -1 # Index in move_list. -1 = starting position
         self.meta_entries = {}   # Dictionary to store the Entry widgets for meta-tags
         self.game_menu = None    # Reference to the Game Menu for updating item states
+        self.stored_moves = []
 
         # Store button references for robust access
         self.insert_edit_comment_button = None
@@ -74,6 +83,7 @@ class ChessAnnotatorApp:
         else:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
+        self._setup_canvas_bindings()
 
     # --- Menu Logic ---
 
@@ -100,6 +110,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
         game_menu.add_separator()
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
+        game_menu.add_command(label="Restore Variation", command=self.restore_variation)
 
         self.game_menu = game_menu
 
@@ -362,7 +373,11 @@ class ChessAnnotatorApp:
 
         # 2. Navigation and Current Move section (center in the header)
         nav_comment_frame = tk.Frame(header_frame)
-        nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.Y)
+
+        # **FIX 1: Pack het frame HIER met fill=tk.BOTH en expand=True**
+        # Dit zorgt ervoor dat dit frame de overgebleven horizontale ruimte tussen
+        # meta_frame (LEFT) en comment_frame (RIGHT) opeist.
+        nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
         # Current Move Notation
         tk.Label(nav_comment_frame, text="Current Move:", font=('Arial', 10, 'bold')).pack(pady=5)
@@ -377,7 +392,28 @@ class ChessAnnotatorApp:
         self.next_button = tk.Button(nav_buttons_frame, text="Next >>", command=self.go_forward_move, width=10)
         self.next_button.pack(side=tk.LEFT, padx=5)
 
-        # 3. Commentary Controls section (right in the header)
+        # === START COMMENTAAR WEERGAVE ===
+        tk.Label(nav_comment_frame, text="Commentaar:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
+
+        # **FIX 2: Maak de wraplength dynamisch en gebruik fill=tk.X en sticky=tk.N**
+        # Door wraplength te verwijderen of veel groter te maken en fill=tk.X te gebruiken,
+        # zal het label de beschikbare breedte van de parent (nav_comment_frame) opvullen.
+
+        self.comment_display = tk.Label(
+            nav_comment_frame,
+            text="Geen commentaar voor deze zet.",
+            font=('Arial', 9),
+            bg='lightgray',
+            relief=tk.SUNKEN,
+            height=3,          # Vaste hoogte voor 3 regels
+            wraplength=450, # Stel in op de breedte van het frame (of laat weg en vertrouw op fill=tk.X)
+            justify=tk.LEFT,   # Linksuitlijning van de tekst
+            anchor=tk.NW       # Zorgt ervoor dat de tekst linksboven begint
+        )
+        # Gebruik fill=tk.X om het label de volle breedte van nav_comment_frame te laten innemen
+        self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
+
+        # === EINDE COMMENTAAR WEERGAVE ===        # 3. Commentary Controls section (right in the header)
         comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
         comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
@@ -392,10 +428,6 @@ class ChessAnnotatorApp:
         self.delete_comment_button = tk.Button(comment_frame, text="Delete Commentary", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
         self.delete_comment_button.pack(pady=5)
 
-        # Display the current move's commentary
-        tk.Label(comment_frame, text="Current Commentary:", font=('Arial', 9, 'bold')).pack(pady=5)
-        self.comment_display = tk.Label(comment_frame, text="—", wraplength=250, justify=tk.LEFT, relief=tk.SUNKEN, padx=5, pady=5, height=3)
-        self.comment_display.pack(fill=tk.X)
 
     def _update_meta_entries(self):
         """
@@ -422,8 +454,10 @@ class ChessAnnotatorApp:
         # Column 1 (Left): Chess Diagram
         board_frame = tk.Frame(main_frame)
         board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-        tk.Label(board_frame, text="Chess Diagram", font=('Arial', 12, 'bold')).pack(pady=5)
-        self.canvas = tk.Canvas(board_frame, width=400, height=400, bg='lightgray')
+        #tk.Label(board_frame, text="Chess Diagram", font=('Arial', 12, 'bold')).pack(pady=5)
+        move_listbox_width = 50
+        width = 8*(self.square_size - 5) + move_listbox_width
+        self.canvas = tk.Canvas(board_frame, width=width, height=8*(self.square_size),bg='lightgray')
         self.canvas.pack(padx=5, pady=5)
         # Make the canvas responsive
         board_frame.bind('<Configure>', self._on_canvas_resize)
@@ -440,8 +474,8 @@ class ChessAnnotatorApp:
         self.move_listbox = tk.Listbox(
             moves_frame,
             yscrollcommand=scrollbar.set,
-            height=25,
-            width=50, # Increased width to accommodate variations indicator
+            #height=25,
+            width=move_listbox_width, # Increased width to accommodate variations indicator
             font=('Consolas', 10)
         )
         self.move_listbox.pack(side=tk.LEFT, fill=tk.Y)
@@ -1057,6 +1091,7 @@ class ChessAnnotatorApp:
 
             index = selection[0]
             variation_node = current_node.variations[index]
+            self.stored_moves.append([current_node, current_node.variations[0], self.current_move_index])
             current_node.promote_to_main(variation_node)
             previous_current_move_index = self.current_move_index
             self.move_list = []
@@ -1140,6 +1175,25 @@ class ChessAnnotatorApp:
 
         self.master.wait_window(dialog)
 
+    def restore_variation(self):
+        if len(self.stored_moves) == 0:
+            messagebox.showinfo("Information", "No variations to restore.")
+            return
+        base_node, move_to_restore, index_move_to_restore = self.stored_moves.pop()
+        base_node.promote_to_main(move_to_restore)
+        previous_current_move_index = index_move_to_restore
+        self.move_list = []
+        node = self.game
+        while node.variations:
+            # Always follow the main (first) variation
+            node = node.variation(0)
+            self.move_list.append(node)
+
+        self._populate_move_listbox()
+        self.current_move_index = index_move_to_restore
+        self.update_state()
+
+
     # --- Board Drawing Logic ---
 
     def _on_canvas_resize(self, event):
@@ -1162,7 +1216,7 @@ class ChessAnnotatorApp:
 
         self.canvas.delete("all")
 
-        square_size = board_size / 8
+        square_size = self.square_size#board_size / 8
         colors = ("#F0D9B5", "#B58863")  # Light and dark square colors
 
         # Unicode pieces (White: Uppercase, Black: Lowercase)
@@ -1182,7 +1236,7 @@ class ChessAnnotatorApp:
                 # Square color
                 color_index = (row + col) % 2
                 fill_color = colors[color_index]
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill_color, tags="square")
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill_color, outline="black", tags="square")
 
                 # Algebraic notation (for the border)
                 file_char = chr(ord('a') + col)
@@ -1195,9 +1249,10 @@ class ChessAnnotatorApp:
 
                 # Place the piece
                 square_index = chess.square(col, 7 - row)
-                piece = self.board.piece_at(square_index)
+                if self.image_manager is None:
+                 piece = self.board.piece_at(square_index)
 
-                if piece:
+                 if piece:
                     piece_char = piece_map.get(piece.symbol())
                     self.canvas.create_text(
                         x1 + square_size / 2,
@@ -1207,6 +1262,23 @@ class ChessAnnotatorApp:
                         fill='black',
                         tags="piece"
                     )
+                else:
+                    piece = self.board.piece_at(square_index)
+
+                    if piece:
+                        symbol = piece.symbol()
+
+                        if symbol in self.image_manager.images:
+                            # We retrieve the cached image from the manager
+                            piece_img = self.image_manager.images.get(symbol)
+
+                            # 3. Draw the image in the center of the square
+                            self.canvas.create_image(
+                                x1 + square_size / 2,
+                                y1 + square_size / 2,
+                                image=piece_img,
+                                tags="piece"  # Use tags for easy removal/movement later
+                            )
 
         # Highlight the last move
         if self.current_move_index >= 0:
@@ -1227,15 +1299,188 @@ class ChessAnnotatorApp:
             # Highlight the 'from' and 'to' squares
             for sq in [from_sq, to_sq]:
                 x1, y1, x2, y2 = get_coords(sq)
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill='#ffe066', stipple='gray50', tags="highlight")
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill='#ffe066', outline="black", stipple='gray50', tags="highlight")
 
             # Ensure pieces are drawn above the highlights
             self.canvas.tag_raise("piece")
             self.canvas.tag_raise("highlight", "square")
 
+    def _setup_canvas_bindings(self):
+        """Koppelt de linker muisklik aan de verwerkingsmethode."""
+        # <Button-1> is de linker muisknop
+        self.canvas.bind("<Button-1>", self._handle_click)
+        print("Canvas click handler is ingesteld.")
+
+
+    def _handle_click(self, event):
+        """
+        Verwerkt een klikgebeurtenis op het Canvas en bepaalt of deze op de
+        linker- of rechterhelft van het bord plaatsvond.
+        """
+        click_x = event.x
+        click_y = event.y
+
+        # De totale breedte van het schaakbord is 8 * square_size
+        board_width = 8 * self.square_size
+
+        # De helft van het bord bevindt zich na kolom 4 (of op x = 4 * square_size)
+        halfway_x = board_width / 2
+
+        # Bepaal het vierkant (kolom/rij) waar geklikt is
+        col_index = int(click_x / self.square_size)
+        row_index = int(click_y / self.square_size)
+
+        # Vertaal de 0-7 index naar de schaaknotatie (a1, h8, etc.)
+        file_char = chr(ord('a') + col_index)
+        rank_char = str(8 - row_index)
+        square_notation = f"{file_char}{rank_char}"
+
+        # Bepaal of de klik op de linkerhelft (kolom a t/m d) of rechterhelft (kolom e t/m h) was
+        if click_x < halfway_x:
+            side = "Linkerhelft van het bord (Kolom a-d)"
+            self.go_back_move()
+        else:
+            side = "Rechterhelft van het bord (Kolom e-h)"
+            self.go_forward_move()
+
+        # print("-" * 30)
+        # print(f"Klik gedetecteerd op: {square_notation} ({row_index}, {col_index})")
+        # print(f"X-coördinaat: {click_x}. Halfweg: {halfway_x}")
+        # print(f"Locatie: {side}")
+        # print("-" * 30)
+
+
+def parse_args():
+    """
+    Define an argument parser and return the parsed arguments
+    """
+    parser = argparse.ArgumentParser(
+        prog='annotator',
+        description='store chess game in a PGN file '
+        'based on user input')
+    parser.add_argument("--pgn_game", "-p",
+                        help="Set the name of the pgn game",
+                        default="")
+    #engine_name
+    parser.add_argument("--engine_name", "-e",
+                        help="Set the directory and name of the engine",
+                        default="")
+
+    parser.add_argument("--piece_set", "-s",
+                        help="Set the piece-set for chess-pieces",
+                        default="staunty")
+    parser.add_argument("--square_size", "-q",
+                        help="Set the square-size for the board",
+                        type=int,
+                        default=80)
+    return parser.parse_args()
+# ----------------------------------------------------------------------
+# 1. PIECE IMAGE MANAGER (THE FACTORY/SINGLETON)
+# This class is responsible for loading all images once from the disk.
+# ----------------------------------------------------------------------
+class PieceImageManager1:
+    """
+    Beheert het laden en cachen van schaakstukafbeeldingen.
+    Ondersteunt nu het kiezen van een specifieke set (bijv. set '2' voor bK2.svg).
+    """
+
+    def __init__(self, square_size, image_dir_path, set_identifier="staunty"):
+        """
+        :param set_identifier: De ID van de gewenste set ('1', '2', '3', etc.).
+                               Dit wordt gebruikt om de juiste bestandsnaam te kiezen.
+        """
+        self.square_size = square_size
+        self.image_dir_path = image_dir_path
+        self.set_identifier = str(set_identifier) # Zorg ervoor dat het een string is
+        self.images = {} # Dictionary om de ImageTk.PhotoImage objecten vast te houden
+
+        # We gebruiken de basisprefixen (wK, bQ)
+        self.piece_map = {
+            'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+            'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
+        }
+
+        self._load_images()
+
+    def _load_images(self):
+        """
+        Laadt en wijzigt de afmetingen van de afbeeldingen van de GESELECTEERDE SET.
+        Zoekt eerst naar een SVG, dan naar een PNG, met de set-identifier eraan vast.
+        """
+        # Wis oude afbeeldingen om Garbage Collector problemen te voorkomen bij herladen
+        self.images = {}
+
+        print(f"Laden van schaakset '{self.set_identifier}' uit: {self.image_dir_path}")
+
+        for symbol, base_prefix in self.piece_map.items():
+
+            # De dynamische prefix: bijv. 'wK2' of 'bN3'
+            filename_prefix = f"{base_prefix}"
+
+            # Lijst van te proberen bestandsformaten, in volgorde van voorkeur
+            # Zoals u in uw map heeft: wK2.svg, wK3.svg, of wK1.png
+            extensions = ['.svg', '.png']
+
+            img = None
+            image_path = None
+
+            for ext in extensions:
+                image_path = os.path.join(self.image_dir_path, self.set_identifier, f"{filename_prefix}{ext}")
+
+                if os.path.exists(image_path):
+                    try:
+                        if ext == '.svg':
+                            # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
+                            print(f"Laden SVG: {image_path}")
+                            # Hieronder moet u de cairosvg import en logica toevoegen
+                            # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
+
+                            # Tenzij u de cairosvg logica al heeft toegevoegd:
+                            png_bytes = cairosvg.svg2png(url=image_path)
+                            img = Image.open(BytesIO(png_bytes))
+
+                            # Fallback: We laten de SVG-laadlogica weg uit dit voorbeeld
+                            # om afhankelijkheden te minimaliseren, tenzij u het expliciet vraagt.
+                            # We gaan verder met het proberen van PNG.
+                            # continue # Skip SVG load for simplicity if cairosvg not set up
+
+                        elif ext == '.png':
+                            # Laad de PNG (werkt altijd met Pillow)
+                            img = Image.open(image_path)
+                            break # Bestand gevonden, stop de lus
+
+                    except Exception as e:
+                        print(f"Fout bij het laden van {image_path}: {e}")
+                        img = None # Bij fout, probeer volgende extensie
+
+            # Controleer of we een afbeelding hebben geladen
+            if img:
+                # 2. Afmetingen aanpassen
+                img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
+
+                # 3. Converteren naar Tkinter-formaat en opslaan
+                self.images[symbol] = ImageTk.PhotoImage(img)
+            else:
+                print(f"Waarschuwing: Geen afbeelding gevonden voor set {self.set_identifier} en stuk {symbol}. Laat leeg.")
+
+        if self.images:
+            print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
+        else:
+            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
 
 # Main execution block
 if __name__ == "__main__":
+    args = parse_args()
+    pgn_game = args.pgn_game
+    engine_name = args.engine_name
+    piece_set = args.piece_set
+    IMAGE_DIRECTORY = "Images/piece"
+    SQUARE_SIZE = args.square_size  # Size of the squares in pixels
+    # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
+    # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
-    app = ChessAnnotatorApp(root)
+    asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5)
     root.mainloop()
+#example call
+##python3 pgn_editor.py --pgn_game "/home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn" --engine_name "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2"
