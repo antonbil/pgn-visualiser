@@ -382,9 +382,9 @@ class ChessAnnotatorApp:
         # 2. Navigation and Current Move section (center in the header)
         nav_comment_frame = tk.Frame(header_frame)
 
-        # **FIX 1: Pack het frame HIER met fill=tk.BOTH en expand=True**
-        # Dit zorgt ervoor dat dit frame de overgebleven horizontale ruimte tussen
-        # meta_frame (LEFT) en comment_frame (RIGHT) opeist.
+        # Pack this frame HERE with fill=tk.BOTH and expand=True
+        # This ensures that this frame claims the remaining horizontal space between
+        # meta_frame (LEFT) and comment_frame (RIGHT).
         nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
         # Current Move Notation
@@ -400,28 +400,28 @@ class ChessAnnotatorApp:
         self.next_button = tk.Button(nav_buttons_frame, text="Next >>", command=self.go_forward_move, width=10)
         self.next_button.pack(side=tk.LEFT, padx=5)
 
-        # === START COMMENTAAR WEERGAVE ===
-        tk.Label(nav_comment_frame, text="Commentaar:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
+        # === COMMENTARY DISPLAY ===
+        tk.Label(nav_comment_frame, text="Commentary:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
 
-        # **FIX 2: Maak de wraplength dynamisch en gebruik fill=tk.X en sticky=tk.N**
-        # Door wraplength te verwijderen of veel groter te maken en fill=tk.X te gebruiken,
-        # zal het label de beschikbare breedte van de parent (nav_comment_frame) opvullen.
+        # Make the wraplength dynamic and use fill=tk.X and sticky=tk.N
+        # By removing wraplength or making it much larger and using fill=tk.X,
+        # the label will fill the available width of the parent (nav_comment_frame).
 
         self.comment_display = tk.Label(
             nav_comment_frame,
-            text="Geen commentaar voor deze zet.",
+            text="No comment for this move.",
             font=('Arial', 9),
             bg='lightgray',
             relief=tk.SUNKEN,
-            height=3,          # Vaste hoogte voor 3 regels
-            wraplength=450, # Stel in op de breedte van het frame (of laat weg en vertrouw op fill=tk.X)
-            justify=tk.LEFT,   # Linksuitlijning van de tekst
-            anchor=tk.NW       # Zorgt ervoor dat de tekst linksboven begint
+            height=3,          # Fixed height for 3 lines
+            wraplength=450, # Set to frame width (or omit and rely on fill=tk.X)
+            justify=tk.LEFT,   # Left alignment of the text
+            anchor=tk.NW      # Ensures the text starts at the top left
         )
-        # Gebruik fill=tk.X om het label de volle breedte van nav_comment_frame te laten innemen
+        # Use fill=tk.X to make the label take the full width of nav_comment_frame
         self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
 
-        # === EINDE COMMENTAAR WEERGAVE ===        # 3. Commentary Controls section (right in the header)
+        # 3. Commentary Controls section (right in the header)
         comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
         comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
@@ -435,7 +435,6 @@ class ChessAnnotatorApp:
 
         self.delete_comment_button = tk.Button(comment_frame, text="Delete Commentary", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
         self.delete_comment_button.pack(pady=5)
-
 
     def _update_meta_entries(self):
         """
@@ -1112,12 +1111,6 @@ class ChessAnnotatorApp:
 
             self._populate_move_listbox()
             self.current_move_index = previous_current_move_index
-            # dialog.destroy()
-            # print("1", self.current_move_index)
-            # i=0
-            # while i<self.current_move_index:
-            #     self.go_forward_move()
-            #     i=i+1
             self.update_state()
 
 
@@ -1329,118 +1322,119 @@ class ChessAnnotatorApp:
             self.canvas.tag_raise("highlight", "square")
 
     def _setup_canvas_bindings(self):
-        """Koppelt de linker muisklik aan de verwerkingsmethode."""
-        # <Button-1> is de linker muisknop
+        """Binds the left mouse click to the processing method."""
+        # <Button-1> is the left mouse button
         self.canvas.bind("<Button-1>", self._handle_click)
-        print("Canvas click handler is ingesteld.")
+        print("Canvas click handler is set up.")
 
 
     def _handle_click(self, event):
         """
-        Verwerkt een klikgebeurtenis op het Canvas.
-        Prioriteit 1: Zet uitvoeren.
-        Prioriteit 2: Stuk selecteren.
-        Prioriteit 3: Navigatie (linker/rechterhelft als er geen zet is gedaan).
+        Handles a click event on the Canvas.
+        Priority 1: Execute move.
+        Priority 2: Select piece.
+        Priority 3: Navigation (left/right half if no move was made).
         """
         click_x = event.x
         click_y = event.y
 
-        # Bepaal het vierkant waar geklikt is (in chess.Square formaat)
+        # Determine the square clicked (in chess.Square format)
         col_index = int(click_x / self.square_size)
         row_index = int(click_y / self.square_size)
 
-        # Converteer GUI (top-down, 0-7) naar chess.Square index (bottom-up)
+        # Convert GUI (top-down, 0-7) to chess.Square index (bottom-up)
         clicked_square = chess.square(col_index, 7 - row_index)
 
         piece_on_square = self.board.piece_at(clicked_square)
 
         # -----------------------------------------------------------
-        # STAP 1: Controleer op zet of selectie ongedaan maken
+        # STEP 1: Check for move or deselect
         # -----------------------------------------------------------
         if self.is_manual and self.selected_square is not None:
             self.is_manual = False
 
-            # Er is al een stuk geselecteerd, dus dit is de doel-vierkant (to_square)
+            # A piece is already selected, so this is the destination square (to_square)
             from_square = self.selected_square
             to_square = clicked_square
 
-            # Probeer de zet te maken (bijv. e2e4, d7d5, etc.)
-            # Omdat we een GUI hebben, is de meest directe manier om de zet te proberen via UCI
+            # Try to make the move (e.g., e2e4, d7d5, etc.)
+            # Because we have a GUI, the most direct way to attempt the move is via UCI
             try:
-                # Maak een zet object aan. Voor promoties (zoals a7a8q) hebben we een 'q' nodig.
-                # We gaan hier uit van een eenvoudige zet (geen automatische promotie afhandeling in deze simpele logica)
+                # Create a move object. For promotions (like a7a8q) we need a 'q'.
+                # We assume a simple move here (no automatic promotion handling in this simple logic)
                 move_uci = chess.square_name(from_square) + chess.square_name(to_square)
 
-                # Controleer op promotie: als het een pion op de 7e rij is die naar de 8e rij beweegt
+                # Check for promotion: if it is a pawn on the 7th rank moving to the 8th rank
                 if self.board.piece_type_at(from_square) == chess.PAWN and chess.square_rank(to_square) in (0, 7) and chess.square_rank(from_square) != chess.square_rank(to_square):
-                    # Voeg standaard 'q' toe als promotie-keuze, u kunt dit later uitbreiden met een prompt
+                    # Add standard 'q' as promotion choice; you can expand this later with a prompt
                     move_uci += 'q'
 
-                # Valideer en voer de zet uit
+                # Validate and execute the move
                 move = chess.Move.from_uci(move_uci)
 
                 if move in self.board.legal_moves:
-                    print(f"Geldige zet: {move.uci()}. Uitvoeren...")
+                    print(f"Valid move: {move.uci()}. Executing...")
                     self._add_move_as_variation(move)
                     self.selected_square = None
                     self._clear_selection_highlight()
                     messagebox.showinfo("Information", f"Valid move: {move.uci()} added...")
 
-                    return # Verwerkt, stop de klikafhandeling
+                    return # Handled, stop click processing
 
                 else:
-                    # Ongeldige zet. Reset de selectie, maar ga verder om te kijken of de gebruiker een NIEUW stuk wil selecteren
-                    print("Ongeldige zet. Selectie gereset.")
+                    # Invalid move. Reset selection, but continue to see if the user wants to select a NEW piece
+                    print("Invalid move. Selection reset.")
                     self.selected_square = None
                     self._clear_selection_highlight()
 
             except Exception as e:
-                # Dit vangt fouten op zoals een foutieve UCI string of andere chess-exceptions
-                print(f"Fout bij het proberen van de zet: {e}. Selectie gereset.")
+                # This catches errors such as a faulty UCI string or other chess exceptions
+                print(f"Error trying to make the move: {e}. Selection reset.")
                 self.selected_square = None
                 self._clear_selection_highlight()
 
         # -----------------------------------------------------------
-        # STAP 2: Nieuwe selectie
+        # STEP 2: New Selection
         # -----------------------------------------------------------
-        # Als de klik een stuk van de beurt-hebbende kleur bevat, selecteer dit stuk.
+        # If the click contains a piece of the current player's color, select this piece.
         if self.is_manual and piece_on_square and piece_on_square.color == self.board.turn:
 
-            # Selecteer het nieuwe vierkant
+            # Select the new square
             self.selected_square = clicked_square
-            print(f"Stuk geselecteerd op: {chess.square_name(clicked_square)}")
+            print(f"Piece selected at: {chess.square_name(clicked_square)}")
             self._draw_selection_highlight(clicked_square)
-            return # Verwerkt, stop de klikafhandeling
+            return # Handled, stop click processing
 
         # -----------------------------------------------------------
-        # STAP 3: Navigatie (alleen als er geen stuk geselecteerd is en de zet niet is gelukt)
+        # STEP 3: Navigation (only if no piece is selected and the move failed)
         # -----------------------------------------------------------
 
-        # Als we hier komen, is de klik niet gebruikt om een geldige zet te maken
-        # en is er ofwel op een leeg veld geklikt, ofwel op een ongeldig stuk.
+        # If we reach here, the click was not used to make a valid move
+        # and either an empty square was clicked, or an invalid piece.
 
         board_width = 8 * self.square_size
         halfway_x = board_width / 2
-        #print("1", self.is_manual, self.selected_square is None, (clicked_square == self.selected_square))
-        # Als er op een leeg veld wordt geklikt of een selectie wordt opgeheven
+
+        # If an empty square is clicked or a selection is canceled
         if not self.is_manual and (self.selected_square is None or (clicked_square == self.selected_square)):
-            # Wis eventuele selectie die nog over is
+
+            # Clear any remaining selection
             self.selected_square = None
             self._clear_selection_highlight()
 
-            # De originele navigatie logica
+            # The original navigation logic
             if click_x < halfway_x:
-                side = "Linkerhelft van het bord (Navigatie: Terug)"
+                side = "Left half of the board (Navigation: Back)"
                 self.go_back_move()
             else:
-                side = "Rechterhelft van het bord (Navigatie: Vooruit)"
+                side = "Right half of the board (Navigation: Forward)"
                 self.go_forward_move()
 
-            # Toon navigatie-info in de console (optioneel)
+            # Display navigation info in the console (optional)
             file_char = chr(ord('a') + col_index)
             rank_char = str(8 - row_index)
             square_notation = f"{file_char}{rank_char}"
-            print(f"Navigatieklik op: {square_notation}. {side}")
+            # print(f"Navigation click on: {square_notation}. {side}")
 
     def _add_move_as_variation(self, move):
         self._get_current_node().add_variation(move)
@@ -1450,16 +1444,16 @@ class ChessAnnotatorApp:
 
 
     def _clear_selection_highlight(self):
-        """Verwijdert de actieve selectie highlight van het Canvas."""
+        """Removes the active selection highlight from the Canvas."""
         if self.highlight_item:
             self.canvas.delete(self.highlight_item)
             self.highlight_item = None
 
     def _draw_selection_highlight(self, square):
-        """Tekent de highlight op het geselecteerde vierkant."""
-        self._clear_selection_highlight() # Eerst de oude highlight verwijderen
+        """Draws the highlight on the selected square."""
+        self._clear_selection_highlight() # First remove the old highlight
 
-        # Bereken de GUI coördinaten van het vierkant
+        # Calculate the GUI coordinates of the square
         col = chess.square_file(square)
         row = 7 - chess.square_rank(square)
         x1 = col * self.square_size
@@ -1467,22 +1461,15 @@ class ChessAnnotatorApp:
         x2 = x1 + self.square_size
         y2 = y1 + self.square_size
 
-        # Teken de highlight
+        # Draw the highlight
         self.highlight_item = self.canvas.create_rectangle(
             x1, y1, x2, y2,
-            outline="#22ff22", # Groene rand
-            width=3,           # Dikkere rand
-            tags="selection_highlight" # Tag voor makkelijk verwijderen
+            outline="#22ff22", # Green border
+            width=3,           # Thicker border
+            tags="selection_highlight" # Tag for easy removal
         )
-        # Zorg ervoor dat de highlight onder de stukken ligt
+        # Ensure the highlight is below the pieces
         self.canvas.tag_lower(self.highlight_item, "piece")
-
-            # print("-" * 30)
-            # print(f"Klik gedetecteerd op: {square_notation} ({row_index}, {col_index})")
-            # print(f"X-coördinaat: {click_x}. Halfweg: {halfway_x}")
-            # print(f"Locatie: {side}")
-            # print("-" * 30)
-
 
 def parse_args():
     """
@@ -1514,21 +1501,21 @@ def parse_args():
 # ----------------------------------------------------------------------
 class PieceImageManager1:
     """
-    Beheert het laden en cachen van schaakstukafbeeldingen.
-    Ondersteunt nu het kiezen van een specifieke set (bijv. set '2' voor bK2.svg).
+    Manages loading and caching of chess piece images.
+    Supports selecting a specific set (e.g., set '2' for bK2.svg).
     """
 
     def __init__(self, square_size, image_dir_path, set_identifier="staunty"):
         """
-        :param set_identifier: De ID van de gewenste set ('1', '2', '3', etc.).
-                               Dit wordt gebruikt om de juiste bestandsnaam te kiezen.
+        :param set_identifier: The ID of the desired set ('1', '2', '3', etc.).
+                                This is used to select the correct filename.
         """
         self.square_size = square_size
         self.image_dir_path = image_dir_path
-        self.set_identifier = str(set_identifier) # Zorg ervoor dat het een string is
-        self.images = {} # Dictionary om de ImageTk.PhotoImage objecten vast te houden
+        self.set_identifier = str(set_identifier) # Ensure it is a string
+        self.images = {} # Dictionary to store ImageTk.PhotoImage objects
 
-        # We gebruiken de basisprefixen (wK, bQ)
+        # Base prefixes (wK = White King, bQ = Black Queen)
         self.piece_map = {
             'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
             'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
@@ -1538,21 +1525,21 @@ class PieceImageManager1:
 
     def _load_images(self):
         """
-        Laadt en wijzigt de afmetingen van de afbeeldingen van de GESELECTEERDE SET.
-        Zoekt eerst naar een SVG, dan naar een PNG, met de set-identifier eraan vast.
+        Loads and resizes images from the SELECTED SET.
+        Searches first for an SVG, then a PNG, with the set-identifier attached.
         """
-        # Wis oude afbeeldingen om Garbage Collector problemen te voorkomen bij herladen
+        # Clear old images to prevent Garbage Collector issues during reloading
         self.images = {}
 
-        print(f"Laden van schaakset '{self.set_identifier}' uit: {self.image_dir_path}")
+        print(f"Loading chess set '{self.set_identifier}' from: {self.image_dir_path}")
 
         for symbol, base_prefix in self.piece_map.items():
 
-            # De dynamische prefix: bijv. 'wK2' of 'bN3'
+            # The dynamic prefix: e.g., 'wK2' or 'bN3'
             filename_prefix = f"{base_prefix}"
 
-            # Lijst van te proberen bestandsformaten, in volgorde van voorkeur
-            # Zoals u in uw map heeft: wK2.svg, wK3.svg, of wK1.png
+            # List of file formats to attempt, in order of preference
+            # As seen in your directory: wK2.svg, wK3.svg, or wK1.png
             extensions = ['.svg', '.png']
 
             img = None
@@ -1564,43 +1551,43 @@ class PieceImageManager1:
                 if os.path.exists(image_path):
                     try:
                         if ext == '.svg':
-                            # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
-                            print(f"Laden SVG: {image_path}")
-                            # Hieronder moet u de cairosvg import en logica toevoegen
-                            # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
+                            # SVGs require Cairosvg (requires installation)
+                            #print(f"Loading SVG: {image_path}")
+                            # Cairosvg logic needs to be added here.
+                            # Because cairosvg is external, we keep generic PNG/fallback logic active.
 
-                            # Tenzij u de cairosvg logica al heeft toegevoegd:
+                            # If cairosvg logic is implemented:
                             png_bytes = cairosvg.svg2png(url=image_path)
                             img = Image.open(BytesIO(png_bytes))
 
-                            # Fallback: We laten de SVG-laadlogica weg uit dit voorbeeld
-                            # om afhankelijkheden te minimaliseren, tenzij u het expliciet vraagt.
-                            # We gaan verder met het proberen van PNG.
+                            # Fallback: We omit extensive SVG loading logic from this example
+                            # to minimize dependencies, unless explicitly requested.
+                            # We proceed with attempting PNG.
                             # continue # Skip SVG load for simplicity if cairosvg not set up
 
                         elif ext == '.png':
-                            # Laad de PNG (werkt altijd met Pillow)
+                            # Load PNG (always works with Pillow)
                             img = Image.open(image_path)
-                            break # Bestand gevonden, stop de lus
+                            break # File found, stop the loop
 
                     except Exception as e:
-                        print(f"Fout bij het laden van {image_path}: {e}")
-                        img = None # Bij fout, probeer volgende extensie
+                        print(f"Error loading {image_path}: {e}")
+                        img = None # On error, attempt next extension
 
-            # Controleer of we een afbeelding hebben geladen
+            # Check if an image was successfully loaded
             if img:
-                # 2. Afmetingen aanpassen
+                # 1. Resize image
                 img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
 
-                # 3. Converteren naar Tkinter-formaat en opslaan
+                # 2. Convert to Tkinter format and store
                 self.images[symbol] = ImageTk.PhotoImage(img)
             else:
-                print(f"Waarschuwing: Geen afbeelding gevonden voor set {self.set_identifier} en stuk {symbol}. Laat leeg.")
+                print(f"Warning: No image found for set {self.set_identifier} and piece {symbol}. Leaving blank.")
 
         if self.images:
-            print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
+            print(f"Chess set '{self.set_identifier}' loaded successfully.")
         else:
-            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
+            print(f"Error: No chess pieces loaded. Verify if files exist: *K{self.set_identifier}.(png/svg)")
 
 # Main execution block
 if __name__ == "__main__":
