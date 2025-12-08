@@ -115,6 +115,8 @@ class ChessAnnotatorApp:
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
         variations_menu.add_command(label="Restore Variation", command=self.restore_variation)
+        variations_menu.add_command(label="Restore All", command=self.restore_all_variations)
+        variations_menu.add_separator()
         variations_menu.add_command(label="Manual Move", command=self.manual_move)
 
         self.game_menu = game_menu
@@ -307,7 +309,7 @@ class ChessAnnotatorApp:
 
         if filepath:
             try:
-                while len(self.stored_moves) == 0:
+                while len(self.stored_moves) > 0:
                     self.restore_variation()
 
                 # 1. Update the game's headers with the modified meta-tags from the UI
@@ -420,12 +422,13 @@ class ChessAnnotatorApp:
         )
         # Use fill=tk.X to make the label take the full width of nav_comment_frame
         self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
-
+        self.variation_btn_frame = tk.Frame(nav_comment_frame, bg='white') # bg ter demo, kan weg
+        self.variation_btn_frame.pack(fill=tk.X, padx=5, pady=(0, 10))
         # 3. Commentary Controls section (right in the header)
         comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
         comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
-        # --- NEW BUTTON FOR VARIATIONS ---
+        # --- BUTTON FOR VARIATIONS ---
         self.manage_variations_button = tk.Button(comment_frame, text="Manage Variations", command=self._open_variation_manager, width=25, bg='#fff9c4')
         self.manage_variations_button.pack(pady=5)
 
@@ -433,8 +436,89 @@ class ChessAnnotatorApp:
         self.insert_edit_comment_button = tk.Button(comment_frame, text="Insert/Edit Comment", command=self.manage_comment, width=25, bg='#d9e7ff')
         self.insert_edit_comment_button.pack(pady=5)
 
-        self.delete_comment_button = tk.Button(comment_frame, text="Delete Commentary", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
+        self.delete_comment_button = tk.Button(comment_frame, text="Delete Comment", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
         self.delete_comment_button.pack(pady=5)
+
+    def update_variation_buttons(self, game_node):
+        """
+        Updates the variation buttons below the commentary.
+        :param game_node: The current game node (e.g., from python-chess).
+        """
+        # 1. Clear the frame completely (remove old buttons)
+        for widget in self.variation_btn_frame.winfo_children():
+            widget.destroy()
+
+        # 2. Retrieve possible moves from this position
+        # (Assuming python-chess structure, adapt if necessary)
+        variations = game_node.variations
+
+        # 3. Logic: Only show buttons if there is more than 1 continuation.
+        # If there is only 1 move, it is simply the main line.
+        if len(variations) > 1:
+
+            # Add a small label (optional, for clarity)
+            lbl = tk.Label(self.variation_btn_frame, text="Continuation:", font=('Arial', 8, 'italic'))
+            lbl.pack(side=tk.LEFT, padx=(0, 5))
+
+            for i, variation in enumerate(variations):
+                # Get the move text (e.g., "e4" or "Nf3")
+                # In python-chess, variation[0] is the move, use .san() for readability
+                # The node is a GameNode, which serves as the root of the variation.
+                # We need to wrap it in a temporary Game structure to use the standard PGN export.
+
+                # Create a temporary game object starting from the move to get the PGN string
+                temp_game = chess.pgn.Game()
+
+                # FIX: Use the corrected function signature: add_variation(node)
+                temp_game.add_variation(variation)
+
+                # Get the PGN string for the variation (which starts with the next move number)
+                #pgn_string = re.sub(r'\{[^}]*\}', '', str(temp_game)) # Remove curly brace comments for cleaner view
+
+                # Clean up the string to remove headers and just show the moves
+                # This is a crude way to get just the moves starting from the first move of the variation
+                move_text = str(str(variation)[:10]).replace("...","").split(" ")[1]#pgn_string.split('\n')[-1].strip()
+                #move_text = variation.move.san()
+                #print("move-text", move_text)
+
+                # Create the button
+                btn = tk.Button(
+                    self.variation_btn_frame,
+                    text=move_text,
+                    font=('Arial', 8),
+                    bg='#e0f7fa', # Light blue color
+                    # IMPORTANT: Use v=variation to capture the correct value in the lambda
+                    command=lambda v=variation: self.follow_variation(i, v)
+                )
+                btn.pack(side=tk.LEFT, padx=2)
+
+        # If there are 0 or 1 moves, the frame remains empty.
+
+    def follow_variation(self, i, variation_node):
+        """
+        Called when a variation button is clicked.
+        """
+        if i == 0:
+            self.go_forward_move()
+            return
+        self.select_variation(self._get_current_node(), self.current_move_index, variation_node)
+        self.go_forward_move()
+        # current_node = self._get_current_node()
+        # previous_current_move_index = self.current_move_index
+
+    def select_variation(self, current_node, previous_current_move_index, variation_node):
+        self.stored_moves.append([current_node, current_node.variations[0], previous_current_move_index])
+        current_node.promote_to_main(variation_node)
+        self.move_list = []
+        node = self.game
+        while node.variations:
+            # Always follow the main (first) variation
+            node = node.variation(0)
+            self.move_list.append(node)
+
+        self._populate_move_listbox()
+        self.current_move_index = previous_current_move_index
+        self.update_state()
 
     def _update_meta_entries(self):
         """
@@ -631,6 +715,7 @@ class ChessAnnotatorApp:
             self.delete_comment_button.config(state=annotation_state)
         if self.manage_variations_button:
             self.manage_variations_button.config(state=annotation_state)
+        self.update_variation_buttons(self._get_current_node())
 
 
     def update_move_notation(self):
@@ -1100,18 +1185,7 @@ class ChessAnnotatorApp:
 
             index = selection[0]
             variation_node = current_node.variations[index]
-            self.stored_moves.append([current_node, current_node.variations[0], previous_current_move_index])
-            current_node.promote_to_main(variation_node)
-            self.move_list = []
-            node = self.game
-            while node.variations:
-                # Always follow the main (first) variation
-                node = node.variation(0)
-                self.move_list.append(node)
-
-            self._populate_move_listbox()
-            self.current_move_index = previous_current_move_index
-            self.update_state()
+            self.select_variation(current_node, previous_current_move_index, variation_node)
 
 
         def _add_new_variation():
@@ -1209,7 +1283,9 @@ class ChessAnnotatorApp:
 
         self.update_state()
 
-
+    def restore_all_variations(self):
+        while len(self.stored_moves) > 0:
+            self.restore_variation()
     # --- Board Drawing Logic ---
 
     def _on_canvas_resize(self, event):
