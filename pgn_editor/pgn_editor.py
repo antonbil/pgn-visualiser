@@ -21,6 +21,9 @@ class ChessAnnotatorApp:
         self.square_size = square_size
         self.image_manager = image_manager
         self.hide_file_load = hide_file_load
+        self.is_manual = False
+        self.selected_square = None
+        self.highlight_item = None
         master.title("PGN Chess Annotator")
 
         # --- Data Initialization ---
@@ -108,9 +111,11 @@ class ChessAnnotatorApp:
         menubar.add_cascade(label="Game", menu=game_menu)
         game_menu.add_command(label="Previous Game", command=lambda: self.go_game(-1), state=tk.DISABLED, accelerator="Ctrl+Left")
         game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
-        game_menu.add_separator()
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
-        game_menu.add_command(label="Restore Variation", command=self.restore_variation)
+        variations_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Variations", menu=variations_menu)
+        variations_menu.add_command(label="Restore Variation", command=self.restore_variation)
+        variations_menu.add_command(label="Manual Move", command=self.manual_move)
 
         self.game_menu = game_menu
 
@@ -302,6 +307,9 @@ class ChessAnnotatorApp:
 
         if filepath:
             try:
+                while len(self.stored_moves) == 0:
+                    self.restore_variation()
+
                 # 1. Update the game's headers with the modified meta-tags from the UI
                 for tag, entry in self.meta_entries.items():
                     self.game.headers[tag] = entry.get()
@@ -695,7 +703,8 @@ class ChessAnnotatorApp:
         # Replace the old item
         self.move_listbox.delete(index)
         self.move_listbox.insert(index, list_item)
-        self.update_move_listbox_selection() # Restore selection
+        self.move_listbox.after_idle(self.update_move_listbox_selection)
+        #self.update_move_listbox_selection() # Restore selection
 
     # --- Commentary Logic ---
 
@@ -1025,6 +1034,7 @@ class ChessAnnotatorApp:
         """
         Opens a dialog to view, edit, add, and delete variations for the current node.
         """
+        previous_current_move_index = self.current_move_index
         current_node = self._get_current_node()
         if not current_node:
             messagebox.showinfo("Information", "Please select a move or the starting position to manage variations.")
@@ -1091,9 +1101,8 @@ class ChessAnnotatorApp:
 
             index = selection[0]
             variation_node = current_node.variations[index]
-            self.stored_moves.append([current_node, current_node.variations[0], self.current_move_index])
+            self.stored_moves.append([current_node, current_node.variations[0], previous_current_move_index])
             current_node.promote_to_main(variation_node)
-            previous_current_move_index = self.current_move_index
             self.move_list = []
             node = self.game
             while node.variations:
@@ -1103,6 +1112,12 @@ class ChessAnnotatorApp:
 
             self._populate_move_listbox()
             self.current_move_index = previous_current_move_index
+            # dialog.destroy()
+            # print("1", self.current_move_index)
+            # i=0
+            # while i<self.current_move_index:
+            #     self.go_forward_move()
+            #     i=i+1
             self.update_state()
 
 
@@ -1175,6 +1190,10 @@ class ChessAnnotatorApp:
 
         self.master.wait_window(dialog)
 
+    def manual_move(self):
+        self.is_manual = True
+        messagebox.showinfo("Information", "Enter move on chess-board.")
+
     def restore_variation(self):
         if len(self.stored_moves) == 0:
             messagebox.showinfo("Information", "No variations to restore.")
@@ -1190,7 +1209,11 @@ class ChessAnnotatorApp:
             self.move_list.append(node)
 
         self._populate_move_listbox()
-        self.current_move_index = index_move_to_restore
+        #self.current_move_index = index_move_to_restore
+        self.current_move_index=0
+        while self.current_move_index<index_move_to_restore:
+             self.go_forward_move()
+
         self.update_state()
 
 
@@ -1314,40 +1337,151 @@ class ChessAnnotatorApp:
 
     def _handle_click(self, event):
         """
-        Verwerkt een klikgebeurtenis op het Canvas en bepaalt of deze op de
-        linker- of rechterhelft van het bord plaatsvond.
+        Verwerkt een klikgebeurtenis op het Canvas.
+        Prioriteit 1: Zet uitvoeren.
+        Prioriteit 2: Stuk selecteren.
+        Prioriteit 3: Navigatie (linker/rechterhelft als er geen zet is gedaan).
         """
         click_x = event.x
         click_y = event.y
 
-        # De totale breedte van het schaakbord is 8 * square_size
-        board_width = 8 * self.square_size
-
-        # De helft van het bord bevindt zich na kolom 4 (of op x = 4 * square_size)
-        halfway_x = board_width / 2
-
-        # Bepaal het vierkant (kolom/rij) waar geklikt is
+        # Bepaal het vierkant waar geklikt is (in chess.Square formaat)
         col_index = int(click_x / self.square_size)
         row_index = int(click_y / self.square_size)
 
-        # Vertaal de 0-7 index naar de schaaknotatie (a1, h8, etc.)
-        file_char = chr(ord('a') + col_index)
-        rank_char = str(8 - row_index)
-        square_notation = f"{file_char}{rank_char}"
+        # Converteer GUI (top-down, 0-7) naar chess.Square index (bottom-up)
+        clicked_square = chess.square(col_index, 7 - row_index)
 
-        # Bepaal of de klik op de linkerhelft (kolom a t/m d) of rechterhelft (kolom e t/m h) was
-        if click_x < halfway_x:
-            side = "Linkerhelft van het bord (Kolom a-d)"
-            self.go_back_move()
-        else:
-            side = "Rechterhelft van het bord (Kolom e-h)"
-            self.go_forward_move()
+        piece_on_square = self.board.piece_at(clicked_square)
 
-        # print("-" * 30)
-        # print(f"Klik gedetecteerd op: {square_notation} ({row_index}, {col_index})")
-        # print(f"X-coördinaat: {click_x}. Halfweg: {halfway_x}")
-        # print(f"Locatie: {side}")
-        # print("-" * 30)
+        # -----------------------------------------------------------
+        # STAP 1: Controleer op zet of selectie ongedaan maken
+        # -----------------------------------------------------------
+        if self.is_manual and self.selected_square is not None:
+            self.is_manual = False
+
+            # Er is al een stuk geselecteerd, dus dit is de doel-vierkant (to_square)
+            from_square = self.selected_square
+            to_square = clicked_square
+
+            # Probeer de zet te maken (bijv. e2e4, d7d5, etc.)
+            # Omdat we een GUI hebben, is de meest directe manier om de zet te proberen via UCI
+            try:
+                # Maak een zet object aan. Voor promoties (zoals a7a8q) hebben we een 'q' nodig.
+                # We gaan hier uit van een eenvoudige zet (geen automatische promotie afhandeling in deze simpele logica)
+                move_uci = chess.square_name(from_square) + chess.square_name(to_square)
+
+                # Controleer op promotie: als het een pion op de 7e rij is die naar de 8e rij beweegt
+                if self.board.piece_type_at(from_square) == chess.PAWN and chess.square_rank(to_square) in (0, 7) and chess.square_rank(from_square) != chess.square_rank(to_square):
+                    # Voeg standaard 'q' toe als promotie-keuze, u kunt dit later uitbreiden met een prompt
+                    move_uci += 'q'
+
+                # Valideer en voer de zet uit
+                move = chess.Move.from_uci(move_uci)
+
+                if move in self.board.legal_moves:
+                    print(f"Geldige zet: {move.uci()}. Uitvoeren...")
+                    self._add_move_as_variation(move)
+                    self.selected_square = None
+                    self._clear_selection_highlight()
+                    messagebox.showinfo("Information", f"Valid move: {move.uci()} added...")
+
+                    return # Verwerkt, stop de klikafhandeling
+
+                else:
+                    # Ongeldige zet. Reset de selectie, maar ga verder om te kijken of de gebruiker een NIEUW stuk wil selecteren
+                    print("Ongeldige zet. Selectie gereset.")
+                    self.selected_square = None
+                    self._clear_selection_highlight()
+
+            except Exception as e:
+                # Dit vangt fouten op zoals een foutieve UCI string of andere chess-exceptions
+                print(f"Fout bij het proberen van de zet: {e}. Selectie gereset.")
+                self.selected_square = None
+                self._clear_selection_highlight()
+
+        # -----------------------------------------------------------
+        # STAP 2: Nieuwe selectie
+        # -----------------------------------------------------------
+        # Als de klik een stuk van de beurt-hebbende kleur bevat, selecteer dit stuk.
+        if self.is_manual and piece_on_square and piece_on_square.color == self.board.turn:
+
+            # Selecteer het nieuwe vierkant
+            self.selected_square = clicked_square
+            print(f"Stuk geselecteerd op: {chess.square_name(clicked_square)}")
+            self._draw_selection_highlight(clicked_square)
+            return # Verwerkt, stop de klikafhandeling
+
+        # -----------------------------------------------------------
+        # STAP 3: Navigatie (alleen als er geen stuk geselecteerd is en de zet niet is gelukt)
+        # -----------------------------------------------------------
+
+        # Als we hier komen, is de klik niet gebruikt om een geldige zet te maken
+        # en is er ofwel op een leeg veld geklikt, ofwel op een ongeldig stuk.
+
+        board_width = 8 * self.square_size
+        halfway_x = board_width / 2
+        #print("1", self.is_manual, self.selected_square is None, (clicked_square == self.selected_square))
+        # Als er op een leeg veld wordt geklikt of een selectie wordt opgeheven
+        if not self.is_manual and (self.selected_square is None or (clicked_square == self.selected_square)):
+            # Wis eventuele selectie die nog over is
+            self.selected_square = None
+            self._clear_selection_highlight()
+
+            # De originele navigatie logica
+            if click_x < halfway_x:
+                side = "Linkerhelft van het bord (Navigatie: Terug)"
+                self.go_back_move()
+            else:
+                side = "Rechterhelft van het bord (Navigatie: Vooruit)"
+                self.go_forward_move()
+
+            # Toon navigatie-info in de console (optioneel)
+            file_char = chr(ord('a') + col_index)
+            rank_char = str(8 - row_index)
+            square_notation = f"{file_char}{rank_char}"
+            print(f"Navigatieklik op: {square_notation}. {side}")
+
+    def _add_move_as_variation(self, move):
+        self._get_current_node().add_variation(move)
+        # 5. Update UI
+        if self.current_move_index != -1:
+            self.update_listbox_item(self.current_move_index)
+
+
+    def _clear_selection_highlight(self):
+        """Verwijdert de actieve selectie highlight van het Canvas."""
+        if self.highlight_item:
+            self.canvas.delete(self.highlight_item)
+            self.highlight_item = None
+
+    def _draw_selection_highlight(self, square):
+        """Tekent de highlight op het geselecteerde vierkant."""
+        self._clear_selection_highlight() # Eerst de oude highlight verwijderen
+
+        # Bereken de GUI coördinaten van het vierkant
+        col = chess.square_file(square)
+        row = 7 - chess.square_rank(square)
+        x1 = col * self.square_size
+        y1 = row * self.square_size
+        x2 = x1 + self.square_size
+        y2 = y1 + self.square_size
+
+        # Teken de highlight
+        self.highlight_item = self.canvas.create_rectangle(
+            x1, y1, x2, y2,
+            outline="#22ff22", # Groene rand
+            width=3,           # Dikkere rand
+            tags="selection_highlight" # Tag voor makkelijk verwijderen
+        )
+        # Zorg ervoor dat de highlight onder de stukken ligt
+        self.canvas.tag_lower(self.highlight_item, "piece")
+
+            # print("-" * 30)
+            # print(f"Klik gedetecteerd op: {square_notation} ({row_index}, {col_index})")
+            # print(f"X-coördinaat: {click_x}. Halfweg: {halfway_x}")
+            # print(f"Locatie: {side}")
+            # print("-" * 30)
 
 
 def parse_args():
