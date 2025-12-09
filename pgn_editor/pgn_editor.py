@@ -36,10 +36,11 @@ def save_preferences(data):
 # Required: pip install python-chess
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = ""):
         print("parameters:",pgn_game, engine_name)
         self.last_filepath = pgn_game
         self.master = master
+        self.piece_set = piece_set
         self.square_size = square_size if square_size else 75
         self.image_manager = image_manager
         self.hide_file_load = hide_file_load
@@ -164,7 +165,8 @@ class ChessAnnotatorApp:
             "last_pgn_filepath": self.last_filepath,
             "current_game_index": self.current_game_index,
             "engine": self.ENGINE_PATH,
-            "square_size": self.square_size + 5
+            "square_size": self.square_size + 5,
+            "piece_set": self.piece_set
             # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
         }
 
@@ -1678,7 +1680,7 @@ def parse_args():
 
     parser.add_argument("--piece_set", "-s",
                         help="Set the piece-set for chess-pieces",
-                        default="staunty")
+                        default=None)
     parser.add_argument("--square_size", "-q",
                         help="Set the square-size for the board",
                         type=int,
@@ -1787,18 +1789,19 @@ if __name__ == "__main__":
     current_game_index = preferences.get("current_game_index", "")
     engine_name_preferences = preferences.get("engine", "")
     square_size = preferences.get("square_size", 80)
+    piece_set1 = preferences.get("piece_set", "staunty")
     print(square_size)
 
     pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
     engine_name = args.engine_name if args.engine_name else engine_name_preferences
-    piece_set = args.piece_set
+    piece_set = args.piece_set if args.piece_set else piece_set1
     IMAGE_DIRECTORY = "Images/piece"
     SQUARE_SIZE = args.square_size if args.square_size else square_size # Size of the squares in pixels
     # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
-    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 #example call
