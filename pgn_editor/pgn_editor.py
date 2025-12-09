@@ -523,7 +523,7 @@ class ChessAnnotatorApp:
                 print("Reeds bij de laatste partij.")
 
         # Zorg ervoor dat de knoppen goed worden ingeschakeld/uitgeschakeld na de sprong
-        self._update_game_navigation_buttons()
+        self.update_state()
 
     def update_variation_buttons(self, game_node):
         """
@@ -1784,13 +1784,12 @@ class PieceImageManager1:
 if __name__ == "__main__":
     args = parse_args()
     preferences = load_preferences()
-    print(preferences)
+
     last_pgn_file = preferences.get("last_pgn_filepath", "")
     current_game_index = preferences.get("current_game_index", "")
     engine_name_preferences = preferences.get("engine", "")
     square_size = preferences.get("square_size", 80)
     piece_set1 = preferences.get("piece_set", "staunty")
-    print(square_size)
 
     pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
     engine_name = args.engine_name if args.engine_name else engine_name_preferences
