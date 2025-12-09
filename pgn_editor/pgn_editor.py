@@ -562,28 +562,27 @@ class ChessAnnotatorApp:
         moves_frame = tk.Frame(main_frame)
         moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
-        # === NIEUW: Header Frame voor Label en Knop ===
+        # Header Frame for Label and Button
         moves_header_frame = tk.Frame(moves_frame)
         moves_header_frame.pack(fill=tk.X, pady=5)
         # ===============================================
 
-        # 1. OPTIONELE KNOP: 'Clear variation'
+        # OPTIONAl BUTTON: 'Clear variation'
         self.clear_variation_button = tk.Button(
             moves_header_frame,
             text="Clear Variation ❌",
-            fg="red", # Maak het rood om de status duidelijk te maken
+            fg="red", # Mkae the button red to make the status clear
             command=self.restore_variation
         )
-        # Standaard is de knop NIET zichtbaar
+        # by default the button is INVISIBLE
         self.clear_variation_button.pack_forget()
 
-        # 2. HET LABEL: Verwijzing naar het Label opslaan
+        # Store the refrence to the Label
         self.move_list_label = tk.Label(
             moves_header_frame,
             text="Move List (Main Line)",
             font=('Arial', 12, 'bold')
         )
-        # Plaats het label in het midden van de header
         self.move_list_label.pack(side=tk.LEFT, padx=(5,0))
 
         scrollbar = tk.Scrollbar(moves_frame)
