@@ -40,7 +40,7 @@ class ChessAnnotatorApp:
         print("parameters:",pgn_game, engine_name)
         self.last_filepath = pgn_game
         self.master = master
-        self.square_size = square_size
+        self.square_size = square_size if square_size else 75
         self.image_manager = image_manager
         self.hide_file_load = hide_file_load
         self.is_manual = False
@@ -85,7 +85,7 @@ class ChessAnnotatorApp:
 [Black "Anic, Darko"]
 [Result "1-0"]
 
-1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. f3 Be7 8. Qd2 Qc7 9. O-O-O Nc6 10. g4 Bd7 11. h4 h6 12. Be2 Nxd4 13. Bxd4 e5 14. Be3 b5 15. a3 Rc8 16. g5 Nh5 17. Nd5 Qxc2+ 18. Qxc2 Rxc2+ 19. Kxc2 Ng3 (19... O-O-O 20. Nb4 Kb7 21. Nd5 Kc8) 20. Rhe1 Nxe2 21. Rxe2 hxg5 22. hxg5 Rh3 23. Rf2 Bd8 24. Rdd2 Be6 25. Nb4 a5 26. Na2 Kd7 27. Nc3 b4 28. Nd5 bxa3 29. bxa3 f5 30. gxf6 gxf6 31. Bb6 Rh8 32. Bxd8 Kxd8 33. Nxf6 Ke7 34. Nd5+ Kf7 35. f4 Rh3 36. fxe5+ Kg6 37. Rf6+ Kg5 38. Rxe6 dxe5 39. Rxe5+ Kg4 40. Nf6+ Kf4 41. Rxa5 1-0
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. f3 Be7 8. Qd2 Qc7 9. O-O-O Nc6 10. g4 Bd7 11. h4 h6 12. Be2 Nxd4 13. Bxd4 e5 14. Be3 b5 15. a3 Rc8 16. g5 Nh5 17. Nd5 Qxc2+ 18. Qxc2 Rxc2+ 19. Kxc2 Ng3 (19... O-O-O 20. Nb4 Kb7 21. Nd5 Kc8) 20. Rhe1 Nxe2 21. Rxe2 hxg5 22. hxg5 Rh3 23. Rf2  Bd8 24. Rdd2 Be6 25. Nb4 a5 26. Na2 Kd7 27. Nc3 b4 28. Nd5 bxa3 29. bxa3 f5 30. gxf6 gxf6 31. Bb6 Rh8 32. Bxd8 Kxd8 33. Nxf6 Ke7 34. Nd5+ Kf7 35. f4 Rh3 36. fxe5+ Kg6 37. Rf6+ Kg5 38. Rxe6 dxe5 39. Rxe5+ Kg4 40. Nf6+ Kf4 41. Rxa5 1-0
 
 [Event "F/S Mostar"]
 [Site "Mostar BIH"]
@@ -163,7 +163,8 @@ class ChessAnnotatorApp:
         preferences_data = {
             "last_pgn_filepath": self.last_filepath,
             "current_game_index": self.current_game_index,
-            "engine": self.ENGINE_PATH
+            "engine": self.ENGINE_PATH,
+            "square_size": self.square_size + 5
             # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
         }
 
@@ -1681,7 +1682,7 @@ def parse_args():
     parser.add_argument("--square_size", "-q",
                         help="Set the square-size for the board",
                         type=int,
-                        default=80)
+                        default=None)
     return parser.parse_args()
 # ----------------------------------------------------------------------
 # 1. PIECE IMAGE MANAGER (THE FACTORY/SINGLETON)
@@ -1781,15 +1782,18 @@ class PieceImageManager1:
 if __name__ == "__main__":
     args = parse_args()
     preferences = load_preferences()
+    print(preferences)
     last_pgn_file = preferences.get("last_pgn_filepath", "")
     current_game_index = preferences.get("current_game_index", "")
     engine_name_preferences = preferences.get("engine", "")
+    square_size = preferences.get("square_size", 80)
+    print(square_size)
 
     pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
     engine_name = args.engine_name if args.engine_name else engine_name_preferences
     piece_set = args.piece_set
     IMAGE_DIRECTORY = "Images/piece"
-    SQUARE_SIZE = args.square_size  # Size of the squares in pixels
+    SQUARE_SIZE = args.square_size if args.square_size else square_size # Size of the squares in pixels
     # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
