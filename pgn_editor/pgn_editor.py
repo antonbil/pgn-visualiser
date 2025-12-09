@@ -123,6 +123,7 @@ class ChessAnnotatorApp:
         variations_menu.add_command(label="Add New Variation", command=self._add_new_variation)
 
         self.game_menu = game_menu
+        self.variations_menu = variations_menu
 
         # Bind shortcuts
         master.bind('<Control-Left>', lambda e: self.go_game(-1))
@@ -743,6 +744,14 @@ class ChessAnnotatorApp:
         self.update_move_notation()
         self.update_comment_display()
         self._update_game_navigation_state() # Update game navigation as well
+        # Update Variations-Menu buttons using entryconfig
+        prev_alternative_state = tk.NORMAL if len(self.stored_moves) > 0 else tk.DISABLED
+
+        # Index 0 is "Previous Game", Index 1 is "Next Game"
+        if self.variations_menu:
+            self.variations_menu.entryconfig(0, state=prev_alternative_state)
+            self.variations_menu.entryconfig(1, state=prev_alternative_state)
+
 
         # Update move navigation button states
         self.prev_button.config(state=tk.NORMAL if self.current_move_index > -1 else tk.DISABLED)
