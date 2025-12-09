@@ -402,10 +402,17 @@ class ChessAnnotatorApp:
         # Navigation Buttons
         nav_buttons_frame = tk.Frame(nav_comment_frame)
         nav_buttons_frame.pack(pady=10)
+        # 1. Vorige Partij (Game)
+        self.prev_game_button = tk.Button(nav_buttons_frame, text="< Prev Game", command=lambda: self._navigate_game(-1), width=10, bg='#fff0e6') # Lichtoranje tint
+        self.prev_game_button.pack(side=tk.LEFT, padx=(10, 5))
         self.prev_button = tk.Button(nav_buttons_frame, text="<< Previous", command=self.go_back_move, width=10)
         self.prev_button.pack(side=tk.LEFT, padx=5)
         self.next_button = tk.Button(nav_buttons_frame, text="Next >>", command=self.go_forward_move, width=10)
         self.next_button.pack(side=tk.LEFT, padx=5)
+        # 4. Volgende Partij (Game)
+        self.next_game_button = tk.Button(nav_buttons_frame, text="Next Game >", command=lambda: self._navigate_game(1), width=10, bg='#fff0e6')
+        self.next_game_button.pack(side=tk.LEFT, padx=(5, 10))
+
 
         # === COMMENTARY DISPLAY ===
         tk.Label(nav_comment_frame, text="Commentary:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
@@ -443,6 +450,30 @@ class ChessAnnotatorApp:
 
         self.delete_comment_button = tk.Button(comment_frame, text="Delete Comment", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
         self.delete_comment_button.pack(pady=5)
+
+    def _navigate_game(self, step):
+        """
+        Navigeert naar de vorige (-1) of volgende (1) partij in self.all_games.
+
+        :param step: -1 voor vorige partij, 1 voor volgende partij.
+        """
+        if not self.all_games:
+            return
+
+        new_index = self.current_game_index + step
+
+        # Controleer of de nieuwe index binnen de grenzen valt
+        if 0 <= new_index < len(self.all_games):
+            self._switch_to_game(new_index)
+        else:
+            # Optioneel: Laat de gebruiker weten dat het einde/begin is bereikt
+            if step == -1:
+                print("Reeds bij de eerste partij.")
+            else:
+                print("Reeds bij de laatste partij.")
+
+        # Zorg ervoor dat de knoppen goed worden ingeschakeld/uitgeschakeld na de sprong
+        self._update_game_navigation_buttons()
 
     def update_variation_buttons(self, game_node):
         """
@@ -756,6 +787,8 @@ class ChessAnnotatorApp:
         # Update move navigation button states
         self.prev_button.config(state=tk.NORMAL if self.current_move_index > -1 else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if self.current_move_index < len(self.move_list) - 1 else tk.DISABLED)
+        self.prev_game_button.config(state=tk.NORMAL if self.current_game_index > 0 and len(self.all_games) > 1 else tk.DISABLED)
+        self.next_game_button.config(state=tk.NORMAL if self.current_game_index < len(self.all_games) - 1 and len(self.all_games) > 1 else tk.DISABLED)
 
         # Annotation buttons are active if a node is selected (current_move_index >= -1)
         annotation_state = tk.NORMAL if self.current_move_index >= -1 else tk.DISABLED
