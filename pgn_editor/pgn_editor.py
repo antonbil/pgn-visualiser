@@ -43,6 +43,8 @@ class ChessAnnotatorApp:
         self.delete_comment_button = None
         if engine_name is None or len(engine_name) == 0:
             self.ENGINE_PATH = "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2"
+        else:
+            self.ENGINE_PATH = engine_name
         # The engine will analyze up to this many best moves (MPV)
         self.ENGINE_MULTI_PV = 3
         # The analysis depth in ply
@@ -118,6 +120,7 @@ class ChessAnnotatorApp:
         variations_menu.add_command(label="Restore All", command=self.restore_all_variations)
         variations_menu.add_separator()
         variations_menu.add_command(label="Manual Move", command=self.manual_move)
+        variations_menu.add_command(label="Add New Variation", command=self._add_new_variation)
 
         self.game_menu = game_menu
 
@@ -251,6 +254,7 @@ class ChessAnnotatorApp:
 
             self._update_meta_entries()
             self._populate_move_listbox()
+            self.show_clear_variation_button()
             self.update_state()
 
     def _update_game_navigation_state(self):
@@ -557,7 +561,30 @@ class ChessAnnotatorApp:
         # Column 2 (Right): Move List
         moves_frame = tk.Frame(main_frame)
         moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        tk.Label(moves_frame, text="Move List (Main Line)", font=('Arial', 12, 'bold')).pack(pady=5)
+
+        # === NIEUW: Header Frame voor Label en Knop ===
+        moves_header_frame = tk.Frame(moves_frame)
+        moves_header_frame.pack(fill=tk.X, pady=5)
+        # ===============================================
+
+        # 1. OPTIONELE KNOP: 'Clear variation'
+        self.clear_variation_button = tk.Button(
+            moves_header_frame,
+            text="Clear Variation ❌",
+            fg="red", # Maak het rood om de status duidelijk te maken
+            command=self.restore_variation
+        )
+        # Standaard is de knop NIET zichtbaar
+        self.clear_variation_button.pack_forget()
+
+        # 2. HET LABEL: Verwijzing naar het Label opslaan
+        self.move_list_label = tk.Label(
+            moves_header_frame,
+            text="Move List (Main Line)",
+            font=('Arial', 12, 'bold')
+        )
+        # Plaats het label in het midden van de header
+        self.move_list_label.pack(side=tk.LEFT, padx=(5,0))
 
         scrollbar = tk.Scrollbar(moves_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -574,6 +601,21 @@ class ChessAnnotatorApp:
 
         # Bind Listbox selection to board update
         self.move_listbox.bind('<<ListboxSelect>>', self._on_move_listbox_select)
+
+    def show_clear_variation_button(self):
+        """
+        Manages the visibility of the 'Clear Variation'-button
+        """
+        if len(self.stored_moves) > 0:
+            # Set the button VISIBLE
+            self.clear_variation_button.pack(side=tk.LEFT, padx=5)
+            # Change the text of the label
+            self.move_list_label.config(text="Move List (Variation)")
+        else:
+            # Hide the button
+            self.clear_variation_button.pack_forget()
+            # Restore the label
+            self.move_list_label.config(text="Move List (Main Line)")
 
     # --- State Update Logic ---
 
@@ -692,6 +734,7 @@ class ChessAnnotatorApp:
             if self.delete_comment_button: self.delete_comment_button.config(state=tk.DISABLED)
             if self.manage_variations_button: self.manage_variations_button.config(state=tk.DISABLED)
             self._update_game_navigation_state()
+            self.show_clear_variation_button()
             return
 
         self.board = self._get_board_at_index(self.current_move_index)
@@ -716,6 +759,7 @@ class ChessAnnotatorApp:
         if self.manage_variations_button:
             self.manage_variations_button.config(state=annotation_state)
         self.update_variation_buttons(self._get_current_node())
+        self.show_clear_variation_button()
 
 
     def update_move_notation(self):
@@ -991,6 +1035,7 @@ class ChessAnnotatorApp:
         """
         The main function to request, display, and add an engine-suggested variation.
         """
+        previous_current_move_index = self.current_move_index
         current_node = self._get_current_node()
         if not current_node:
             messagebox.showinfo("Information", "No game loaded.")
@@ -1004,7 +1049,8 @@ class ChessAnnotatorApp:
 
         # 1. Get suggestions from the engine (Blocking call)
         # Note: Tkinter UI will freeze during this time. For a large app, use threading.
-        tk.Label(self.master, text="Analyzing... Please wait...", fg="red").pack(side=tk.BOTTOM, fill=tk.X)#, tags="engine_status"
+        self.engine_status_label = tk.Label(self.master, text="Analyzing... Please wait...", fg="red")
+        self.engine_status_label.pack(side=tk.BOTTOM, fill=tk.X)
         self.master.update()
 
         suggestions = asyncio.run(self._get_engine_suggestions(
@@ -1012,8 +1058,8 @@ class ChessAnnotatorApp:
             num_moves=self.ENGINE_MULTI_PV,
             depth=self.ENGINE_DEPTH
         ))
-
-        #self.master.nametowidget('.').delete("engine_status") # Remove temporary label
+        #remove analyze-label
+        self.engine_status_label.destroy()
 
         if not suggestions:
             # Error message is handled inside _get_engine_suggestions
@@ -1087,12 +1133,15 @@ class ChessAnnotatorApp:
 
             if new_variation_root:
 
+                messagebox.showinfo("Success", f"Variation starting with {selected_sug['move_san']} added successfully.")
                 # 5. Update UI
+                self.current_move_index = previous_current_move_index
                 if self.current_move_index != -1:
                     self.update_listbox_item(self.current_move_index)
-                _populate_variations()
+                if _populate_variations:
+                    _populate_variations()
 
-                messagebox.showinfo("Success", f"Variation starting with {selected_sug['move_san']} added successfully.")
+                self.update_state()
 
             dialog.destroy()
         # Buttons
@@ -1129,7 +1178,7 @@ class ChessAnnotatorApp:
         dialog.transient(self.master)
         dialog.grab_set()
 
-        tk.Label(dialog, text="Select a variation to edit/delete:", font=('Arial', 10, 'bold')).pack(padx=10, pady=5)
+        tk.Label(dialog, text="Select a variation to activate/delete:", font=('Arial', 10, 'bold')).pack(padx=10, pady=5)
 
         listbox_frame = tk.Frame(dialog, padx=10, pady=5)
         listbox_frame.pack(fill='both', expand=True)
@@ -1190,37 +1239,7 @@ class ChessAnnotatorApp:
 
         def _add_new_variation():
             """Opens dialog to add a new variation."""
-            self._open_engine_suggestion_dialog(_populate_variations)
-            return
-            new_pgn = simpledialog.askstring(
-                "Add New Variation",
-                "Enter the PGN sequence for the new variation (starting with the first move, e.g., 'Bd3 Nc6'):",
-                parent=dialog
-            )
-
-            if new_pgn:
-                try:
-                    # Create a board reflecting the position *before* the variation starts
-                    temp_board = current_node.board()
-
-                    # Read the PGN sequence starting from the current position
-                    # We pass the board state to ensure correct SAN parsing
-                    new_game = chess.pgn.read_game(StringIO(new_pgn), board=temp_board)
-
-                    if new_game is None or not new_game.variations:
-                        raise ValueError("Could not parse valid move sequence.")
-
-                    # Add the new variation (it should have one variation)
-                    # FIX: Use the corrected function signature: add_variation(node)
-                    current_node.add_variation(new_game.variations[0])
-
-                    _populate_variations()
-                    if self.current_move_index != -1:
-                        self.update_listbox_item(self.current_move_index) # Update indicator
-                    messagebox.showinfo("Success", "New variation added successfully.")
-
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to parse or add variation. Check PGN format. Error: {e}")
+            self._add_new_variation(_populate_variations)
 
 
         def _delete_selected_variation():
@@ -1256,6 +1275,11 @@ class ChessAnnotatorApp:
         dialog.geometry(f'+{position_x}+{position_y}')
 
         self.master.wait_window(dialog)
+
+    def _add_new_variation(self,_populate_variations = None):
+            """Opens dialog to add a new variation."""
+            self._open_engine_suggestion_dialog(_populate_variations)
+
 
     def manual_move(self):
         self.is_manual = True
