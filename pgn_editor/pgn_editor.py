@@ -1,3 +1,4 @@
+import json
 import tkinter as tk
 from tkinter import messagebox, simpledialog, filedialog
 from io import StringIO
@@ -11,12 +12,33 @@ import os
 import cairosvg
 from io import BytesIO
 
+PREFERENCES_FILE = "preferences.json"
+
+def load_preferences():
+    """Loads the preferences from preferences.json, or returns an empty dict."""
+    if os.path.exists(PREFERENCES_FILE):
+        try:
+            with open(PREFERENCES_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            # if error in json-file, return empty dict
+            return {}
+    return {}
+
+def save_preferences(data):
+    """Saves the preferences in preferences.json."""
+    try:
+        with open(PREFERENCES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"Warning: cannot save preferences: {e}")
 
 # Required: pip install python-chess
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1):
         print("parameters:",pgn_game, engine_name)
+        self.last_filepath = pgn_game
         self.master = master
         self.square_size = square_size
         self.image_manager = image_manager
@@ -28,7 +50,10 @@ class ChessAnnotatorApp:
 
         # --- Data Initialization ---
         self.all_games = []      # List of all chess.pgn.Game objects in the PGN file
-        self.current_game_index = -1 # Index of the current game in all_games
+        try:
+            self.current_game_index = int(current_game_index) # Index of the current game in all_games
+        except:
+            self.current_game_index = 0
         self.game = None         # The current chess.pgn.Game object
         self.board = None        # The current chess.Board object
         self.move_list = []      # List of all GameNode objects in the main variation
@@ -128,6 +153,25 @@ class ChessAnnotatorApp:
         # Bind shortcuts
         master.bind('<Control-Left>', lambda e: self.go_game(-1))
         master.bind('<Control-Right>', lambda e: self.go_game(1))
+
+    def on_closing(self):
+        """
+        Slaat de huidige sessie-informatie op en sluit de applicatie.
+        Wordt aangeroepen door root.protocol("WM_DELETE_WINDOW", ...).
+        """
+        # 1. Verzamel data
+        preferences_data = {
+            "last_pgn_filepath": self.last_filepath,
+            "current_game_index": self.current_game_index,
+            "engine": self.ENGINE_PATH
+            # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
+        }
+
+        # 2. Opslaan
+        save_preferences(preferences_data)
+
+        # 3. Sluit de app
+        self.master.destroy()
 
     # --- Game Chooser Logic ---
 
@@ -291,8 +335,10 @@ class ChessAnnotatorApp:
         )
         if filepath:
             try:
+                self.last_filepath = filepath
                 with open(filepath, 'r', encoding='utf-8') as f:
                     pgn_content = f.read()
+                self.current_game_index = 0
                 self._load_game_from_content(pgn_content)
             except Exception as e:
                 messagebox.showerror("Loading Error", f"Could not read the file: {e}")
@@ -353,9 +399,10 @@ class ChessAnnotatorApp:
                 self.move_list = []
                 self.update_state() # Reset UI
                 return
-
+            if self.current_game_index >= len(self.all_games):
+                self.current_game_index = len(self.all_games) - 1
             # Switch to the first game
-            self._switch_to_game(0)
+            self._switch_to_game(self.current_game_index)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error reading PGN: {e}")
@@ -1733,8 +1780,13 @@ class PieceImageManager1:
 # Main execution block
 if __name__ == "__main__":
     args = parse_args()
-    pgn_game = args.pgn_game
-    engine_name = args.engine_name
+    preferences = load_preferences()
+    last_pgn_file = preferences.get("last_pgn_filepath", "")
+    current_game_index = preferences.get("current_game_index", "")
+    engine_name_preferences = preferences.get("engine", "")
+
+    pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
+    engine_name = args.engine_name if args.engine_name else engine_name_preferences
     piece_set = args.piece_set
     IMAGE_DIRECTORY = "Images/piece"
     SQUARE_SIZE = args.square_size  # Size of the squares in pixels
@@ -1742,7 +1794,8 @@ if __name__ == "__main__":
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
-    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 #example call
 ##python3 pgn_editor.py --pgn_game "/home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn" --engine_name "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2"
