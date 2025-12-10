@@ -116,6 +116,10 @@ class ChessAnnotatorApp:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
+        # Scroll variabelen
+        self._start_y = 0         # Absolute Y-coördinaat bij de klik
+        self._last_y = 0          # Nodig voor de yview_scroll delta
+        self._is_dragging = False # Vlag om scroll-intentie te detecteren
 
     # --- Menu Logic ---
 
@@ -706,6 +710,136 @@ class ChessAnnotatorApp:
             tags="self.canvas_inner_frame"
         )
 
+        # Bind events voor synchronisatie en touch-scrollen
+        # Zorg dat het inner frame (met de Treeview) altijd de breedte van de canvas heeft.
+        self.moves_canvas.bind('<Configure>', self._on_canvas_configure)
+
+        # Bind touch/muis drag-events voor handmatig scrollen op touch-apparaten
+        # Bindingen op de Canvas (voor klikken op de lege ruimte)
+        self.moves_canvas.bind("<ButtonPress-1>", self._start_scroll)
+        self.moves_canvas.bind("<B1-Motion>", self._do_scroll)
+        self.moves_canvas.bind("<ButtonRelease-1>", self._on_release_or_select) # Nieuwe afhandeling!
+
+        # Bindingen op de Treeview (voor klikken op de items)
+        self.move_listbox.bind("<ButtonPress-1>", self._start_scroll)
+        self.move_listbox.bind("<B1-Motion>", self._do_scroll)
+        self.move_listbox.bind("<ButtonRelease-1>", self._on_release_or_select) # Nieuwe afhandeling!
+
+        # Bind de selectie op het Treeview virtuele event voor een klik zonder beweging
+        # We gebruiken nu _on_release_or_select in plaats van <<TreeviewSelect>> voor de klik-actie.
+        # U kunt de oude binding verwijderen of laten staan als u deze elders nog nodig heeft.
+        # self.move_listbox.bind('<<TreeviewSelect>>', self._on_move_listbox_select) # <-- OPTIONEEL VERWIJDEREN
+
+        # Scrollen met muiswiel (globaal)
+        self.moves_canvas.bind_all('<MouseWheel>', lambda e: self.moves_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+    def _on_canvas_configure(self, event):
+        """
+        Past de scrollregio en de breedte van het inner frame aan wanneer de canvas van grootte verandert.
+        """
+        self.moves_canvas.itemconfig(
+            self.canvas_window_id,
+            width=event.width,
+            # GEEN HOOGTE PARAMETER MEEGEVEN!
+        )
+
+        # Vervolgens de scrollregion aanpassen:
+        bbox = self.moves_canvas.bbox("all")
+        if bbox:
+            # Stel de scrollregio in op basis van de werkelijke hoogte van de inhoud (bbox[3])
+            # Dit is de hoogte die nodig is om alles te tonen.
+            self.moves_canvas.config(scrollregion=bbox)
+
+    def _start_scroll(self, event):
+        """Registreert de absolute startpositie van de klik."""
+        self._start_y = event.y_root
+        self._is_dragging = False
+        self.moves_canvas.focus_set()
+        return "break"
+
+    def _setup_main_columns(self, master):
+        """
+        Sets up the two columns below the header: Chess Diagram and Move List.
+        """
+        main_frame = tk.Frame(master, padx=10, pady=10)
+        main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # Column 1 (Left): Chess Diagram
+        board_frame = tk.Frame(main_frame)
+        board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+        #tk.Label(board_frame, text="Chess Diagram", font=('Arial', 12, 'bold')).pack(pady=5)
+        move_listbox_width = 50
+        width = 8*(self.square_size - 5) + move_listbox_width
+        self.canvas = tk.Canvas(board_frame, width=width, height=8*(self.square_size),bg='lightgray')
+        self.canvas.pack(padx=5, pady=5)
+        # Make the canvas responsive
+        board_frame.bind('<Configure>', self._on_canvas_resize)
+
+
+        # Column 2 (Right): Move List
+        moves_frame = tk.Frame(main_frame)
+        moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+        # Header Frame for Label and Button
+        moves_header_frame = tk.Frame(moves_frame)
+        moves_header_frame.pack(fill=tk.X, pady=5)
+        # ===============================================
+
+        # OPTIONAl BUTTON: 'Clear variation'
+        self.clear_variation_button = tk.Button(
+            moves_header_frame,
+            text="Clear Variation ❌",
+            fg="red", # Mkae the button red to make the status clear
+            command=self.restore_variation
+        )
+        # by default the button is INVISIBLE
+        self.clear_variation_button.pack_forget()
+
+        # Store the refrence to the Label
+        self.move_list_label = tk.Label(
+            moves_header_frame,
+            text="Move List (Main Line)",
+            font=('Arial', 12, 'bold')
+        )
+        self.move_list_label.pack(side=tk.LEFT, padx=(5,0))
+
+        # 1. Maak de Canvas aan
+        self.moves_canvas = tk.Canvas(moves_frame, borderwidth=0, highlightthickness=0)
+        self.moves_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 2. Maak de Scrollbar aan en koppel deze aan de Canvas
+        scrollbar = tk.Scrollbar(moves_frame, orient=tk.VERTICAL, command=self.moves_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.moves_canvas.config(yscrollcommand=scrollbar.set)
+
+        # 3. Maak een 'Inner Frame' aan BINNEN de Canvas
+        # Dit frame zal uw Treeview bevatten, en dit frame wordt gescrold door de Canvas.
+        self.canvas_inner_frame = tk.Frame(self.moves_canvas)
+
+        # 4. Plaats de Treeview in het 'Inner Frame'
+        # OPMERKING: Haal de 'yscrollcommand' optie uit de Treeview,
+        # want de Canvas behandelt nu het scrollen.
+        self.move_listbox = ttk.Treeview(
+            self.canvas_inner_frame, # Plaatsing in het inner frame!
+            columns=('Move',),
+            show='',
+            style="Custom.Treeview",
+            # yscrollcommand=scrollbar.set <-- DEZE VERWIJDEREN!
+        )
+
+        # Configureer de Treeview (zoals eerder)
+        self.move_listbox.column('Move', width=move_listbox_width * 8, anchor='w')
+        # GEEN .pack() OF .grid() op de Treeview. We gebruiken .place() of .grid()
+        # om deze de hele grootte van het inner_frame te geven, of gewoon fill/expand:
+        self.move_listbox.pack(fill=tk.BOTH, expand=True)
+
+        # 5. Koppel het Inner Frame aan de Canvas
+        self.canvas_window_id = self.moves_canvas.create_window(
+            (0, 0),
+            window=self.canvas_inner_frame,
+            anchor="nw",
+            tags="self.canvas_inner_frame"
+        )
+
         # 6. Bind events voor synchronisatie en touch-scrollen
         # Zorg dat het inner frame (met de Treeview) altijd de breedte van de canvas heeft.
         self.moves_canvas.bind('<Configure>', self._on_canvas_configure)
@@ -714,20 +848,62 @@ class ChessAnnotatorApp:
         self.moves_canvas.bind("<ButtonPress-1>", self._start_scroll)
         self.moves_canvas.bind("<B1-Motion>", self._do_scroll)
         # Bind Listbox selection to board update
-        self.move_listbox.bind('<<TreeviewSelect>>', self._on_move_listbox_select)
+        #self.move_listbox.bind('<<TreeviewSelect>>', self._on_move_listbox_select)
+        self.move_listbox.bind("<ButtonPress-1>", self._start_scroll)
+
+        # Als de muisknop wordt bewogen terwijl deze is ingedrukt boven de lijst, scrollen.
+        self.move_listbox.bind("<B1-Motion>", self._do_scroll)
 
         # Hulpvariabele voor het scrollen (kan ook als self.last_y worden opgeslagen)
         self._last_y = 0
+        self._start_y = 0
+        self.move_listbox.bind("<ButtonRelease-1>", self._on_release_or_select)
+        self._is_dragging = False
+
+    def _on_release_or_select(self, event):
+        """Handelt de Treeview selectie af als de muisknop wordt losgelaten en er GEEN scroll was."""
+
+        if self._is_dragging:
+            self._is_dragging = False
+            return # Was een scroll-actie, negeer selectie
+
+        # Het was een simpele klik (of te kleine beweging): voer de selectie uit
+
+        # Gebruik .identify_row om te bepalen op welke rij geklikt is
+        selected_iid = self.move_listbox.identify_row(event.y)
+
+        if selected_iid:
+            # Haal de index op die we hebben opgeslagen als de iid
+            try:
+                selected_index = int(selected_iid)
+            except ValueError:
+                return
+
+            # Selecteer het item in de Treeview (dit triggert GEEN <<TreeviewSelect>>)
+            self.move_listbox.selection_set(selected_iid)
+
+            # Roep uw update-logica aan
+            if self.current_move_index != selected_index:
+                self.current_move_index = selected_index
+                self.update_state()
+        else:
+            # Klik op lege ruimte: terug naar startpositie (-1)
+            if self.current_move_index != -1:
+                self.current_move_index = -1
+                self.update_state()
+
+        # Reset de vlag
+        self._is_dragging = False
 
     def _on_canvas_configure(self, event):
         """
         Past de scrollregio en de breedte van het inner frame aan wanneer de canvas van grootte verandert.
         """
+        self.moves_canvas.update_idletasks()
         # 1. Zorg ervoor dat het inner frame de breedte van de canvas heeft
         self.moves_canvas.itemconfig(
             self.canvas_window_id,
             width=event.width,
-            height=event.height # <-- DEZE REGEL IS DE OPLOSSING VOOR HET HOOGTEPROBLEEM
         )
 
         # 2. Update de scrollregio op basis van de hoogte van het inner frame
@@ -744,30 +920,36 @@ class ChessAnnotatorApp:
 
 
     def _start_scroll(self, event):
-        """Start de drag-scroll operatie door de start Y-coördinaat op te slaan."""
-        self.moves_canvas.scan_mark(event.x, event.y)
-        self._last_y = event.y
-        # Optioneel: Stel de focus in op de Treeview voor betere selectie
-        self.move_listbox.focus_set()
+        """Slaat de startcoördinaten op en zet de focus."""
+        self._start_y = event.y
+        # self._last_y wordt pas bij de drag-start gebruikt
+        self._is_dragging = False
+        self.moves_canvas.focus_set()
+        return "break"
 
 
     def _do_scroll(self, event):
-        """
-        Verschuift de canvasinhoud op basis van de beweging van de vinger/muis.
-        Dit simuleert het touch-drag-scrollen.
-        """
-        # Gebruik scan_drag om de inhoud van de canvas te verschuiven
-        self.moves_canvas.scan_dragto(event.x, event.y, gain=1)
+        MIN_DRAG_DISTANCE = 5
 
-        # Om de standaard selectie te behouden, is de scan_dragto methode vaak voldoende.
-        # U kunt ook yview_scroll gebruiken als u meer inertie wilt:
-        # delta = self._last_y - event.y
-        # self.moves_canvas.yview_scroll(int(delta / 2), "units") # Pas '2' aan voor snelheid
-        # self._last_y = event.y
+        # 1. Start Drag Check
+        if not self._is_dragging:
+            if abs(event.y_root - self._start_y) > MIN_DRAG_DISTANCE:
+                self._is_dragging = True
+                self._last_y = event.y_root # Initialiseer _last_y met absolute Y
+            else:
+                return
 
+        # 2. Scroll met delta
+        delta = self._last_y - event.y_root
 
-        # Optioneel: Voeg een MouseWheel-binding toe voor desktop/touchpad scrollen
-        self.moves_canvas.bind_all('<MouseWheel>', lambda e: self.moves_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+        # Gebruik yview_scroll op de Canvas
+        self.moves_canvas.yview_scroll(int(delta / 4), "units")
+        self._last_y = event.y_root
+
+        # 3. Annuleer selectie (Noodzakelijk voor de Treeview!)
+        self.move_listbox.selection_remove(self.move_listbox.selection())
+
+        return "break"
 
     def show_clear_variation_button(self):
         """
@@ -837,6 +1019,10 @@ class ChessAnnotatorApp:
                 tags=('default',), # Pas de font tag toe
                 values=(list_item,) # De data voor de kolom 'Move'
             )
+        self.moves_canvas.update_idletasks()
+        bbox = self.moves_canvas.bbox("all")
+        print(f"Canvas Scrollregion BBOX hoogte: {bbox[3] if bbox else 'N/A'}")
+        self.moves_canvas.config(scrollregion=bbox) # Gebruik bbox direct voor testen
 
     def _on_move_listbox_select(self, event):
         """
