@@ -668,31 +668,106 @@ class ChessAnnotatorApp:
         )
         self.move_list_label.pack(side=tk.LEFT, padx=(5,0))
 
-        scrollbar = tk.Scrollbar(moves_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # 1. Maak de Canvas aan
+        self.moves_canvas = tk.Canvas(moves_frame, borderwidth=0, highlightthickness=0)
+        self.moves_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+        # 2. Maak de Scrollbar aan en koppel deze aan de Canvas
+        scrollbar = tk.Scrollbar(moves_frame, orient=tk.VERTICAL, command=self.moves_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.moves_canvas.config(yscrollcommand=scrollbar.set)
+
+        # 3. Maak een 'Inner Frame' aan BINNEN de Canvas
+        # Dit frame zal uw Treeview bevatten, en dit frame wordt gescrold door de Canvas.
+        self.canvas_inner_frame = tk.Frame(self.moves_canvas)
+
+        # 4. Plaats de Treeview in het 'Inner Frame'
+        # OPMERKING: Haal de 'yscrollcommand' optie uit de Treeview,
+        # want de Canvas behandelt nu het scrollen.
         self.move_listbox = ttk.Treeview(
-            moves_frame,
-            columns=('Move',), # Één kolom voor de volledige zet
-            show='',   # Toon alleen de kopjes (geen boomstructuur)
-            yscrollcommand=scrollbar.set,
+            self.canvas_inner_frame, # Plaatsing in het inner frame!
+            columns=('Move',),
+            show='',
+            style="Custom.Treeview",
+            # yscrollcommand=scrollbar.set <-- DEZE VERWIJDEREN!
         )
 
-        # 2. Configureer de enige kolom en het kopje
-        # Stel de breedte in op basis van je variabele
+        # Configureer de Treeview (zoals eerder)
         self.move_listbox.column('Move', width=move_listbox_width * 8, anchor='w')
-        #self.move_listbox.heading('Move', text='Zetlijst')
+        # GEEN .pack() OF .grid() op de Treeview. We gebruiken .place() of .grid()
+        # om deze de hele grootte van het inner_frame te geven, of gewoon fill/expand:
+        self.move_listbox.pack(fill=tk.BOTH, expand=True)
 
-        # 3. Koppel de scrollbar en pack
-        self.move_listbox.pack(side=tk.LEFT, fill=tk.Y, expand=True) # expand=True is cruciaal
-        scrollbar.config(command=self.move_listbox.yview)
+        # 5. Koppel het Inner Frame aan de Canvas
+        self.canvas_window_id = self.moves_canvas.create_window(
+            (0, 0),
+            window=self.canvas_inner_frame,
+            anchor="nw",
+            tags="self.canvas_inner_frame"
+        )
 
-        # 4. Optioneel: Stel de font in via een tag (voor Consolas font)
-        self.move_listbox.tag_configure('default', font=('Consolas', 10))
-        scrollbar.config(command=self.move_listbox.yview)
+        # 6. Bind events voor synchronisatie en touch-scrollen
+        # Zorg dat het inner frame (met de Treeview) altijd de breedte van de canvas heeft.
+        self.moves_canvas.bind('<Configure>', self._on_canvas_configure)
 
+        # Bind touch/muis drag-events voor handmatig scrollen op touch-apparaten
+        self.moves_canvas.bind("<ButtonPress-1>", self._start_scroll)
+        self.moves_canvas.bind("<B1-Motion>", self._do_scroll)
         # Bind Listbox selection to board update
         self.move_listbox.bind('<<TreeviewSelect>>', self._on_move_listbox_select)
+
+        # Hulpvariabele voor het scrollen (kan ook als self.last_y worden opgeslagen)
+        self._last_y = 0
+
+    def _on_canvas_configure(self, event):
+        """
+        Past de scrollregio en de breedte van het inner frame aan wanneer de canvas van grootte verandert.
+        """
+        # 1. Zorg ervoor dat het inner frame de breedte van de canvas heeft
+        self.moves_canvas.itemconfig(
+            self.canvas_window_id,
+            width=event.width,
+            height=event.height # <-- DEZE REGEL IS DE OPLOSSING VOOR HET HOOGTEPROBLEEM
+        )
+
+        # 2. Update de scrollregio op basis van de hoogte van het inner frame
+        # (Dit moet ook aangeroepen worden nadat de move list is gevuld!)
+        bbox = self.moves_canvas.bbox("all")
+        if bbox:
+            # Als de totale hoogte van de inhoud (bbox[3]) groter is dan de Canvas-hoogte (event.height),
+            # dan moet de scrollregio de totale hoogte bevatten.
+            # Anders stellen we de scrollregio zo in dat er niet gescrold kan worden.
+
+            # We stellen de scrollregio in op de grootte van de inner_frame (0, 0, width, height)
+            # zodat Tkinter weet dat het inner_frame de volledige canvasgrootte kan vullen.
+            self.moves_canvas.config(scrollregion=(0, 0, event.width, bbox[3] if bbox[3] > event.height else event.height))
+
+
+    def _start_scroll(self, event):
+        """Start de drag-scroll operatie door de start Y-coördinaat op te slaan."""
+        self.moves_canvas.scan_mark(event.x, event.y)
+        self._last_y = event.y
+        # Optioneel: Stel de focus in op de Treeview voor betere selectie
+        self.move_listbox.focus_set()
+
+
+    def _do_scroll(self, event):
+        """
+        Verschuift de canvasinhoud op basis van de beweging van de vinger/muis.
+        Dit simuleert het touch-drag-scrollen.
+        """
+        # Gebruik scan_drag om de inhoud van de canvas te verschuiven
+        self.moves_canvas.scan_dragto(event.x, event.y, gain=1)
+
+        # Om de standaard selectie te behouden, is de scan_dragto methode vaak voldoende.
+        # U kunt ook yview_scroll gebruiken als u meer inertie wilt:
+        # delta = self._last_y - event.y
+        # self.moves_canvas.yview_scroll(int(delta / 2), "units") # Pas '2' aan voor snelheid
+        # self._last_y = event.y
+
+
+        # Optioneel: Voeg een MouseWheel-binding toe voor desktop/touchpad scrollen
+        self.moves_canvas.bind_all('<MouseWheel>', lambda e: self.moves_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
     def show_clear_variation_button(self):
         """
