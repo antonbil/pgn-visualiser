@@ -1,4 +1,5 @@
 import json
+from tkinter import ttk
 import tkinter as tk
 from tkinter import messagebox, simpledialog, filedialog
 from io import StringIO
@@ -670,18 +671,28 @@ class ChessAnnotatorApp:
         scrollbar = tk.Scrollbar(moves_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.move_listbox = tk.Listbox(
+        self.move_listbox = ttk.Treeview(
             moves_frame,
+            columns=('Move',), # Één kolom voor de volledige zet
+            show='',   # Toon alleen de kopjes (geen boomstructuur)
             yscrollcommand=scrollbar.set,
-            #height=25,
-            width=move_listbox_width, # Increased width to accommodate variations indicator
-            font=('Consolas', 10)
         )
-        self.move_listbox.pack(side=tk.LEFT, fill=tk.Y)
+
+        # 2. Configureer de enige kolom en het kopje
+        # Stel de breedte in op basis van je variabele
+        self.move_listbox.column('Move', width=move_listbox_width * 8, anchor='w')
+        #self.move_listbox.heading('Move', text='Zetlijst')
+
+        # 3. Koppel de scrollbar en pack
+        self.move_listbox.pack(side=tk.LEFT, fill=tk.Y, expand=True) # expand=True is cruciaal
+        scrollbar.config(command=self.move_listbox.yview)
+
+        # 4. Optioneel: Stel de font in via een tag (voor Consolas font)
+        self.move_listbox.tag_configure('default', font=('Consolas', 10))
         scrollbar.config(command=self.move_listbox.yview)
 
         # Bind Listbox selection to board update
-        self.move_listbox.bind('<<ListboxSelect>>', self._on_move_listbox_select)
+        self.move_listbox.bind('<<TreeviewSelect>>', self._on_move_listbox_select)
 
     def show_clear_variation_button(self):
         """
@@ -702,9 +713,12 @@ class ChessAnnotatorApp:
 
     def _populate_move_listbox(self):
         """
-        Fills the Listbox with all moves, including any commentaries and variation indicators.
+        Fills the Treeview with all moves, including any commentaries and variation indicators.
         """
-        self.move_listbox.delete(0, tk.END)
+        # VERANDERING 1: Treeview leegmaken
+        for item in self.move_listbox.get_children():
+            self.move_listbox.delete(item)
+
         if not self.game:
             return
 
@@ -728,30 +742,53 @@ class ChessAnnotatorApp:
             try:
                 san_move = prev_board.san(node.move)
             except:
-                 san_move = node.move.uci() # Fallback
+                san_move = node.move.uci() # Fallback
 
             # Add commentary if present
             comment_text = f" ({node.comment.strip()})" if node.comment and node.comment.strip() else ""
 
             # Variation indicator
+            # We gebruiken een speciaal symbool voor de variatie-indicator (bijvoorbeeld '⊕')
             variation_indicator = f" [+ {len(node.variations)-1} V]" if len(node.variations) > 1 else ""
 
             list_item = f"{prefix}{san_move}{comment_text}{variation_indicator}"
-            self.move_listbox.insert(tk.END, list_item)
+
+            # VERANDERING 2 & 3: Invoegen in Treeview
+            # De IID (internal identifier) wordt ingesteld op de node-index (i)
+            self.move_listbox.insert(
+                '',               # Parent: De root
+                tk.END,           # Plaats aan het einde
+                iid=str(i),       # BELANGRIJK: Sla de index op als de IID
+                tags=('default',), # Pas de font tag toe
+                values=(list_item,) # De data voor de kolom 'Move'
+            )
 
     def _on_move_listbox_select(self, event):
         """
         Updates the status upon selecting a Listbox item.
         """
-        selection = self.move_listbox.curselection()
+        selection = self.move_listbox.selection()
+
         if not selection:
-            # Allow clicking off the listbox to select the start position
+            # Er is niets geselecteerd. Dit kan gebeuren als er op lege ruimte wordt geklikt.
+            # Laat de gebruiker terugkeren naar de startpositie (-1).
             if self.current_move_index != -1:
                 self.current_move_index = -1
                 self.update_state()
             return
 
-        selected_index = selection[0]
+        # De IID is de string die we hebben opgeslagen, die overeenkomt met de index.
+        selected_iid = selection[0]
+
+        # 2. Converteer de IID (string) terug naar de numerieke index (integer)
+        try:
+            selected_index = int(selected_iid)
+        except ValueError:
+            # Dit zou niet mogen gebeuren als de IID correct is opgeslagen als str(i)
+            print(f"Fout: Ongeldige IID in Treeview: {selected_iid}")
+            return
+
+        # 3. Voer de overgang uit
         if self.current_move_index != selected_index:
             self.current_move_index = selected_index
             self.update_state()
@@ -885,10 +922,18 @@ class ChessAnnotatorApp:
         """
         Synchronizes the selection in the Listbox.
         """
-        self.move_listbox.selection_clear(0, tk.END)
+        self.move_listbox.selection_remove(self.move_listbox.selection())
+
         if self.current_move_index != -1:
-            self.move_listbox.selection_set(self.current_move_index)
-            self.move_listbox.see(self.current_move_index)
+            # 2. Converteer de numerieke index naar de IID (die we als string hebben opgeslagen).
+            iid_to_select = str(self.current_move_index)
+
+            # 3. Stel de nieuwe selectie in (selectie op basis van IID).
+            # selection_set() in Treeview werkt met IID's.
+            self.move_listbox.selection_set(iid_to_select)
+
+            # 4. Zorg ervoor dat de geselecteerde zet zichtbaar is (scroll indien nodig).
+            self.move_listbox.see(iid_to_select)
 
     def update_listbox_item(self, index):
         """
