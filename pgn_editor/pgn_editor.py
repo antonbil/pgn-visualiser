@@ -460,10 +460,19 @@ class ChessAnnotatorApp:
         """
         Opens a dialog to select a PGN file and loads all games from it.
         """
+        initial_dir = None
+        if hasattr(self, 'last_filepath') and self.last_filepath:
+            # Extract the directory from the path
+            directory = os.path.dirname(self.last_filepath)
+
+        # 3. Controleer of de map geldig is en bestaat
+        if os.path.isdir(directory):
+            initial_dir = directory
         filepath = filedialog.askopenfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
-            title="Choose a PGN file to load"
+            title="Choose a PGN file to load",
+            initialdir=initial_dir
         )
         if filepath:
             try:
