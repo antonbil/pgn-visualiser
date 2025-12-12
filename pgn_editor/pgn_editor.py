@@ -108,9 +108,6 @@ class ChessAnnotatorApp:
         self.selected_square = None
         self.highlight_item = None
         master.title("PGN Chess Annotator")
-        master.update_idletasks()
-
-        self.set_screen_position(master)
         # Zoek het thema (bijvoorbeeld op basis van een gebruikersinstelling)
         self.selected_theme = next(
             (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
@@ -175,6 +172,10 @@ class ChessAnnotatorApp:
 
         self._setup_main_columns(master,self.board_frame,self.moves_frame)
 
+        master.update_idletasks()
+
+        self.set_screen_position(master)
+
         if not(pgn_game is None or len(pgn_game) == 0):
             try:
                 with open(pgn_game, 'r', encoding='utf-8') as f:
@@ -207,6 +208,8 @@ class ChessAnnotatorApp:
             # Dit dwingt het venster om niet over de rand te gaan.
 
             # De breedte is de benodigde breedte, tenzij die de schermbreedte overschrijdt.
+            print(required_width, screen_width)
+            print(required_height, screen_height)
             window_width = min(required_width, screen_width)
             window_height = min(required_height, screen_height)
 
@@ -249,7 +252,7 @@ class ChessAnnotatorApp:
             column1_frame = tk.Frame(main_frame)
             column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
             # Column 2: Move List
-            column2_frame = tk.Frame(main_frame, width=200)
+            column2_frame = tk.Frame(main_frame, width=150)
             column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
             column3_frame = tk.Frame(main_frame)
             column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
