@@ -252,8 +252,9 @@ class ChessAnnotatorApp:
             column1_frame = tk.Frame(main_frame)
             column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
             # Column 2: Move List
-            column2_frame = tk.Frame(main_frame, width=150)
+            column2_frame = tk.Frame(main_frame, width=300)
             column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            column2_frame.pack_propagate(False)
             column3_frame = tk.Frame(main_frame)
             column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
