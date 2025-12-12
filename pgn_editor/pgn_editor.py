@@ -252,7 +252,7 @@ class ChessAnnotatorApp:
             column1_frame = tk.Frame(main_frame)
             column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
             # Column 2: Move List
-            column2_frame = tk.Frame(main_frame, width=300)
+            column2_frame = tk.Frame(main_frame, width=400)
             column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
             column2_frame.pack_propagate(False)
             column3_frame = tk.Frame(main_frame)
@@ -789,7 +789,7 @@ class ChessAnnotatorApp:
 
         # Knoppen met kortere tekst en kleinere vaste breedte
         # 1. Vorige Partij (Game)
-        self.prev_game_button = tk.Button(nav_buttons_frame, text="<< Game", command=lambda: self._navigate_game(-1),
+        self.prev_game_button = tk.Button(nav_buttons_frame, text="<<", command=lambda: self._navigate_game(-1),
                                           width=6, bg='#fff0e6')  # Breedte verlaagd
         self.prev_game_button.pack(side=tk.LEFT, padx=(5, 3))
 
@@ -804,7 +804,7 @@ class ChessAnnotatorApp:
         self.next_button.pack(side=tk.LEFT, padx=3)
 
         # 4. Volgende Partij (Game)
-        self.next_game_button = tk.Button(nav_buttons_frame, text="Game >>", command=lambda: self._navigate_game(1),
+        self.next_game_button = tk.Button(nav_buttons_frame, text=">>", command=lambda: self._navigate_game(1),
                                           width=6, bg='#fff0e6')  # Breedte verlaagd
         self.next_game_button.pack(side=tk.LEFT, padx=(3, 5))
 
