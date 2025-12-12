@@ -92,6 +92,7 @@ BOARD_THEMES = [
         "dark": "#696969"  # Dark gray (Sufficient contrast)
     }
 ]
+COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard"):
@@ -107,6 +108,9 @@ class ChessAnnotatorApp:
         self.selected_square = None
         self.highlight_item = None
         master.title("PGN Chess Annotator")
+        master.update_idletasks()
+
+        self.set_screen_position(master)
         # Zoek het thema (bijvoorbeeld op basis van een gebruikersinstelling)
         self.selected_theme = next(
             (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
@@ -183,13 +187,41 @@ class ChessAnnotatorApp:
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
 
+    def set_screen_position(self, master):
+        # 1. Bepaal de maximale beschikbare breedte
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+
+        # 2. Bepaal de vereiste breedte van het venster (minimaal benodigde breedte)
+        # Dit is de breedte die uw huidige widgets in de gekozen lay-out nodig hebben.
+        required_width = master.winfo_reqwidth()
+        required_height = master.winfo_reqheight()
+
+        # 3. Stel de maximale breedte in om te voorkomen dat het venster breder wordt dan het scherm.
+        # We gebruiken de hoogte die u al in uw lay-outlogica gebruikt (bijv. 1000 pixels als drempel)
+
+        if screen_height < COMPACT_HEIGHT_THRESHOLD:
+            # Dit is waarschijnlijk een compact/touchscreen apparaat.
+
+            # Gebruik de breedte die de widgets nodig hebben, maar beperk tot de schermbreedte.
+            # Dit dwingt het venster om niet over de rand te gaan.
+
+            # De breedte is de benodigde breedte, tenzij die de schermbreedte overschrijdt.
+            window_width = min(required_width, screen_width)
+            window_height = min(required_height, screen_height)
+
+            # Startpositie: Linksboven (+0+0) om te garanderen dat alles zichtbaar is.
+            # We stellen de exacte geometrie in.
+            master.geometry(f"{window_width}x{window_height}+0+0")
+
+            # Optioneel: Stel de minimale grootte in om te voorkomen dat de gebruiker het te klein maakt
+            master.minsize(window_width, window_height)
+
     def setup_ui(self, master):
         """
         Sets up the UI elements based on the initial screen height.
         """
 
-        # --- 1. Definieer de drempel ---
-        COMPACT_HEIGHT_THRESHOLD = 1000
 
         # Forceer de vensterweergave en haal de initiële hoogte op
         master.update_idletasks()
@@ -225,14 +257,11 @@ class ChessAnnotatorApp:
             # 1. Game Meta-Tags section (left in the header)
             meta_frame = tk.LabelFrame(column3_frame, text="Game Meta-Tags", padx=5, pady=5)
             meta_frame.pack(side=tk.TOP, padx=10, pady=5)
-            nav_comment_frame = tk.Frame(column2_frame)
-
-            # Pack this frame HERE with fill=tk.BOTH and expand=True
-            # This ensures that this frame claims the remaining horizontal space between
-            # meta_frame (LEFT) and comment_frame (RIGHT).
-            nav_comment_frame.pack(padx=30, fill=tk.BOTH, expand=True)
             comment_frame = tk.LabelFrame(column3_frame, text="Annotation Tools", padx=10, pady=5)
             comment_frame.pack(fill=tk.Y, padx=10, pady=5)
+            nav_comment_frame = tk.Frame(column3_frame)
+
+            nav_comment_frame.pack(padx=30, fill=tk.BOTH, expand=True)
 
             main_frame = tk.Frame(master, padx=10, pady=10)
             main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -733,23 +762,34 @@ class ChessAnnotatorApp:
 
         # Current Move Notation
         tk.Label(nav_comment_frame, text="Current Move:", font=('Arial', 10, 'bold')).pack(pady=5)
-        self.notation_label = tk.Label(nav_comment_frame, text="Starting Position", font=('Arial', 14, 'bold'), fg='blue')
+        self.notation_label = tk.Label(nav_comment_frame, text="Starting Position", font=('Arial', 14, 'bold'),
+                                       fg='blue')
         self.notation_label.pack(pady=5)
 
         # Navigation Buttons
         nav_buttons_frame = tk.Frame(nav_comment_frame)
         nav_buttons_frame.pack(pady=10)
-        # 1. Vorige Partij (Game)
-        self.prev_game_button = tk.Button(nav_buttons_frame, text="< Prev Game", command=lambda: self._navigate_game(-1), width=10, bg='#fff0e6') # Lichtoranje tint
-        self.prev_game_button.pack(side=tk.LEFT, padx=(10, 5))
-        self.prev_button = tk.Button(nav_buttons_frame, text="<< Previous", command=self.go_back_move, width=10)
-        self.prev_button.pack(side=tk.LEFT, padx=5)
-        self.next_button = tk.Button(nav_buttons_frame, text="Next >>", command=self.go_forward_move, width=10)
-        self.next_button.pack(side=tk.LEFT, padx=5)
-        # 4. Volgende Partij (Game)
-        self.next_game_button = tk.Button(nav_buttons_frame, text="Next Game >", command=lambda: self._navigate_game(1), width=10, bg='#fff0e6')
-        self.next_game_button.pack(side=tk.LEFT, padx=(5, 10))
 
+        # Knoppen met kortere tekst en kleinere vaste breedte
+        # 1. Vorige Partij (Game)
+        self.prev_game_button = tk.Button(nav_buttons_frame, text="<< Game", command=lambda: self._navigate_game(-1),
+                                          width=6, bg='#fff0e6')  # Breedte verlaagd
+        self.prev_game_button.pack(side=tk.LEFT, padx=(5, 3))
+
+        # 2. Vorige Zet (Move)
+        self.prev_button = tk.Button(nav_buttons_frame, text="< Move", command=self.go_back_move,
+                                     width=6)  # Breedte verlaagd
+        self.prev_button.pack(side=tk.LEFT, padx=3)
+
+        # 3. Volgende Zet (Move)
+        self.next_button = tk.Button(nav_buttons_frame, text="Move >", command=self.go_forward_move,
+                                     width=6)  # Breedte verlaagd
+        self.next_button.pack(side=tk.LEFT, padx=3)
+
+        # 4. Volgende Partij (Game)
+        self.next_game_button = tk.Button(nav_buttons_frame, text="Game >>", command=lambda: self._navigate_game(1),
+                                          width=6, bg='#fff0e6')  # Breedte verlaagd
+        self.next_game_button.pack(side=tk.LEFT, padx=(3, 5))
 
         # === COMMENTARY DISPLAY ===
         tk.Label(nav_comment_frame, text="Commentary:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
