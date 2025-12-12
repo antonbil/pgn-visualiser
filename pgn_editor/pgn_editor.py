@@ -171,7 +171,7 @@ class ChessAnnotatorApp:
         self._setup_menu_bar(master)
         self.setup_ui( master)
 
-        self._setup_header_frame(master, self.meta_frame, self.nav_comment_frame, self.comment_frame)
+        self._setup_header_frame(master, self.meta_frame, self.nav_comment_frame, self.comment_frame, self.comment_display_frame)
 
         self._setup_main_columns(master,self.board_frame,self.moves_frame)
 
@@ -248,8 +248,8 @@ class ChessAnnotatorApp:
             # Column 1 (Left): Chess Diagram
             column1_frame = tk.Frame(main_frame)
             column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-            # Column 2 (Right): Move List
-            column2_frame = tk.Frame(main_frame)
+            # Column 2: Move List
+            column2_frame = tk.Frame(main_frame, width=200)
             column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
             column3_frame = tk.Frame(main_frame)
             column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -268,10 +268,12 @@ class ChessAnnotatorApp:
 
             # Column 1 (Left): Chess Diagram
             board_frame = tk.Frame(column1_frame)
-            board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-            # Column 2 (Right): Move List
+            board_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5)
+            # Column 2: Move List
             moves_frame = tk.Frame(column2_frame)
             moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
+            comment_display_frame = tk.Frame(column1_frame)
+            comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
 
         else:
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
@@ -280,12 +282,19 @@ class ChessAnnotatorApp:
             # 1. Game Meta-Tags section (left in the header)
             meta_frame = tk.LabelFrame(header_frame, text="Game Meta-Tags", padx=5, pady=5)
             meta_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
-            nav_comment_frame = tk.Frame(header_frame)
+
+            middle_column_frame = tk.Frame(header_frame)
+            # Dit frame moet de resterende horizontale ruimte innemen
+            middle_column_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
+
+            nav_comment_frame = tk.Frame(middle_column_frame)
 
             # Pack this frame HERE with fill=tk.BOTH and expand=True
             # This ensures that this frame claims the remaining horizontal space between
             # meta_frame (LEFT) and comment_frame (RIGHT).
-            nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
+            nav_comment_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+            comment_display_frame = tk.Frame(middle_column_frame)
+            comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
             comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
             comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
@@ -295,9 +304,12 @@ class ChessAnnotatorApp:
             # Column 1 (Left): Chess Diagram
             board_frame = tk.Frame(main_frame)
             board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+
             # Column 2 (Right): Move List
             moves_frame = tk.Frame(main_frame)
             moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+
 
         # Sla ze op als klasse-attributen zodat de rest van de code ze kan bereiken
         self.meta_frame = meta_frame
@@ -305,6 +317,7 @@ class ChessAnnotatorApp:
         self.comment_frame = comment_frame
         self.board_frame = board_frame
         self.moves_frame = moves_frame
+        self.comment_display_frame = comment_display_frame
 
     # --- Menu Logic ---
 
@@ -741,7 +754,7 @@ class ChessAnnotatorApp:
 
     # --- UI Component Setup ---
 
-    def _setup_header_frame(self, master, meta_frame, nav_comment_frame, comment_frame):
+    def _setup_header_frame(self, master, meta_frame, nav_comment_frame, comment_frame, comment_display_frame):
         """
         Sets up the top section of the UI: Meta-tags, Navigation, and Commentary Controls.
         """
@@ -791,15 +804,13 @@ class ChessAnnotatorApp:
                                           width=6, bg='#fff0e6')  # Breedte verlaagd
         self.next_game_button.pack(side=tk.LEFT, padx=(3, 5))
 
-        # === COMMENTARY DISPLAY ===
-        tk.Label(nav_comment_frame, text="Commentary:", font=('Arial', 10, 'bold')).pack(pady=(10, 0))
 
         # Make the wraplength dynamic and use fill=tk.X and sticky=tk.N
         # By removing wraplength or making it much larger and using fill=tk.X,
         # the label will fill the available width of the parent (nav_comment_frame).
 
         self.comment_display = tk.Label(
-            nav_comment_frame,
+            comment_display_frame,
             text="No comment for this move.",
             font=('Arial', 9),
             bg='lightgray',
