@@ -35,11 +35,69 @@ def save_preferences(data):
         print(f"Warning: cannot save preferences: {e}")
 
 # Required: pip install python-chess
+BOARD_THEMES = [
+    {
+        "name": "Standard",
+        "light": "#F0D9B5", # Zeer lichte beige/crème
+        "dark": "#B58863"   # Warme bruin/sepiakleur
+    },
+    {
+        "name": "Blue Lagoon",
+        "light": "#C3DDE9",  # Very light blue/gray
+        "dark": "#638C9B"  # Muted blue/green
+    },
+    {
+        "name": "Green",
+        "light": "#ECECDD",  # Very light green-yellow
+        "dark": "#779954"  # Standard dark green
+    },
+    {
+        "name": "Red",
+        "light": "#FFF3E1",  # Light cream color
+        "dark": "#B83E3E"  # Deep red
+    },
+    {
+        "name": "Dark",
+        "light": "#D1D0D0",  # Light gray
+        "dark": "#9B9B9B"  # Lighter dark gray (Improved contrast)
+    },
+    {
+        "name": "Moody (Purple)",
+        "light": "#E9E4F5",  # Very light purple
+        "dark": "#9F8CC4"  # Lighter muted purple (Improved contrast)
+    },
+    {
+        "name": "Classic Tournament",
+        "light": "#FFFFFF",  # White
+        "dark": "#AAAAAA"  # Medium gray
+    },
+    {
+        "name": "Ocean",
+        "light": "#CCFFCC",  # Very light green
+        "dark": "#5588C2"  # Lighter navy blue/ocean blue (Improved contrast)
+    },
+    {
+        "name": "Rosewood",
+        "light": "#FFC0CB",  # Pink
+        "dark": "#C45A5A"  # Lighter reddish-brown (Improved contrast)
+    },
+    {
+        "name": "Terminal (Green on Dark)",
+        "light": "#00CC00",  # Bright green
+        "dark": "#333333"  # Very dark gray (Improved contrast, was black)
+    },
+    {
+        "name": "Ivory",
+        "light": "#F5F5DC",  # Ivory
+        "dark": "#696969"  # Dark gray (Sufficient contrast)
+    }
+]
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = ""):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard"):
         print("parameters:",pgn_game, engine_name)
         self.last_filepath = pgn_game
+        self.theme_name=board
         self.master = master
         self.piece_set = piece_set
         self.square_size = square_size if square_size else 75
@@ -49,6 +107,11 @@ class ChessAnnotatorApp:
         self.selected_square = None
         self.highlight_item = None
         master.title("PGN Chess Annotator")
+        # Zoek het thema (bijvoorbeeld op basis van een gebruikersinstelling)
+        self.selected_theme = next(
+            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
+            BOARD_THEMES[0] # Gebruik Standard als fallback
+        )
 
         # --- Data Initialization ---
         self.all_games = []      # List of all chess.pgn.Game objects in the PGN file
@@ -102,8 +165,11 @@ class ChessAnnotatorApp:
 
         # --- UI Setup ---
         self._setup_menu_bar(master)
-        self._setup_header_frame(master)
-        self._setup_main_columns(master)
+        self.setup_ui( master)
+
+        self._setup_header_frame(master, self.meta_frame, self.nav_comment_frame, self.comment_frame)
+
+        self._setup_main_columns(master,self.board_frame,self.moves_frame)
 
         if not(pgn_game is None or len(pgn_game) == 0):
             try:
@@ -116,6 +182,100 @@ class ChessAnnotatorApp:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
+
+    def setup_ui(self, master):
+        """
+        Sets up the UI elements based on the initial screen height.
+        """
+
+        # --- 1. Definieer de drempel ---
+        COMPACT_HEIGHT_THRESHOLD = 1000
+
+        # Forceer de vensterweergave en haal de initiële hoogte op
+        master.update_idletasks()
+
+        # We gebruiken de SCHERM-hoogte om te beoordelen of we op een compact apparaat zijn.
+        # Als de gebruiker een venster van 100x100 op een 4K monitor start, zal deze breed zijn.
+        # U kunt master.winfo_height() gebruiken als u de initieel GEWENSTE vensterhoogte wilt meten.
+
+        # Voor dit voorbeeld gebruiken we de SCHERMhoogte:
+        screen_height = master.winfo_screenheight()
+        is_compact_layout = screen_height < COMPACT_HEIGHT_THRESHOLD
+
+
+
+        if is_compact_layout:
+            # --- 2. Frames Aanmaken ---
+            # Deze moeten altijd aangemaakt worden voordat we ze plaatsen of vullen.
+            self._setup_menu_bar(master)
+
+            # Hoofdcontainers
+            main_frame = tk.Frame(master, padx=10, pady=10)
+            main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            # Column 1 (Left): Chess Diagram
+            column1_frame = tk.Frame(main_frame)
+            column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            # Column 2 (Right): Move List
+            column2_frame = tk.Frame(main_frame)
+            column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            column3_frame = tk.Frame(main_frame)
+            column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+            # 1. Game Meta-Tags section (left in the header)
+            meta_frame = tk.LabelFrame(column3_frame, text="Game Meta-Tags", padx=5, pady=5)
+            meta_frame.pack(side=tk.TOP, padx=10, pady=5)
+            nav_comment_frame = tk.Frame(column2_frame)
+
+            # Pack this frame HERE with fill=tk.BOTH and expand=True
+            # This ensures that this frame claims the remaining horizontal space between
+            # meta_frame (LEFT) and comment_frame (RIGHT).
+            nav_comment_frame.pack(padx=30, fill=tk.BOTH, expand=True)
+            comment_frame = tk.LabelFrame(column3_frame, text="Annotation Tools", padx=10, pady=5)
+            comment_frame.pack(fill=tk.Y, padx=10, pady=5)
+
+            main_frame = tk.Frame(master, padx=10, pady=10)
+            main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            # Column 1 (Left): Chess Diagram
+            board_frame = tk.Frame(column1_frame)
+            board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            # Column 2 (Right): Move List
+            moves_frame = tk.Frame(column2_frame)
+            moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
+
+        else:
+            header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
+            header_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+
+            # 1. Game Meta-Tags section (left in the header)
+            meta_frame = tk.LabelFrame(header_frame, text="Game Meta-Tags", padx=5, pady=5)
+            meta_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
+            nav_comment_frame = tk.Frame(header_frame)
+
+            # Pack this frame HERE with fill=tk.BOTH and expand=True
+            # This ensures that this frame claims the remaining horizontal space between
+            # meta_frame (LEFT) and comment_frame (RIGHT).
+            nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
+            comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
+            comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
+
+            main_frame = tk.Frame(master, padx=10, pady=10)
+            main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            # Column 1 (Left): Chess Diagram
+            board_frame = tk.Frame(main_frame)
+            board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+            # Column 2 (Right): Move List
+            moves_frame = tk.Frame(main_frame)
+            moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+        # Sla ze op als klasse-attributen zodat de rest van de code ze kan bereiken
+        self.meta_frame = meta_frame
+        self.nav_comment_frame = nav_comment_frame
+        self.comment_frame = comment_frame
+        self.board_frame = board_frame
+        self.moves_frame = moves_frame
 
     # --- Menu Logic ---
 
@@ -167,7 +327,8 @@ class ChessAnnotatorApp:
             "current_game_index": self.current_game_index,
             "engine": self.ENGINE_PATH,
             "square_size": self.square_size + 5,
-            "piece_set": self.piece_set
+            "piece_set": self.piece_set,
+            "board":self.theme_name
             # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
         }
 
@@ -551,17 +712,10 @@ class ChessAnnotatorApp:
 
     # --- UI Component Setup ---
 
-    def _setup_header_frame(self, master):
+    def _setup_header_frame(self, master, meta_frame, nav_comment_frame, comment_frame):
         """
         Sets up the top section of the UI: Meta-tags, Navigation, and Commentary Controls.
         """
-        header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
-        header_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
-
-        # 1. Game Meta-Tags section (left in the header)
-        meta_frame = tk.LabelFrame(header_frame, text="Game Meta-Tags", padx=5, pady=5)
-        meta_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
-
         # Label for Game Index
         self.game_index_label = tk.Label(meta_frame, text="No Game Loaded", font=('Arial', 9, 'bold'), fg='darkgreen')
         self.game_index_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
@@ -575,12 +729,7 @@ class ChessAnnotatorApp:
 
 
         # 2. Navigation and Current Move section (center in the header)
-        nav_comment_frame = tk.Frame(header_frame)
 
-        # Pack this frame HERE with fill=tk.BOTH and expand=True
-        # This ensures that this frame claims the remaining horizontal space between
-        # meta_frame (LEFT) and comment_frame (RIGHT).
-        nav_comment_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
         # Current Move Notation
         tk.Label(nav_comment_frame, text="Current Move:", font=('Arial', 10, 'bold')).pack(pady=5)
@@ -625,8 +774,6 @@ class ChessAnnotatorApp:
         self.variation_btn_frame = tk.Frame(nav_comment_frame, bg='white') # bg ter demo, kan weg
         self.variation_btn_frame.pack(fill=tk.X, padx=5, pady=(0, 10))
         # 3. Commentary Controls section (right in the header)
-        comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
-        comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
         # --- BUTTON FOR VARIATIONS ---
         self.manage_variations_button = tk.Button(comment_frame, text="Manage Variations", command=self._open_variation_manager, width=25, bg='#fff9c4')
@@ -759,16 +906,10 @@ class ChessAnnotatorApp:
             value = self.game.headers.get(tag, "Unknown")
             entry.insert(0, value)
 
-    def _setup_main_columns(self, master):
+    def _setup_main_columns(self, master, board_frame, moves_frame):
         """
         Sets up the two columns below the header: Chess Diagram and Move List.
         """
-        main_frame = tk.Frame(master, padx=10, pady=10)
-        main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        # Column 1 (Left): Chess Diagram
-        board_frame = tk.Frame(main_frame)
-        board_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         #tk.Label(board_frame, text="Chess Diagram", font=('Arial', 12, 'bold')).pack(pady=5)
         move_listbox_width = 50
         width = 8*(self.square_size - 5) + move_listbox_width
@@ -778,9 +919,6 @@ class ChessAnnotatorApp:
         board_frame.bind('<Configure>', self._on_canvas_resize)
 
 
-        # Column 2 (Right): Move List
-        moves_frame = tk.Frame(main_frame)
-        moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
         # Header Frame for Label and Button
         moves_header_frame = tk.Frame(moves_frame)
@@ -829,9 +967,6 @@ class ChessAnnotatorApp:
             anchor="nw",
             tags="inner_frame"
         )
-        scrollbar = tk.Scrollbar(moves_frame, orient=tk.VERTICAL, command=self.moves_canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
 
 
     def show_clear_variation_button(self):
@@ -1741,7 +1876,8 @@ class ChessAnnotatorApp:
         self.canvas.delete("all")
 
         square_size = self.square_size#board_size / 8
-        colors = ("#F0D9B5", "#B58863")  # Light and dark square colors
+        colors = (self.selected_theme["light"], self.selected_theme["dark"])
+        #colors = ("#F0D9B5", "#B58863")  # Light and dark square colors
 
         # Unicode pieces (White: Uppercase, Black: Lowercase)
         piece_map = {
@@ -1998,6 +2134,9 @@ def parse_args():
     parser.add_argument("--piece_set", "-s",
                         help="Set the piece-set for chess-pieces",
                         default=None)
+    parser.add_argument("--board", "-o",
+                        help="Set the color theme of the board",
+                        default=None)
     parser.add_argument("--square_size", "-q",
                         help="Set the square-size for the board",
                         type=int,
@@ -2107,17 +2246,19 @@ if __name__ == "__main__":
     engine_name_preferences = preferences.get("engine", "")
     square_size = preferences.get("square_size", 80)
     piece_set1 = preferences.get("piece_set", "staunty")
+    board1 = preferences.get("board", "red")
 
     pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
     engine_name = args.engine_name if args.engine_name else engine_name_preferences
     piece_set = args.piece_set if args.piece_set else piece_set1
+    board = args.board if args.board else board1
     IMAGE_DIRECTORY = "Images/piece"
     SQUARE_SIZE = args.square_size if args.square_size else square_size # Size of the squares in pixels
     # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
-    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 #example call
