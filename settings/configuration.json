@@ -1,6 +1,6 @@
 {
     "default_directory": "/home/user/Schaken",
-    "lastLoadedPgnPath": "/home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn",
+    "lastLoadedPgnPath": "/home/user/Schaken/7_Greatest_Games_on_Sicilian_Dragon-annotated.pgn",
     "engine_path": "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2",
     "piece_set": "staunty"
 }

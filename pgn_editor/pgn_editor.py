@@ -96,7 +96,7 @@ COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard"):
-        print("parameters:",pgn_game, engine_name)
+        print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.last_filepath = pgn_game
         self.theme_name=board
         self.master = master
@@ -790,7 +790,7 @@ class ChessAnnotatorApp:
         # Knoppen met kortere tekst en kleinere vaste breedte
         # 1. Vorige Partij (Game)
         self.prev_game_button = tk.Button(nav_buttons_frame, text="<<", command=lambda: self._navigate_game(-1),
-                                          width=6, bg='#fff0e6')  # Breedte verlaagd
+                                          width=2, bg='#fff0e6')  # Breedte verlaagd
         self.prev_game_button.pack(side=tk.LEFT, padx=(5, 3))
 
         # 2. Vorige Zet (Move)
@@ -805,7 +805,7 @@ class ChessAnnotatorApp:
 
         # 4. Volgende Partij (Game)
         self.next_game_button = tk.Button(nav_buttons_frame, text=">>", command=lambda: self._navigate_game(1),
-                                          width=6, bg='#fff0e6')  # Breedte verlaagd
+                                          width=2, bg='#fff0e6')  # Breedte verlaagd
         self.next_game_button.pack(side=tk.LEFT, padx=(3, 5))
 
 

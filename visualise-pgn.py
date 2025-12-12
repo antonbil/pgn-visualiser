@@ -531,7 +531,9 @@ class ChessEventViewer:
             string_var_value = self.pgn_filepath.get()
         except:
             string_var_value = ""
-        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True)
+        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None, square_size = 75, current_game_index = 0,  piece_set = "staunty", board="Standard")
+        #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 False <__main__.PieceImageManager1 object at 0x78f90a0dfb30> 75 0 ../../../Images/piece/tatiana Rosewood
+        #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
 
     def enter_new_game(self):
         root = tk.Tk()
@@ -1265,10 +1267,31 @@ class ChessEventViewer:
         """Reads the PGN-content of the file and start the analysis."""
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
+                # Read the complete content of the PGN-file
                 pgn_content = f.read()
 
-            self.do_new_analysis(pgn_content)
-            self.lastLoadedPgnPath = filepath
+            # Use io.StringIO to handle the string like it is a file
+            pgn_io = io.StringIO(pgn_content)
+
+            # use the python-chess parser to load the first game
+            first_game = chess.pgn.read_game(pgn_io)
+
+            if first_game:
+                # Define the Exporter: Set headers, VARIATIONS and COMMENTS to True
+                exporter = chess.pgn.StringExporter(
+                    headers=True,
+                    variations=True,  # Zorgt ervoor dat varianten worden meegenomen
+                    comments=True  # Zorgt ervoor dat commentaren worden meegenomen
+                )
+
+                # Convert back the found game
+                single_pgn_string = first_game.accept(exporter)
+
+                # Do the analysis of the first game
+                self.do_new_analysis(single_pgn_string)
+                self.lastLoadedPgnPath = filepath
+            else:
+                print("Error: the PGN-file does not contain playable games.")
 
         except Exception as e:
             error_message = f"ERROR: Failed to read PGN file: {e}"
