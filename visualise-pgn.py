@@ -1004,6 +1004,9 @@ class ChessEventViewer:
 
     def set_game_var_descriptions(self, current_game_index: int):
         # Updates the index, the selected Combobox variable, and the game counter text.
+        if len(self.game_descriptions)-1 < current_game_index or current_game_index < 0:
+            self.current_game_index = len(self.game_descriptions)-1
+            return
         self.current_game_index = current_game_index
         self.selected_game_var.set(self.game_descriptions[current_game_index])
 
@@ -1295,14 +1298,18 @@ class ChessEventViewer:
         self._clear_content_frame()
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
-        all_events, game = self.get_all_significant_events(pgn_string)
-        self._update_meta_info(game)
-        print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
+        try:
+            all_events, game = self.get_all_significant_events(pgn_string)
+            self._update_meta_info(game)
+            print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
 
-        self.sorted_events = select_key_positions(all_events)
-        self.num_events = len(self.sorted_events)
-        self.populate_event_tabs(self.sorted_events)
-        self.master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
+            self.sorted_events = select_key_positions(all_events)
+            self.num_events = len(self.sorted_events)
+            self.populate_event_tabs(self.sorted_events)
+            self.master.title(f"Chess Game Analysis: {self.num_events} Critical Positions Selected")
+        except Exception as e:
+            traceback.print_exc()
+            print(e)
 
     def do_new_analysis_game(self, game):
         self._clear_content_frame()
