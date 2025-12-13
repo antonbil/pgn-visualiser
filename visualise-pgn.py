@@ -1331,7 +1331,7 @@ class ChessEventViewer:
             while game := chess.pgn.read_game(pgn_io):
                 self.all_games.append(game)
                 self.game_descriptions.append(
-                    f"{game.headers.get("White")}-{game.headers.get("Black")}({game.headers.get("Result")})")
+                    game.headers.get("White")+"-"+game.headers.get("Black")+"("+game.headers.get("Result")+")")
 
             # --- 2. Check and Analyze the First Game ---
             if self.all_games:
