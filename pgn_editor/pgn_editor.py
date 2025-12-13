@@ -92,6 +92,231 @@ BOARD_THEMES = [
         "dark": "#696969"  # Dark gray (Sufficient contrast)
     }
 ]
+
+class GameChooserDialog(tk.Toplevel):
+    """
+    A Toplevel dialog for selecting a game from a PGN list,
+    featuring touch-friendly canvas scrolling.
+    """
+
+    def __init__(self, master, all_games, current_game_index, switch_callback):
+        # Toplevel initialization
+        super().__init__(master)
+
+        # --- External Data ---
+        self.all_games = all_games
+        self.current_game_index = current_game_index
+        # Callback function from the main class (e.g., self._switch_to_game)
+        self.switch_callback = switch_callback
+
+        # --- Internal State ---
+        self.selected_index = None
+        self.drag_data = {
+            "_start_y": 0,
+            "_last_y": 0,
+            "_is_dragging": False,
+            "selected_label": None
+        }
+        self.game_labels = []
+
+        # --- UI Setup ---
+        self.title("Choose Game")
+        self.transient(master)  # Ensures the dialog stays on top of the master
+        self.grab_set()  # Modal behavior
+
+        # Call the UI builder
+        self._build_ui(master)
+
+        # Wait until the dialog is destroyed
+        self.master.wait_window(self)
+
+    def _build_ui(self, master):
+        """Builds the entire user interface within the Toplevel."""
+
+        tk.Label(self, text="Select a game from the list:", font=('Arial', 10, 'bold')).pack(padx=10, pady=5)
+
+        listbox_frame = tk.Frame(self, padx=10, pady=5)
+        listbox_frame.pack(fill='both', expand=True)
+
+        # 1. Create the Canvas (the viewport)
+        self.game_canvas = tk.Canvas(listbox_frame, borderwidth=0, highlightthickness=0, height=15 * 25)
+        self.game_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 2. Create Scrollbar and link it to the Canvas
+        scrollbar = tk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.game_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.game_canvas.config(yscrollcommand=scrollbar.set)
+
+        # 3. Create Inner Frame (the scrollable content container)
+        self.canvas_inner_frame = tk.Frame(self.game_canvas)
+
+        # 4. Attach the Inner Frame to the Canvas
+        self.canvas_window_id = self.game_canvas.create_window(
+            (0, 0),
+            window=self.canvas_inner_frame,
+            anchor="nw",
+            tags="inner_frame"
+        )
+
+        # --- Bindings and Populating ---
+        self._populate_and_bind_content()
+        self._setup_global_bindings()
+        self._center_and_focus(master)
+
+    # --- HELPER FUNCTIONS (Now class methods) ---
+
+    def update_scroll_region(self, event=None):
+        """Adjusts the inner frame width and the Canvas scrollregion."""
+        self.game_canvas.update_idletasks()
+        self.game_canvas.itemconfig(self.canvas_window_id, width=self.game_canvas.winfo_width())
+        bbox = self.game_canvas.bbox("all")
+        if bbox:
+            canvas_height = self.game_canvas.winfo_height()
+            if bbox[3] > canvas_height:
+                self.game_canvas.config(scrollregion=bbox)
+            else:
+                # Content is smaller than viewport: disable scrolling
+                self.game_canvas.config(scrollregion=(0, 0, bbox[2], canvas_height))
+
+    def start_scroll(self, event):
+        """Registers the start position (absolute Y) of the drag."""
+        self.drag_data["_start_y"] = event.y_root
+        self.drag_data["_is_dragging"] = False
+        return "break"
+
+    def do_scroll(self, event):
+        """Calculates the delta and scrolls the Canvas content."""
+        MIN_DRAG_DISTANCE = 5
+        if not self.drag_data["_is_dragging"]:
+            if abs(event.y_root - self.drag_data["_start_y"]) > MIN_DRAG_DISTANCE:
+                self.drag_data["_is_dragging"] = True
+                self.drag_data["_last_y"] = event.y_root
+            else:
+                return
+
+        delta = self.drag_data["_last_y"] - event.y_root
+        self.game_canvas.yview_scroll(int(delta / 4), "units")
+        self.drag_data["_last_y"] = event.y_root
+
+        # Clear visual selection during scrolling
+        if self.drag_data["selected_label"]:
+            self.drag_data["selected_label"].config(background='white', foreground='black')
+            self.drag_data["selected_label"] = None
+
+        return "break"
+
+    def on_release_or_select(self, event):
+        """Handles item selection if it was a click (not a scroll)."""
+        if self.drag_data["_is_dragging"]:
+            self.drag_data["_is_dragging"] = False
+            return
+
+        # Clear previous visual selections
+        for lbl in self.game_labels:
+            lbl.config(background='white', foreground='black')
+        self.drag_data["selected_label"] = None
+
+        widget_clicked = event.widget
+        if hasattr(widget_clicked, 'game_index'):
+            # Select the label visually
+            widget_clicked.config(background='#0078D7', foreground='white')
+            self.drag_data["selected_label"] = widget_clicked
+
+        self.drag_data["_is_dragging"] = False
+
+    def select_game_and_close(self, selected_index=None):
+        """Handles the selection and closes the dialog."""
+
+        if selected_index is not None:
+            final_index = selected_index
+        elif self.drag_data["selected_label"]:
+            final_index = self.drag_data["selected_label"].game_index
+        else:
+            messagebox.showwarning("Selection Error", "Please select a game from the list.")
+            return
+
+        if final_index is not None and final_index != self.current_game_index:
+            # Call the callback function in the main class
+            self.switch_callback(final_index)
+
+        self.destroy()  # Close the dialog
+
+    # --- POPULATE AND BIND METHODS ---
+
+    def _populate_and_bind_content(self):
+        """Fills the list with labels and binds local events."""
+
+        for i, game in enumerate(self.all_games):
+            white = game.headers.get("White", "???")
+            black = game.headers.get("Black", "???")
+            result = game.headers.get("Result", "*-*")
+            event_name = game.headers.get("Event", "Untitled")
+
+            list_item = f"Game {i + 1}: {white} - {black} ({result}) | {event_name}"
+
+            lbl = ttk.Label(
+                self.canvas_inner_frame,
+                text=list_item,
+                font=('Consolas', 10),
+                anchor='w',
+                padding=(5, 2),
+                background='white',
+                cursor='hand2'
+            )
+            lbl.pack(fill=tk.X, pady=0)
+            lbl.game_index = i
+
+            # Bind touch events
+            lbl.bind("<ButtonPress-1>", self.start_scroll)
+            lbl.bind("<B1-Motion>", self.do_scroll)
+            lbl.bind("<ButtonRelease-1>", self.on_release_or_select)
+            # Bind double-click to select action
+            lbl.bind('<Double-Button-1>', lambda e, index=i: self.select_game_and_close(index))
+
+            self.game_labels.append(lbl)
+
+        # Pre-selection and scrolling
+        if 0 <= self.current_game_index < len(self.game_labels):
+            pre_selected_label = self.game_labels[self.current_game_index]
+            pre_selected_label.config(background='#0078D7', foreground='white')
+            self.drag_data["selected_label"] = pre_selected_label
+
+            self.update_idletasks()
+            # Scroll to the selected game's position
+            self.game_canvas.yview_moveto(pre_selected_label.winfo_y() / self.game_canvas.winfo_reqheight())
+
+        # Buttons at the bottom
+        button_frame = tk.Frame(self, pady=10)
+        button_frame.pack()
+
+        tk.Button(button_frame, text="Select Game", command=self.select_game_and_close, width=15,
+                  bg='#d9ffc7').pack(side=tk.LEFT, padx=10)
+        tk.Button(button_frame, text="Cancel", command=self.destroy, width=15, bg='#ffe0e0').pack(side=tk.LEFT,
+                                                                                                  padx=10)
+
+    def _setup_global_bindings(self):
+        """Binds events to the canvas and the window."""
+        self.game_canvas.bind('<Configure>', self.update_scroll_region)
+        self.game_canvas.bind("<ButtonPress-1>", self.start_scroll)
+        self.game_canvas.bind("<B1-Motion>", self.do_scroll)
+        self.game_canvas.bind("<ButtonRelease-1>", self.on_release_or_select)
+        # Bind mouse wheel for desktop users
+        self.game_canvas.bind_all('<MouseWheel>',
+                                  lambda e: self.game_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+        self.update_scroll_region()  # Initial call
+
+    def _center_and_focus(self, master):
+        """Centers the dialog on the master window."""
+        self.update_idletasks()
+        dialog_width = self.winfo_reqwidth()
+        dialog_height = self.winfo_reqheight()
+        position_x = master.winfo_x() + (master.winfo_width() // 2) - (dialog_width // 2)
+        position_y = master.winfo_y() + (master.winfo_height() // 2) - (dialog_height // 2)
+        self.geometry(f'+{position_x}+{position_y}')
+        self.focus_force()
+
+
 COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
@@ -388,217 +613,19 @@ class ChessAnnotatorApp:
 
     def _open_game_chooser(self):
         """
-        Opens a Toplevel dialog to choose a game from the all_games list,
-        using a Canvas/Frame wrapper for touch-friendly scrolling.
+        Opens the Game Chooser dialog, which handles game selection and switching.
         """
-        if not self.all_games:
+        if not hasattr(self, 'all_games') or not self.all_games:
             messagebox.showinfo("Information", "No PGN games are currently loaded.")
             return
 
-        dialog = tk.Toplevel(self.master)
-        dialog.title("Choose Game")
-        dialog.transient(self.master)
-        dialog.grab_set()
-
-        tk.Label(dialog, text="Select a game from the list:", font=('Arial', 10, 'bold')).pack(padx=10, pady=5)
-
-        listbox_frame = tk.Frame(dialog, padx=10, pady=5)
-        listbox_frame.pack(fill='both', expand=True)
-
-        # --- Scroll Variables for the local dialog ---
-        # These variables are defined locally within the function's closure
-        drag_data = {
-            "_start_y": 0,          # Absolute Y-coordinate at the start of the click
-            "_last_y": 0,           # Needed to calculate scroll delta
-            "_is_dragging": False,  # Flag to detect drag vs. simple click
-            "selected_label": None  # Reference to the currently selected label widget
-        }
-        game_labels = [] # List to hold all game label widgets
-
-        # --- SETUP CANVAS WRAPPER ---
-
-        # 1. Create the Canvas (the viewport)
-        game_canvas = tk.Canvas(listbox_frame, borderwidth=0, highlightthickness=0, height=15 * 25)
-        game_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # 2. Create Scrollbar and link it to the Canvas
-        scrollbar = tk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=game_canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        game_canvas.config(yscrollcommand=scrollbar.set) # Link Canvas to Scrollbar
-
-        # 3. Create Inner Frame (the scrollable content container)
-        canvas_inner_frame = tk.Frame(game_canvas)
-
-        # 4. Attach the Inner Frame to the Canvas
-        canvas_window_id = game_canvas.create_window(
-            (0, 0),
-            window=canvas_inner_frame,
-            anchor="nw",
-            tags="inner_frame"
+        GameChooserDialog(
+            master=self.master,
+            all_games=self.all_games,
+            current_game_index=self.current_game_index,
+            # pass the method that will be executed after selection
+            switch_callback=self._switch_to_game
         )
-
-        # --- HELPER FUNCTIONS FOR TOUCH LOGIC (NESTED) ---
-
-        def update_scroll_region(event=None):
-            """Adjusts the inner frame width and the Canvas scrollregion."""
-            game_canvas.update_idletasks()
-
-            # 1. Force the Inner Frame to match the width of the Canvas
-            game_canvas.itemconfig(canvas_window_id, width=game_canvas.winfo_width())
-
-            # 2. Update the scrollregion
-            bbox = game_canvas.bbox("all")
-            if bbox:
-                canvas_height = game_canvas.winfo_height()
-
-                if bbox[3] > canvas_height:
-                    game_canvas.config(scrollregion=bbox)
-                else:
-                    # Content is smaller than viewport: disable scrolling
-                    game_canvas.config(scrollregion=(0, 0, bbox[2], canvas_height))
-
-        def start_scroll(event):
-            """Registers the start position (absolute Y) of the drag."""
-            drag_data["_start_y"] = event.y_root
-            drag_data["_is_dragging"] = False
-            return "break"
-
-        def do_scroll(event):
-            """Calculates the delta and scrolls the Canvas content."""
-            MIN_DRAG_DISTANCE = 5
-
-            # 1. Check if drag threshold is met
-            if not drag_data["_is_dragging"]:
-                if abs(event.y_root - drag_data["_start_y"]) > MIN_DRAG_DISTANCE:
-                    drag_data["_is_dragging"] = True
-                    drag_data["_last_y"] = event.y_root
-                else:
-                    return
-
-            # 2. Scroll the canvas based on delta
-            delta = drag_data["_last_y"] - event.y_root
-            game_canvas.yview_scroll(int(delta / 4), "units")
-            drag_data["_last_y"] = event.y_root
-
-            # 3. Clear visual selection during scrolling
-            if drag_data["selected_label"]:
-                drag_data["selected_label"].config(background='white', foreground='black')
-                drag_data["selected_label"] = None
-
-            return "break"
-
-        def on_release_or_select(event):
-            """Handles item selection if it was a click (not a scroll)."""
-            if drag_data["_is_dragging"]:
-                drag_data["_is_dragging"] = False
-                return
-
-            # Clear previous visual selections
-            for lbl in game_labels:
-                lbl.config(background='white', foreground='black')
-            drag_data["selected_label"] = None
-
-            widget_clicked = event.widget
-            if hasattr(widget_clicked, 'game_index'):
-                # Select the label visually
-                widget_clicked.config(background='#0078D7', foreground='white')
-                drag_data["selected_label"] = widget_clicked
-
-            drag_data["_is_dragging"] = False
-
-
-        # --- POPULATE CONTENT (LABELS) AND BIND ---
-
-        # Populate the list with Labels
-        for i, game in enumerate(self.all_games):
-            white = game.headers.get("White", "???")
-            black = game.headers.get("Black", "???")
-            result = game.headers.get("Result", "*-*")
-            event_name = game.headers.get("Event", "Untitled")
-
-            list_item = f"Game {i+1}: {white} - {black} ({result}) | {event_name}"
-
-            # Create a Label instead of a Listbox item
-            lbl = ttk.Label(
-                canvas_inner_frame,
-                text=list_item,
-                font=('Consolas', 10),
-                anchor='w',
-                padding=(5, 2),
-                background='white',
-                cursor='hand2'
-            )
-            lbl.pack(fill=tk.X, pady=0)
-            lbl.game_index = i # Store the index in the Label object
-
-            # Bind touch events to the label
-            lbl.bind("<ButtonPress-1>", start_scroll)
-            lbl.bind("<B1-Motion>", do_scroll)
-            lbl.bind("<ButtonRelease-1>", on_release_or_select)
-            # Bind double-click to select action
-            lbl.bind('<Double-Button-1>', lambda e, index=i: select_game(index))
-
-            game_labels.append(lbl)
-
-        # --- GLOBAL BINDINGS (for clicking on empty space or mouse wheel) ---
-        game_canvas.bind('<Configure>', update_scroll_region)
-        game_canvas.bind("<ButtonPress-1>", start_scroll)
-        game_canvas.bind("<B1-Motion>", do_scroll)
-        game_canvas.bind("<ButtonRelease-1>", on_release_or_select)
-        # Bind mouse wheel for desktop users
-        game_canvas.bind_all('<MouseWheel>', lambda e: game_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
-
-        update_scroll_region() # Initial call to set the scroll region correctly
-
-        # --- PRE-SELECTION ---
-        if 0 <= self.current_game_index < len(game_labels):
-            pre_selected_label = game_labels[self.current_game_index]
-            pre_selected_label.config(background='#0078D7', foreground='white')
-            drag_data["selected_label"] = pre_selected_label
-
-            # Scroll to the selected game
-            pre_selected_label.update_idletasks()
-            # Move the view to the position of the selected label
-            game_canvas.yview_moveto(pre_selected_label.winfo_y() / game_canvas.winfo_height())
-
-
-        def select_game(selected_index=None):
-            """
-            Switches to the selected game and closes the dialog.
-            """
-            if selected_index is not None:
-                # Selected via double-click (with index)
-                final_index = selected_index
-            elif drag_data["selected_label"]:
-                # Selected via the button (using the currently selected label reference)
-                final_index = drag_data["selected_label"].game_index
-            else:
-                messagebox.showwarning("Selection Error", "Please select a game from the list.")
-                return
-
-            if final_index != self.current_game_index:
-                self._switch_to_game(final_index)
-
-            dialog.destroy()
-
-
-        # Buttons
-        button_frame = tk.Frame(dialog, pady=10)
-        button_frame.pack()
-
-        tk.Button(button_frame, text="Select Game", command=select_game, width=15, bg='#d9ffc7').pack(side=tk.LEFT, padx=10)
-        tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=15, bg='#ffe0e0').pack(side=tk.LEFT, padx=10)
-
-        # Center the dialog on the master window
-        self.master.update_idletasks()
-        dialog_width = dialog.winfo_reqwidth()
-        dialog_height = dialog.winfo_reqheight()
-        position_x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (dialog_width // 2)
-        position_y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (dialog_height // 2)
-        dialog.geometry(f'+{position_x}+{position_y}')
-
-        self.master.wait_window(dialog)
-
 
     # --- Game Navigation Logic ---
 

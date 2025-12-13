@@ -12,9 +12,11 @@ from PIL import Image, ImageTk
 from pathlib import Path
 import json
 from pgn_editor.pgn_editor import ChessAnnotatorApp
+from pgn_editor.pgn_editor import GameChooserDialog
 from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
 import cairosvg
 from io import BytesIO
+import traceback
 
 # --- PGN DATA FOR DEMONSTRATION ---
 PGN_WITH_EVENTS = """
@@ -397,6 +399,7 @@ class ChessEventViewer:
         self.engine_path = engine_path
         self.piece_set = piece_set
         self.all_moves_chess = None
+        self.all_games = []
         self.current_move_index = None
         self.game = None
         self.board_canvases = []
@@ -452,29 +455,37 @@ class ChessEventViewer:
             "BlackElo": tk.StringVar(master, value="????"),
         }
         self._setup_menu_bar(master)
+        # Hoofdcontainer: grid_columnconfigure op main_frame is correct.
         main_frame = tk.Frame(master, padx=10, pady=10)
-        main_frame.grid_columnconfigure(0, weight=1)
-        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)  # Kolom 0 (Meta)
+        main_frame.grid_columnconfigure(1, weight=1)  # Kolom 1 (Navigatie)
         main_frame.pack(fill='x', anchor='n')
 
-        # Frame for the PGN Meta-information (top)
-        self.meta_info_frame = tk.Frame(main_frame, bd=2, relief=tk.GROOVE, padx=10, pady=5)
+        # Configureer rij 0 om verticaal te kunnen uitrekken
+        main_frame.grid_rowconfigure(0, weight=1)
+        # Geef rij 1 (indien gebruikt) gewicht 0, zodat het niet uitrekt
+        main_frame.grid_rowconfigure(1, weight=0)
 
+        # 1. Frame for the PGN Meta-information (links, rij 0)
+        self.meta_info_frame = tk.Frame(main_frame, bd=2, relief=tk.GROOVE, padx=10, pady=5)
+        # Plaats in rij 0, kolom 0. De sticky optie 'nwes' zorgt ervoor dat het zich uitrekt.
         self.meta_info_frame.grid(row=0, column=0, sticky='nwes')
 
-        # Frame for Game Navigation (right)
-        self.nav_panel = tk.Frame(main_frame, padx=20)
-        self.nav_panel.grid(row=0, column=1, sticky='nwes')
+        # 2. Frame voor de GEGROEPEERDE Navigatie (rechts, rij 0)
+        self.navigation_container = tk.Frame(main_frame, padx=20, pady=5)
+        # Plaats deze container NAAST de meta-informatie (rij 0, kolom 1)
+        self.navigation_container.grid(row=0, column=1, sticky='nwes')
+        # Binnen de container gebruiken we pack om de items verticaal te stapelen
 
-        # Frame for Move Navigation (onder Game Navigation, rechts)
-        self.move_nav_panel = tk.Frame(main_frame, padx=20, pady=10)
-        # Position in row 1, column 1
-        self.move_nav_panel.grid(row=1, column=1, sticky='new')
-        # Configure the column-weights so that the navigation will be pushed right
-        self.master.grid_columnconfigure(0, weight=1)
-        self.master.grid_columnconfigure(1, weight=1)
-        # Optional: give the row for move-navigation weight 0
-        main_frame.grid_rowconfigure(1, weight=0)
+        # 2a. Frame voor Game Navigation (Boven in de container)
+        self.nav_panel = tk.Frame(self.navigation_container)
+        # Gebruik tk.TOP om bovenin te stapelen. fill=tk.X om de breedte van de container te vullen.
+        self.nav_panel.pack(side=tk.TOP, fill=tk.X, pady=5)
+
+        # 2b. Frame voor Move Navigation (Onder in de container)
+        self.move_nav_panel = tk.Frame(self.navigation_container, pady=10)
+        # Gebruik tk.TOP om eronder te stapelen. fill=tk.X om de breedte van de container te vullen.
+        self.move_nav_panel.pack(side=tk.TOP, fill=tk.X)
 
         self._create_meta_info_widgets(self.meta_info_frame)
         self._create_navigation_widgets(self.nav_panel)
@@ -499,6 +510,8 @@ class ChessEventViewer:
         file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
         file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
         file_menu.add_separator()
+        file_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=master.quit)
 
         # Game Menu
@@ -508,6 +521,45 @@ class ChessEventViewer:
         game_menu.add_command(label="Enter new Game", command=lambda: self.enter_new_game(), state=tk.NORMAL, accelerator="Ctrl+Right")
 
         self.game_menu = game_menu
+
+    def _open_game_chooser(self):
+        """
+        Opens the Game Chooser dialog, which handles game selection and switching.
+        """
+        if not hasattr(self, 'all_games') or not self.all_games:
+            messagebox.showinfo("Information", "No PGN games are currently loaded.")
+            return
+
+        GameChooserDialog(
+            master=self.master,
+            all_games=self.all_games,
+            current_game_index=self.current_game_index,
+            # pass the method that will be executed after selection
+            switch_callback=self._switch_to_game
+        )
+
+    def _switch_to_game(self, index):
+        """
+        Sets the current game, rebuilds the move list, and resets the UI.
+        """
+        selected_game = self.all_games[index]
+
+        # Define the Exporter: Set headers, VARIATIONS and COMMENTS to True
+        exporter = chess.pgn.StringExporter(
+            headers=True,
+            variations=True,
+            comments=True
+        )
+
+        # Convert back the found game (including variants/comments)
+        single_pgn_string = selected_game.accept(exporter)
+
+        # Reset the current game index to the first game
+        self.current_game_index = index
+
+        # Do the analysis of the first game
+        self.do_new_analysis(single_pgn_string)
+        print("selected index:", index)
 
 
     def load_pgn_file(self):
@@ -1129,12 +1181,11 @@ class ChessEventViewer:
         """
         pgn_io = io.StringIO(pgn_string)
         self.games = []
-        self.game_descriptions = []
         while True:
             game = chess.pgn.read_game(pgn_io)
             if game is not None:
                 self.games.append(game)
-                self.game_descriptions.append(f"{game.headers.get("White")}-{game.headers.get("Black")}({game.headers.get("Result")})")
+
             else:
                 break
         self.game_selector.config(values=self.game_descriptions)
@@ -1149,10 +1200,11 @@ class ChessEventViewer:
             game = self.games[0]
             if self.num_games == 1:
                 # hide the navigation-panel
-                self.nav_panel.grid_forget()
+                self.nav_panel.pack_forget()
             else:
                 # show the navigation-panel
-                self.nav_panel.grid(row=0, column=1, sticky='ne', padx=20)
+                NAV_PACK_ARGS = {'side': tk.TOP, 'fill': tk.X, 'pady': 5}
+                self.nav_panel.pack(**NAV_PACK_ARGS)
         self.game = game
         return self.get_all_significant_events_game(game)
 
@@ -1272,28 +1324,45 @@ class ChessEventViewer:
 
             # Use io.StringIO to handle the string like it is a file
             pgn_io = io.StringIO(pgn_content)
+            self.all_games = []
+            self.game_descriptions = []
 
-            # use the python-chess parser to load the first game
-            first_game = chess.pgn.read_game(pgn_io)
+            # --- 1. Read ALL games from the PGN file ---
+            while game := chess.pgn.read_game(pgn_io):
+                self.all_games.append(game)
+                self.game_descriptions.append(
+                    f"{game.headers.get("White")}-{game.headers.get("Black")}({game.headers.get("Result")})")
 
-            if first_game:
+            # --- 2. Check and Analyze the First Game ---
+            if self.all_games:
+                first_game = self.all_games[0]
+
                 # Define the Exporter: Set headers, VARIATIONS and COMMENTS to True
                 exporter = chess.pgn.StringExporter(
                     headers=True,
-                    variations=True,  # Zorgt ervoor dat varianten worden meegenomen
-                    comments=True  # Zorgt ervoor dat commentaren worden meegenomen
+                    variations=True,
+                    comments=True
                 )
 
-                # Convert back the found game
+                # Convert back the found game (including variants/comments)
                 single_pgn_string = first_game.accept(exporter)
+
+                # Reset the current game index to the first game
+                self.current_game_index = 0
 
                 # Do the analysis of the first game
                 self.do_new_analysis(single_pgn_string)
                 self.lastLoadedPgnPath = filepath
+
             else:
                 print("Error: the PGN-file does not contain playable games.")
+                # Handle error state: clear path and content
+                self.pgn_filepath.set("Error: PGN file contains no games.")
+                self._clear_content_frame()
+                self.all_games = [] # Ensure the list is empty if no games found
 
         except Exception as e:
+            traceback.print_exc()
             error_message = f"ERROR: Failed to read PGN file: {e}"
             print(error_message)
             self.pgn_filepath.set(error_message)
