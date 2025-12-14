@@ -391,6 +391,7 @@ class ChessAnnotatorApp:
 
         # --- UI Setup ---
         self._setup_menu_bar(master)
+        self.touch_screen = False
         self.setup_ui( master)
 
         self._setup_header_frame(master, self.meta_frame, self.nav_comment_frame, self.comment_frame, self.comment_display_frame)
@@ -465,6 +466,7 @@ class ChessAnnotatorApp:
 
 
         if is_compact_layout:
+            self.touch_screen = True
             # --- 2. Frames Aanmaken ---
             # Deze moeten altijd aangemaakt worden voordat we ze plaatsen of vullen.
             self._setup_menu_bar(master)
@@ -1996,11 +1998,14 @@ class ChessAnnotatorApp:
 
                  if piece:
                     piece_char = piece_map.get(piece.symbol())
+                    piece_size = int(square_size * 0.7)
+                    if self.touch_screen:
+                        piece_size = int(piece_size * 0.7)
                     self.canvas.create_text(
                         x1 + square_size / 2,
                         y1 + square_size / 2,
                         text=piece_char,
-                        font=('Arial', int(square_size * 0.7), 'bold'),
+                        font=('Arial', piece_size, 'bold'),
                         fill='black',
                         tags="piece"
                     )
