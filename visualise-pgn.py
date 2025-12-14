@@ -417,8 +417,6 @@ class ChessEventViewer:
         self.default_pgn_string = pgn_string
         self.lastLoadedPgnPath = lastLoadedPgnPath
 
-        self.games = []
-
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
@@ -561,6 +559,7 @@ class ChessEventViewer:
 
         # Reset the current game index to the first game
         self.current_game_index = index
+        self.set_game_var_descriptions(self.current_game_index)
 
         # Do the analysis of the first game
         self.do_new_analysis(single_pgn_string)
@@ -732,6 +731,7 @@ class ChessEventViewer:
             print(f"Error while simulating the moves: {e}")
             return
 
+        print(" set self.current_move_index to:",real_move_index)
         self.current_move_index = real_move_index
         chess_move = board.fullmove_number#int((real_move_index + 1)/2 - 1)
         if self.current_move_index % 2 == 1:
@@ -899,7 +899,7 @@ class ChessEventViewer:
         if self.current_game_index > 0:
             self.current_game_index -= 1
             self.set_game_var_descriptions(self.current_game_index)
-            self.do_new_analysis_game(self.games[self.current_game_index])
+            self.do_new_analysis_game(self.all_games[self.current_game_index])
         else:
             print("First game reached.")
 
@@ -908,7 +908,7 @@ class ChessEventViewer:
         if self.current_game_index < self.num_games - 1:
             self.current_game_index += 1
             self.set_game_var_descriptions(self.current_game_index)
-            self.do_new_analysis_game(self.games[self.current_game_index])
+            self.do_new_analysis_game(self.all_games[self.current_game_index])
         else:
             print("Last game reached.")
 
@@ -926,7 +926,7 @@ class ChessEventViewer:
             if new_index != self.current_game_index:
                 self.current_game_index = new_index
                 self.set_game_var_descriptions(new_index)
-                self.do_new_analysis_game(self.games[new_index])
+                self.do_new_analysis_game(self.all_games[new_index])
         except ValueError:
             print(f"Error: Description '{selected_description}' niet gevonden.")
 
@@ -987,7 +987,7 @@ class ChessEventViewer:
         if len(self.game_descriptions)-1 < current_game_index or current_game_index < 0:
             self.current_game_index = len(self.game_descriptions)-1
             return
-        self.current_game_index = current_game_index
+        #self.current_game_index = current_game_index
         self.selected_game_var.set(self.game_descriptions[current_game_index])
 
         self.game_counter_var.set(f"Game {self.current_game_index + 1} of {self.num_games}")
@@ -1163,11 +1163,11 @@ class ChessEventViewer:
         Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
         """
         pgn_io = io.StringIO(pgn_string)
-        self.games = []
+        games = []
         while True:
             game = chess.pgn.read_game(pgn_io)
             if game is not None:
-                self.games.append(game)
+                games.append(game)
 
             else:
                 break
@@ -1176,11 +1176,11 @@ class ChessEventViewer:
         current_game_index = 0
         self.set_game_var_descriptions(current_game_index)
 
-        if len(self.games) == 0:
+        if len(games) == 0:
             print("Error: Could not read chess game from PGN string.")
             return []
         else:
-            game = self.games[0]
+            game = games[0]
             if self.num_games == 1:
                 # hide the navigation-panel
                 self.nav_panel.pack_forget()
