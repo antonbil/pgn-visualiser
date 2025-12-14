@@ -1,8 +1,0 @@
-{
-    "default_directory": "/home/user/Schaken",
-    "lastLoadedPgnPath": "",
-    "engine_path": "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2",
-    "piece_set": "staunty",
-    "square_size": 40,
-    "board": "red"
-}
