@@ -101,7 +101,7 @@ def get_settings():
         # The PGN directory
         default_pgn_dir = config_data.get("default_directory", "/home/user/Chess")
         lastLoadedPgnPath = config_data.get("lastLoadedPgnPath", "")
-        piece_set = config_data.get("piece_set", "")
+        piece_set = config_data.get("piece_set", "staunty")
         engine_path = config_data.get("engine_path", "")
         square_size = config_data.get("square_size", 80)
         board1 = config_data.get("board", "red")
@@ -588,7 +588,7 @@ class ChessEventViewer:
             string_var_value = self.pgn_filepath.get()
         except:
             string_var_value = ""
-        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None, square_size = 75, current_game_index = 0,  piece_set = "staunty", board="Standard")
+        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None, square_size = 75, current_game_index = self.current_game_index,  piece_set = "staunty", board="Standard")
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 False <__main__.PieceImageManager1 object at 0x78f90a0dfb30> 75 0 ../../../Images/piece/tatiana Rosewood
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
 
