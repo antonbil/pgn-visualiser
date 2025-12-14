@@ -64,7 +64,7 @@ def _load_config():
         return {}
 
 
-def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, piece_set: str):
+def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, piece_set: str, square_size: int, board: str):
     """
     Saves the current configuration (default directory and last PGN path)
     to the configuration JSON file.
@@ -80,6 +80,8 @@ def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, p
         "lastLoadedPgnPath": last_pgn_path.strip(),
         "engine_path": engine_path.strip(),
         "piece_set": piece_set.strip(),
+        "square_size":square_size,
+        "board":board.strip()
     }
 
     try:
@@ -101,9 +103,11 @@ def get_settings():
         lastLoadedPgnPath = config_data.get("lastLoadedPgnPath", "")
         piece_set = config_data.get("piece_set", "")
         engine_path = config_data.get("engine_path", "")
+        square_size = config_data.get("square_size", 80)
+        board1 = config_data.get("board", "red")
         print(f"Default PGN Directory: {default_pgn_dir}")
 
-        return default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set
+        return default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1
 
 
 # Functie om de zet-index uit de oorspronkelijke data te halen
@@ -394,10 +398,11 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard"):
         self.current_movelistbox_info = None
         self.engine_path = engine_path
         self.piece_set = piece_set
+        self.board = board
         self.all_moves_chess = None
         self.all_games = []
         self.current_move_index = None
@@ -426,7 +431,6 @@ class ChessEventViewer:
         self.game_counter_var = tk.StringVar(value=f"Game 1 of {self.num_games}")
         self.game_descriptions = []
         self.selected_game_var = tk.StringVar(value=None)
-        self.game_selector = None
 
         self.current_game_moves = []
 
@@ -457,7 +461,7 @@ class ChessEventViewer:
         self._setup_menu_bar(master)
         # Hoofdcontainer: grid_columnconfigure op main_frame is correct.
         main_frame = tk.Frame(master, padx=10, pady=10)
-        main_frame.grid_columnconfigure(0, weight=1)  # Kolom 0 (Meta)
+        main_frame.grid_columnconfigure(0, weight=0)  # Kolom 0 (Meta)
         main_frame.grid_columnconfigure(1, weight=1)  # Kolom 1 (Navigatie)
         main_frame.pack(fill='x', anchor='n')
 
@@ -469,23 +473,24 @@ class ChessEventViewer:
         # 1. Frame for the PGN Meta-information (links, rij 0)
         self.meta_info_frame = tk.Frame(main_frame, bd=2, relief=tk.GROOVE, padx=10, pady=5)
         # Plaats in rij 0, kolom 0. De sticky optie 'nwes' zorgt ervoor dat het zich uitrekt.
-        self.meta_info_frame.grid(row=0, column=0, sticky='nwes')
+        self.meta_info_frame.grid(row=0, column=0)
 
         # 2. Frame voor de GEGROEPEERDE Navigatie (rechts, rij 0)
         self.navigation_container = tk.Frame(main_frame, padx=20, pady=5)
-        # Plaats deze container NAAST de meta-informatie (rij 0, kolom 1)
         self.navigation_container.grid(row=0, column=1, sticky='nwes')
-        # Binnen de container gebruiken we pack om de items verticaal te stapelen
+        # Binnen de container gebruiken we pack om de items nu HORIZONTAAL te plaatsen
 
-        # 2a. Frame voor Game Navigation (Boven in de container)
+        # 2a. Frame voor Game Navigation (Links in de container)
         self.nav_panel = tk.Frame(self.navigation_container)
-        # Gebruik tk.TOP om bovenin te stapelen. fill=tk.X om de breedte van de container te vullen.
-        self.nav_panel.pack(side=tk.TOP, fill=tk.X, pady=5)
+        # Gebruik side=tk.LEFT om de frames naast elkaar te plaatsen.
+        self.nav_panel.pack(side=tk.LEFT, padx=5, pady=5)  # Fill=tk.Y om verticaal op te vullen
 
-        # 2b. Frame voor Move Navigation (Onder in de container)
+        # 2b. Frame voor Move Navigation (Rechts van de Game Navigatie)
         self.move_nav_panel = tk.Frame(self.navigation_container, pady=10)
-        # Gebruik tk.TOP om eronder te stapelen. fill=tk.X om de breedte van de container te vullen.
-        self.move_nav_panel.pack(side=tk.TOP, fill=tk.X)
+        # Gebruik side=tk.LEFT zodat deze direct naast de vorige wordt geplaatst.
+        self.move_nav_panel.pack(side=tk.LEFT,  padx=5)  # Fill=tk.Y om verticaal op te vullen
+
+
 
         self._create_meta_info_widgets(self.meta_info_frame)
         self._create_navigation_widgets(self.nav_panel)
@@ -826,18 +831,10 @@ class ChessEventViewer:
         """
         Creates the Listbox for displaying the moves (PGN).
         """
-        pgn_block = tk.LabelFrame(parent_frame, text="Move History",
-                                  padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
-        # Use pack with fill/expand to make the LabelFrame fill the entire parent_frame
-        pgn_block.pack(fill='both', expand=True)
-
-        # ESSENTIAL: Ensures that column 0 and row 0 expand within the LabelFrame
-        pgn_block.grid_columnconfigure(0, weight=1)
-        pgn_block.grid_rowconfigure(0, weight=1)
 
         # 1. Listbox for a structured, clickable list of moves
         self.move_listbox = tk.Listbox(
-            pgn_block,
+            parent_frame,
             selectmode=tk.SINGLE,
             font=("Consolas", 10),
             relief=tk.FLAT
@@ -846,7 +843,7 @@ class ChessEventViewer:
         self.move_listbox.grid(row=0, column=0, sticky='nsew')
 
         # 2. Scrollbar
-        move_list_scrollbar = tk.Scrollbar(pgn_block, command=self.move_listbox.yview)
+        move_list_scrollbar = tk.Scrollbar(parent_frame, command=self.move_listbox.yview)
         move_list_scrollbar.grid(row=0, column=1, sticky='ns')
         self.move_listbox.config(yscrollcommand=move_list_scrollbar.set)
 
@@ -893,24 +890,9 @@ class ChessEventViewer:
         # Use a single frame to arrange both the label and the buttons horizontally
         button_container = tk.Frame(parent_frame)
         # Anchor='w' (West/Left) to keep the whole block left-aligned
-        button_container.pack(pady=10, anchor='center')
+        button_container.pack(pady=10)
 
-        # 1. Label on the left side (side=tk.LEFT)
-        tk.Label(button_container,
-                 text="Move Navigation:",
-                 font=('Arial', 10, 'bold')
-                 ).pack(side=tk.LEFT, padx=(0, 10))  # Add some space between the label and buttons
 
-        # 2. The buttons immediately after, also on the left side (side=tk.LEFT)
-
-        tk.Button(button_container, text="|<", command=self._go_to_first_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(button_container, text="<", command=self._go_to_previous_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(button_container, text=">", command=self._go_to_next_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(button_container, text=">|", command=self._go_to_last_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)    # --- NAVIGATION FUNCTIONS ---
 
     def _prev_game(self):
         """Navigates to the previous game in the list."""
@@ -955,23 +937,11 @@ class ChessEventViewer:
         """
         button_font = ('Arial', 10, 'bold')
 
-        # 1. Dropdown (Combobox) for Game Selection (blijft boven de navigatie)
-        self.game_selector = ttk.Combobox(
-            parent_frame,
-            textvariable=self.selected_game_var,
-            values=self.game_descriptions,
-            state='readonly',
-            width=55
-        )
-        self.game_selector.pack(fill='x', padx=5, pady=5)  # Vult de breedte van nav_panel
-
-        self.game_selector.bind('<<ComboboxSelected>>', self._select_game)
-
         # 2. Container for Horizontal Grouping (Label + Buttons)
         # Use this frame to place the counter and the navigation buttons side-by-side
         horizontal_nav_frame = tk.Frame(parent_frame)
         # pack() without side and with anchor='center' ensures centering within the parent (nav_panel)
-        horizontal_nav_frame.pack(pady=10, anchor='center')
+        horizontal_nav_frame.pack(side=tk.LEFT, pady=10)
 
         # 2a. Game Number (Game X of Y) - Left of the buttons
         tk.Label(
@@ -983,7 +953,7 @@ class ChessEventViewer:
         # 2b. Navigation Buttons (Previous and Next) - Right next to it
         # We keep button_frame for structure, but now pack it with side=LEFT
         button_frame = tk.Frame(horizontal_nav_frame)
-        button_frame.pack(side=tk.LEFT)
+        button_frame.pack()
         # 'Previous' button
         tk.Button(
             button_frame,
@@ -1001,6 +971,16 @@ class ChessEventViewer:
             font=button_font,
             width=8
         ).pack(side=tk.LEFT, padx=5)
+        # 2. The buttons on the left side (side=tk.LEFT)
+
+        tk.Button(parent_frame, text="|<", command=self._go_to_first_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(parent_frame, text="<", command=self._go_to_previous_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(parent_frame, text=">", command=self._go_to_next_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)
+        tk.Button(parent_frame, text=">|", command=self._go_to_last_move, width=5, relief=tk.RAISED, bd=1).pack(
+            side=tk.LEFT, padx=2, pady=2)  # --- NAVIGATION FUNCTIONS ---
 
     def set_game_var_descriptions(self, current_game_index: int):
         # Updates the index, the selected Combobox variable, and the game counter text.
@@ -1138,7 +1118,7 @@ class ChessEventViewer:
             result_label.configure(foreground="red")
 
     def on_closing(self):
-        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set)
+        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set, self.square_size, self.board)
         exit()
 
     def load_initial_pgn(self, lastLoadedPgnPath):
@@ -1191,7 +1171,7 @@ class ChessEventViewer:
 
             else:
                 break
-        self.game_selector.config(values=self.game_descriptions)
+
         self.num_games = len(self.game_descriptions)
         current_game_index = 0
         self.set_game_var_descriptions(current_game_index)
@@ -1498,7 +1478,6 @@ class ChessEventViewer:
 
         # 1. Info Label
         info_text = (
-            f"Move: {event_data['move_text']}\n"
             f"Change: {event_data['score'] / 100.0:.2f} P\n"
             f"Eval BEFORE: {event_data['eval_before']:.2f} | Eval AFTER: {event_data['eval_after']:.2f}"
         )
@@ -1651,13 +1630,13 @@ if __name__ == "__main__":
         root.geometry("1200x900")
 
         IMAGE_DIRECTORY = "Images/piece"
-        SQUARE_SIZE = 60  # Size of the squares in pixels
-        default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set = get_settings()
+        default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1 = get_settings()
+        SQUARE_SIZE = int(square_size) if square_size else 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
         asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board1)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
