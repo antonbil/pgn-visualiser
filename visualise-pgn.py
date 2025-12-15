@@ -709,6 +709,9 @@ class ChessEventViewer:
 
     def display_diagram_move(self, real_move_index: int):
         board = self.game.board()
+        previous_move = None
+        last_move = None
+        previous_board = self.game.board()
         # Simulate every move in the mainline up to the desired index
         try:
             # Loop over all moves up to the real_move_index
@@ -716,7 +719,12 @@ class ChessEventViewer:
                 if i < len(self.all_moves_chess):
                     move = self.all_moves_chess[i]
                     # Execute the move on the board
+                    previous_move = board
+                    if last_move:
+                        previous_board.push(last_move)
+                    last_move = move
                     board.push(move)
+
                 else:
                     # This happens if the target move index is too high
                     print(f"Warning: Move sequence ends after index {i}.")
@@ -732,6 +740,7 @@ class ChessEventViewer:
             return
 
         print(" set self.current_move_index to:",real_move_index)
+        print("last move:", last_move)
         self.current_move_index = real_move_index
         chess_move = board.fullmove_number#int((real_move_index + 1)/2 - 1)
         if self.current_move_index % 2 == 1:
@@ -765,6 +774,35 @@ class ChessEventViewer:
 
         # Draw the pieces
         self.draw_pieces(self.current_board_canvas, board)
+        try:
+            move_san = f"{last_move}".split()[-1].strip('.')
+            move_to_highlight = previous_board.parse_san(move_san)
+            from_square = move_to_highlight.from_square
+
+            from_rank = 7 - chess.square_rank(from_square)
+            from_file = chess.square_file(from_square)
+
+            x1 = from_file * self.square_size
+            y1 = from_rank * self.square_size
+
+            # Add a yellow highlight to the starting square
+            self.current_board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
+                                          outline="#FFC300", width=4, tags="highlight")
+            from_rank = 7 - chess.square_rank(move_to_highlight.to_square)
+            from_file = chess.square_file(move_to_highlight.to_square)
+
+            x1 = from_file * self.square_size
+            y1 = from_rank * self.square_size
+
+            # Add a yellow highlight to the starting square
+            self.current_board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
+                                                       outline="#FFC300", width=4, tags="highlight")
+            print("draw outline", x1, y1)
+            self.current_board_canvas.tag_raise("highlight", "square")
+            self.current_board_canvas.tag_raise("text")
+        except Exception as e:
+            print(f"Error highlighting move: {e}")
+            pass
 
     def get_info_current_listbox(self):
         """
@@ -787,6 +825,8 @@ class ChessEventViewer:
         move_pattern = re.compile(r'^(\d+)\.')
 
         moves_added = []
+
+        last_index = 0
 
         # Iterate over all rows in the Listbox
         for i in range(self.current_movelistbox.size()):
@@ -813,6 +853,11 @@ class ChessEventViewer:
                     min_move_number = move_number
                 if move_number > max_move_number:
                     max_move_number = move_number
+                # get index of move
+                splits = line_content.split(" ")
+                last_index = (move_number - 1) * 2
+                if len(splits) == 3:
+                    last_index = last_index + 1
 
         # Check if any moves were found and reset min/max if the list was empty
         if not move_index_map:
@@ -823,8 +868,11 @@ class ChessEventViewer:
         self.current_movelistbox_info = {
             'min_move_number': min_move_number,
             'max_move_number': max_move_number,
-            'move_index_map': move_index_map
+            'move_index_map': move_index_map,
+            'last_index': last_index
         }
+        if self.current_move_index is None:
+            self.current_move_index = last_index
         return self.current_movelistbox_info
     # --- WIDGET: MOVE LIST (Listbox) ---
     def _create_move_list_widget(self, parent_frame):
@@ -1024,8 +1072,8 @@ class ChessEventViewer:
         # 4. Update the UI and log the change
         print(f"Tab changed. New index: {self.current_tab}")
 
-        self.current_movelistbox_info = None
         self.current_movelistbox = self.move_listboxes[self.current_tab]
+
         self.current_board_canvas = self.board_canvases[self.current_tab]
 
     def _create_meta_info_widgets(self, parent_frame):
@@ -1526,6 +1574,7 @@ class ChessEventViewer:
             # Add a yellow highlight to the starting square
             board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
                                           outline="#FFC300", width=4, tags="highlight")
+            print("draw outline", x1, y1)
             board_canvas.tag_raise("highlight", "square")
             board_canvas.tag_raise("text")
         except Exception as e:
