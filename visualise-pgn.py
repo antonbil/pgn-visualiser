@@ -1000,7 +1000,7 @@ class ChessEventViewer:
         # 'Previous' button
         tk.Button(
             button_frame,
-            text="<< Prev",
+            text="<<Pr.",
             command=self._prev_game,
             font=button_font,
             width=8
@@ -1009,7 +1009,7 @@ class ChessEventViewer:
         # 'Next' button
         tk.Button(
             button_frame,
-            text="Next >>",
+            text="Nx.>>",
             command=self._next_game,
             font=button_font,
             width=8
