@@ -1073,6 +1073,8 @@ class ChessEventViewer:
         print(f"Tab changed. New index: {self.current_tab}")
 
         self.current_movelistbox = self.move_listboxes[self.current_tab]
+        self.current_movelistbox_info = None
+        self.get_info_current_listbox()
 
         self.current_board_canvas = self.board_canvases[self.current_tab]
 
