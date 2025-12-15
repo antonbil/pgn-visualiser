@@ -391,6 +391,7 @@ class PieceImageManager:
         else:
             print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
 
+TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
 
 class ChessEventViewer:
@@ -886,8 +887,11 @@ class ChessEventViewer:
         self.move_listbox.grid(row=0, column=0, sticky='nsew')
 
         # 2. Scrollbar
-        move_list_scrollbar = tk.Scrollbar(parent_frame, command=self.move_listbox.yview)
+        move_list_scrollbar = ttk.Scrollbar(parent_frame, command=self.move_listbox.yview)
         move_list_scrollbar.grid(row=0, column=1, sticky='ns')
+        parent_frame.grid_columnconfigure(1, minsize=TOUCH_WIDTH)
+        #move_list_scrollbar = tk.Scrollbar(parent_frame, command=self.move_listbox.yview)
+        #move_list_scrollbar.grid(row=0, column=1, sticky='ns')
         self.move_listbox.config(yscrollcommand=move_list_scrollbar.set)
 
         # 3. Populate the Listbox with move data from the model
