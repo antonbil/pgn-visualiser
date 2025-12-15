@@ -709,7 +709,6 @@ class ChessEventViewer:
 
     def display_diagram_move(self, real_move_index: int):
         board = self.game.board()
-        previous_move = None
         last_move = None
         previous_board = self.game.board()
         # Simulate every move in the mainline up to the desired index
@@ -739,8 +738,6 @@ class ChessEventViewer:
             print(f"Error while simulating the moves: {e}")
             return
 
-        print(" set self.current_move_index to:",real_move_index)
-        print("last move:", last_move)
         self.current_move_index = real_move_index
         chess_move = board.fullmove_number#int((real_move_index + 1)/2 - 1)
         if self.current_move_index % 2 == 1:
@@ -749,7 +746,6 @@ class ChessEventViewer:
         self.current_movelistbox.selection_clear(0, tk.END)
         for diagram_move in self.get_info_current_listbox()["move_index_map"]:
             if diagram_move[0]==chess_move:
-                print("index in diagram:", diagram_move[1])
                 index_to_select = diagram_move[1]
 
                 # B. Select the item on the specific index (i)
@@ -797,7 +793,6 @@ class ChessEventViewer:
             # Add a yellow highlight to the starting square
             self.current_board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
                                                        outline="#FFC300", width=4, tags="highlight")
-            print("draw outline", x1, y1)
             self.current_board_canvas.tag_raise("highlight", "square")
             self.current_board_canvas.tag_raise("text")
         except Exception as e:
@@ -1074,7 +1069,12 @@ class ChessEventViewer:
 
         self.current_movelistbox = self.move_listboxes[self.current_tab]
         self.current_movelistbox_info = None
-        self.get_info_current_listbox()
+        info = self.get_info_current_listbox()
+
+        number_ = 2 * (info["max_move_number"] - 1)
+        if number_ >= len(self.all_moves_chess):
+            number_ = self.all_moves_chess
+        self.current_move_index = number_
 
         self.current_board_canvas = self.board_canvases[self.current_tab]
 
@@ -1576,7 +1576,6 @@ class ChessEventViewer:
             # Add a yellow highlight to the starting square
             board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
                                           outline="#FFC300", width=4, tags="highlight")
-            print("draw outline", x1, y1)
             board_canvas.tag_raise("highlight", "square")
             board_canvas.tag_raise("text")
         except Exception as e:
