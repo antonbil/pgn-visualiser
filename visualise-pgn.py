@@ -1003,7 +1003,7 @@ class ChessEventViewer:
             text="<<Pr.",
             command=self._prev_game,
             font=button_font,
-            width=8
+            width=4
         ).pack(side=tk.LEFT, padx=5)
 
         # 'Next' button
@@ -1012,7 +1012,7 @@ class ChessEventViewer:
             text="Nx.>>",
             command=self._next_game,
             font=button_font,
-            width=8
+            width=4
         ).pack(side=tk.LEFT, padx=5)
         # 2. The buttons on the left side (side=tk.LEFT)
 
