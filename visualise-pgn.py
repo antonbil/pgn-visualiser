@@ -982,48 +982,62 @@ class ChessEventViewer:
 
         # 2. Container for Horizontal Grouping (Label + Buttons)
         # Use this frame to place the counter and the navigation buttons side-by-side
-        horizontal_nav_frame = tk.Frame(parent_frame)
-        # pack() without side and with anchor='center' ensures centering within the parent (nav_panel)
-        horizontal_nav_frame.pack(side=tk.LEFT, pady=10)
+        game_nav_group = tk.Frame(parent_frame)
+        # Fixed padding on the right to separate from Move Navigation
+        game_nav_group.pack(side=tk.LEFT, padx=(0, 20))
 
-        # 2a. Game Number (Game X of Y) - Left of the buttons
+        # 2. Group: MOVE NAVIGATION (<| / < / > / |>)
+        # This group follows directly in the parent_frame
+        move_nav_group = tk.Frame(parent_frame)
+        move_nav_group.pack(side=tk.LEFT)
+
+        # --- 1. Populating Game Navigation (Left) ---
+
+        # 1a. Game Number (Game X of Y)
         tk.Label(
-            horizontal_nav_frame,
+            game_nav_group,
             textvariable=self.game_counter_var,
             font=button_font
-        ).pack(side=tk.LEFT, padx=(5, 15))  # Extra padx on the right for spacing from the buttons
+        ).pack(side=tk.LEFT, padx=(5, 5))  # Reduced padding
 
-        # 2b. Navigation Buttons (Previous and Next) - Right next to it
-        # We keep button_frame for structure, but now pack it with side=LEFT
-        button_frame = tk.Frame(horizontal_nav_frame)
-        button_frame.pack()
-        # 'Previous' button
+        # 1b. Previous/Next Game Buttons
+        # No extra frame (button_frame) needed, buttons directly in the group
         tk.Button(
-            button_frame,
-            text="<<Pr.",
+            game_nav_group,
+            text="<<",
             command=self._prev_game,
             font=button_font,
-            width=4
-        ).pack(side=tk.LEFT, padx=5)
+            width=5,  # Slightly wider for readability
+            relief=tk.RAISED, bd=1  # Harmonized style
+        ).pack(side=tk.LEFT, padx=(5, 1))  # Reduced space between buttons
 
-        # 'Next' button
         tk.Button(
-            button_frame,
-            text="Nx.>>",
+            game_nav_group,
+            text=">>",
             command=self._next_game,
             font=button_font,
-            width=4
-        ).pack(side=tk.LEFT, padx=5)
-        # 2. The buttons on the left side (side=tk.LEFT)
+            width=5,
+            relief=tk.RAISED, bd=1  # Harmonized style
+        ).pack(side=tk.LEFT, padx=(1, 5))
 
-        tk.Button(parent_frame, text="|<", command=self._go_to_first_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(parent_frame, text="<", command=self._go_to_previous_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(parent_frame, text=">", command=self._go_to_next_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)
-        tk.Button(parent_frame, text=">|", command=self._go_to_last_move, width=5, relief=tk.RAISED, bd=1).pack(
-            side=tk.LEFT, padx=2, pady=2)  # --- NAVIGATION FUNCTIONS ---
+        # --- 2. Populating Move Navigation (Right) ---
+        # Place the buttons directly in the move_nav_group
+
+        # Go to first move
+        tk.Button(move_nav_group, text="|<", command=self._go_to_first_move,
+                  width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=(5, 1))
+
+        # Go to previous move
+        tk.Button(move_nav_group, text="<", command=self._go_to_previous_move,
+                  width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=1)
+
+        # Go to next move
+        tk.Button(move_nav_group, text=">", command=self._go_to_next_move,
+                  width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=1)
+
+        # Go to last move
+        tk.Button(move_nav_group, text=">|", command=self._go_to_last_move,
+                  width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=(1, 5))
 
     def set_game_var_descriptions(self, current_game_index: int):
         # Updates the index, the selected Combobox variable, and the game counter text.
