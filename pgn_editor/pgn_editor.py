@@ -1072,8 +1072,8 @@ class ChessAnnotatorApp:
             display_height = 3  # 3 lines for desktop
             scrollbar_width = None
 
-        comment_display_frame.grid_columnconfigure(0, weight=1)
-        comment_display_frame.grid_rowconfigure(0, weight=1)
+        comment_display_frame.grid_columnconfigure(0, weight=0)
+        comment_display_frame.grid_rowconfigure(0, weight=0)
 
         self.comment_display = tk.Text(
             comment_display_frame,
