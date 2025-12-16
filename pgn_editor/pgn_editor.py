@@ -34,6 +34,165 @@ def save_preferences(data):
     except Exception as e:
         print(f"Warning: cannot save preferences: {e}")
 
+class SettingsDialog(tk.Toplevel):
+    def __init__(self, parent, current_config, save_config_callback):
+        """
+        Initialiseert de modale instellingendialoog.
+
+        :param parent: De hoofd Tkinter-instantie.
+        :param current_config: Een dictionary met de huidige instellingen.
+        :param save_config_callback: De functie om de nieuwe instellingen op te slaan (uw _save_config).
+        """
+        super().__init__(parent)
+        self.transient(parent)
+        self.title("Application Settings")
+        self.parent = parent
+        self.current_config = current_config
+        self.save_config_callback = save_config_callback
+
+        self.theme_names = [theme["name"] for theme in BOARD_THEMES]  # Lijst met namen
+
+        # --- Modale Setup ---
+        self.result = None
+        self.grab_set()
+
+        self._create_variables()
+        self._create_widgets()
+
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50, parent.winfo_rooty() + 50))
+        self.wait_window(self)
+
+    def _create_variables(self):
+        """Maakt Tkinter-variabelen aan en vult deze met de huidige waarden."""
+
+        # Standaard Directory
+        self.default_dir_var = tk.StringVar(value=self.current_config.get("default_directory", ""))
+
+        # Laatst Geladen PGN Pad
+        self.last_pgn_path_var = tk.StringVar(value=self.current_config.get("lastLoadedPgnPath", ""))
+
+        # Engine Pad
+        self.engine_path_var = tk.StringVar(value=self.current_config.get("engine_path", ""))
+
+        # Piece Set (Standaard: staunty)
+        self.piece_set_var = tk.StringVar(value=self.current_config.get("piece_set", "staunty"))
+
+        # Square Size (Standaard: 80)
+        # Gebruik IntVar voor numerieke waarde
+        self.square_size_var = tk.IntVar(value=self.current_config.get("square_size", 80))
+
+        # Board Kleur (Standaard: red)
+        self.board_var = tk.StringVar(value=self.current_config.get("board", "Standard"))
+
+    def _create_widgets(self):
+        """Maakt en plaatst de GUI-elementen in het dialoogvenster."""
+
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.grid(row=0, column=0, sticky="nsew")
+
+        # --- Rij 0: Default Directory ---
+        ttk.Label(main_frame, text="Default PGN Directory:").grid(row=0, column=0, sticky='w', pady=5)
+        ttk.Entry(main_frame, textvariable=self.default_dir_var, width=50).grid(row=0, column=1, sticky='ew', padx=5)
+        ttk.Button(main_frame, text="Browse", command=self._browse_dir).grid(row=0, column=2, sticky='e')
+
+        # --- Rij 1: Engine Path ---
+        ttk.Label(main_frame, text="Stockfish Engine Path:").grid(row=1, column=0, sticky='w', pady=5)
+        ttk.Entry(main_frame, textvariable=self.engine_path_var, width=50).grid(row=1, column=1, sticky='ew', padx=5)
+        ttk.Button(main_frame, text="Browse", command=self._browse_engine).grid(row=1, column=2, sticky='e')
+
+        # --- Rij 2: Last Loaded PGN Path (alleen ter info, niet bewerkbaar) ---
+        ttk.Label(main_frame, text="Last Loaded PGN (Read-only):").grid(row=2, column=0, sticky='w', pady=5)
+        # Disabled entry om te tonen, maar niet bewerkbaar te maken
+        ttk.Entry(main_frame, textvariable=self.last_pgn_path_var, width=50, state='readonly').grid(row=2, column=1,
+                                                                                                    columnspan=2,
+                                                                                                    sticky='ew', padx=5)
+        # --- Rij 3 & 4: Visual Settings (in een subframe) ---
+        visual_frame = ttk.LabelFrame(main_frame, text="Visual Settings", padding="10")
+        visual_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=10)
+
+        # Piece Set
+        ttk.Label(visual_frame, text="Piece Set Name:").grid(row=0, column=0, sticky='w', pady=5)
+        ttk.Entry(visual_frame, textvariable=self.piece_set_var, width=20).grid(row=0, column=1, sticky='w', padx=5)
+
+        # Square Size
+        ttk.Label(visual_frame, text="Square Size (px):").grid(row=0, column=2, sticky='w', pady=5)
+        ttk.Entry(visual_frame, textvariable=self.square_size_var, width=10).grid(row=0, column=3, sticky='w', padx=5)
+
+        # --- BOARD THEME AANPASSING: Gebruik Combobox ---
+        ttk.Label(visual_frame, text="Board Theme:").grid(row=1, column=0, sticky='w', pady=5)
+
+        # Combobox voor themakeuze
+        board_combobox = ttk.Combobox(
+            visual_frame,
+            textvariable=self.board_var,
+            values=self.theme_names,  # Gebruik de lijst met namen
+            state='readonly',  # Forceer selectie uit de lijst
+            width=20
+        )
+        board_combobox.grid(row=1, column=1, sticky='w', padx=5)
+        # Zorg ervoor dat de combobox de huidige waarde toont als deze geldig is
+        if self.board_var.get() not in self.theme_names:
+            self.board_var.set(
+                "Standard")  # Val terug op Standard als de naam ongeldig is# --- Rij 5: OK / Cancel Knoppen ---
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=5, column=0, columnspan=3, pady=10)
+
+        ttk.Button(button_frame, text="OK", command=self.ok, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.cancel, width=10).pack(side=tk.LEFT, padx=5)
+
+        # Zorgt ervoor dat de Entry velden in de grid meegroeien
+        main_frame.grid_columnconfigure(1, weight=1)
+
+    def _browse_dir(self):
+        """Opent een dialoogvenster om de standaardmap te selecteren."""
+        new_dir = filedialog.askdirectory(
+            parent=self,
+            initialdir=self.default_dir_var.get() or "~",
+            title="Select Default PGN Directory"
+        )
+        if new_dir:
+            self.default_dir_var.set(new_dir)
+
+    def _browse_engine(self):
+        """Opent een dialoogvenster om het Stockfish uitvoerbare bestand te selecteren."""
+        new_path = filedialog.askopenfilename(
+            parent=self,
+            initialdir=self.engine_path_var.get() or "~",
+            title="Select Stockfish Executable"
+        )
+        if new_path:
+            self.engine_path_var.set(new_path)
+
+    def ok(self):
+        """Verwerkt de OK-knop: valideert, slaat op en sluit."""
+        try:
+            # Validatie (voorbeeld: zorg ervoor dat square_size een integer is)
+            square_size = self.square_size_var.get()
+            if not isinstance(square_size, int) or square_size < 10:
+                raise ValueError("Square Size must be a number greater than 10.")
+        except ValueError as e:
+            messagebox.showerror("Validation Error", str(e), parent=self)
+            return
+
+            # Roep de externe opslagfunctie aan met de nieuwe waarden
+        self.save_config_callback(
+            self.default_dir_var.get(),
+            self.last_pgn_path_var.get(),
+            self.engine_path_var.get(),
+            self.piece_set_var.get(),
+            self.square_size_var.get(),
+            self.board_var.get()  # Stuurt nu de geselecteerde naam (bv. "Red")
+        )
+
+        self.result = True
+        self.destroy()
+
+    def cancel(self):
+        """Verwerkt de Cancel-knop of sluiting van het venster."""
+        self.result = False
+        self.destroy()
+
 # Required: pip install python-chess
 BOARD_THEMES = [
     {
@@ -328,6 +487,7 @@ class ChessAnnotatorApp:
         self.piece_set = piece_set
         self.square_size = square_size if square_size else 75
         self.image_manager = image_manager
+        self.default_pgn_dir = ""
         self.hide_file_load = hide_file_load
         self.is_manual = False
         self.selected_square = None
@@ -581,6 +741,11 @@ class ChessAnnotatorApp:
         variations_menu.add_separator()
         variations_menu.add_command(label="Manual Move", command=self.manual_move)
         variations_menu.add_command(label="Add New Variation", command=self._add_new_variation)
+        if not self.image_manager is None:
+            settings_menu = tk.Menu(menubar, tearoff=0)
+            menubar.add_cascade(label="Settings", menu=settings_menu)
+            settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(),
+                                      state=tk.NORMAL)
 
         self.game_menu = game_menu
         self.variations_menu = variations_menu
@@ -594,22 +759,26 @@ class ChessAnnotatorApp:
         Slaat de huidige sessie-informatie op en sluit de applicatie.
         Wordt aangeroepen door root.protocol("WM_DELETE_WINDOW", ...).
         """
+        self.save_preferences_class()
+
+        # 3. Sluit de app
+        self.master.destroy()
+
+    def save_preferences_class(self):
         # 1. Verzamel data
         preferences_data = {
+            "default_directory": self.default_pgn_dir,
             "last_pgn_filepath": self.last_filepath,
             "current_game_index": self.current_game_index,
             "engine": self.ENGINE_PATH,
             "square_size": self.square_size + 5,
             "piece_set": self.piece_set,
-            "board":self.theme_name
+            "board": self.theme_name
             # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
         }
 
         # 2. Opslaan
         save_preferences(preferences_data)
-
-        # 3. Sluit de app
-        self.master.destroy()
 
     # --- Game Chooser Logic ---
 
@@ -689,6 +858,29 @@ class ChessAnnotatorApp:
             self.game_menu.entryconfig(0, state=prev_state)
             self.game_menu.entryconfig(1, state=next_state)
 
+    def show_settings_dialog(self):
+
+        current_settings = {
+            "default_directory": self.default_pgn_dir,
+            "lastLoadedPgnPath": self.last_filepath,
+            "engine_path": self.ENGINE_PATH,
+            "piece_set": self.piece_set,
+            "square_size": self.square_size,
+            "board": self.theme_name
+        }
+
+
+        SettingsDialog(self.master, current_settings, self._save_config_wrapper)
+
+    def _save_config_wrapper(self, *args):
+        self.save_preferences_class()
+        # Update the internal attributes after saving
+        self.default_pgn_dir = args[0]
+        self.ENGINE_PATH = args[2]
+        self.piece_set = args[3]
+        self.square_size = args[4]
+        self.theme_name = args[5]
+        self.update_state()
 
     # --- File & Load Logic ---
 
