@@ -1540,9 +1540,8 @@ class ChessEventViewer:
         # --- COLUMN 0: DIAGRAM & INFO (Left) ---
         title = f"{index}: {event_data['move_text']}"
 
-        diagram_block = tk.LabelFrame(tab_frame,
-                                      text=title,
-                                      padx=10, pady=10, font=("Helvetica", 10, "bold"), bd=2, relief=tk.GROOVE)
+        diagram_block = tk.Frame(tab_frame,
+                                      padx=10, pady=10, bd=2, relief=tk.GROOVE)
         diagram_block.grid(row=0, column=0, padx=(0, 15), pady=5, sticky='nsw')
 
         # 1. Info Label
