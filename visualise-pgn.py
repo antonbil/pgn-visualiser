@@ -2,7 +2,7 @@
 # Installation: pip install python-chess
 import os
 import tkinter as tk
-from tkinter import ttk, filedialog, font
+from tkinter import ttk, filedialog, font, messagebox
 import chess
 import chess.pgn
 import io
@@ -12,7 +12,7 @@ from PIL import Image, ImageTk
 from pathlib import Path
 import json
 from pgn_editor.pgn_editor import ChessAnnotatorApp
-from pgn_editor.pgn_editor import GameChooserDialog
+from pgn_editor.pgn_editor import GameChooserDialog, BOARD_THEMES
 from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
 import cairosvg
 from io import BytesIO
@@ -297,6 +297,158 @@ def select_key_positions(all_events):
     return selected_events
 
 
+class SettingsDialog(tk.Toplevel):
+    def __init__(self, parent, current_config, save_config_callback):
+        """
+        Initialiseert de modale instellingendialoog.
+
+        :param parent: De hoofd Tkinter-instantie.
+        :param current_config: Een dictionary met de huidige instellingen.
+        :param save_config_callback: De functie om de nieuwe instellingen op te slaan (uw _save_config).
+        """
+        super().__init__(parent)
+        self.transient(parent)  # Maakt dit een tijdelijk venster boven het hoofdvenster
+        self.title("Application Settings")
+        self.parent = parent
+        self.current_config = current_config
+        self.save_config_callback = save_config_callback
+
+        # --- Modale Setup ---
+        self.result = None
+        self.grab_set()  # Zorgt ervoor dat het venster modaal is (gebruiker moet reageren)
+
+        # Maak variabelen om de waarden op te slaan
+        self._create_variables()
+
+        # Maak de GUI elementen
+        self._create_widgets()
+
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50, parent.winfo_rooty() + 50))
+
+        # Focus en wacht tot het venster gesloten is
+        self.wait_window(self)
+
+    def _create_variables(self):
+        """Maakt Tkinter-variabelen aan en vult deze met de huidige waarden."""
+
+        # Standaard Directory
+        self.default_dir_var = tk.StringVar(value=self.current_config.get("default_directory", ""))
+
+        # Laatst Geladen PGN Pad
+        self.last_pgn_path_var = tk.StringVar(value=self.current_config.get("lastLoadedPgnPath", ""))
+
+        # Engine Pad
+        self.engine_path_var = tk.StringVar(value=self.current_config.get("engine_path", ""))
+
+        # Piece Set (Standaard: staunty)
+        self.piece_set_var = tk.StringVar(value=self.current_config.get("piece_set", "staunty"))
+
+        # Square Size (Standaard: 80)
+        # Gebruik IntVar voor numerieke waarde
+        self.square_size_var = tk.IntVar(value=self.current_config.get("square_size", 80))
+
+        # Board Kleur (Standaard: red)
+        self.board_var = tk.StringVar(value=self.current_config.get("board", "red"))
+
+    def _create_widgets(self):
+        """Maakt en plaatst de GUI-elementen in het dialoogvenster."""
+
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.grid(row=0, column=0, sticky="nsew")
+
+        # --- Rij 0: Default Directory ---
+        ttk.Label(main_frame, text="Default PGN Directory:").grid(row=0, column=0, sticky='w', pady=5)
+        ttk.Entry(main_frame, textvariable=self.default_dir_var, width=50).grid(row=0, column=1, sticky='ew', padx=5)
+        ttk.Button(main_frame, text="Browse", command=self._browse_dir).grid(row=0, column=2, sticky='e')
+
+        # --- Rij 1: Engine Path ---
+        ttk.Label(main_frame, text="Stockfish Engine Path:").grid(row=1, column=0, sticky='w', pady=5)
+        ttk.Entry(main_frame, textvariable=self.engine_path_var, width=50).grid(row=1, column=1, sticky='ew', padx=5)
+        ttk.Button(main_frame, text="Browse", command=self._browse_engine).grid(row=1, column=2, sticky='e')
+
+        # --- Rij 2: Last Loaded PGN Path (alleen ter info, niet bewerkbaar) ---
+        ttk.Label(main_frame, text="Last Loaded PGN (Read-only):").grid(row=2, column=0, sticky='w', pady=5)
+        # Disabled entry om te tonen, maar niet bewerkbaar te maken
+        ttk.Entry(main_frame, textvariable=self.last_pgn_path_var, width=50, state='readonly').grid(row=2, column=1,
+                                                                                                    columnspan=2,
+                                                                                                    sticky='ew', padx=5)
+
+        # --- Rij 3 & 4: Visual Settings (in een subframe) ---
+        visual_frame = ttk.LabelFrame(main_frame, text="Visual Settings", padding="10")
+        visual_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=10)
+
+        # Piece Set
+        ttk.Label(visual_frame, text="Piece Set Name:").grid(row=0, column=0, sticky='w', pady=5)
+        # Optioneel: Gebruik een Combobox als u een vaste lijst van sets heeft
+        ttk.Entry(visual_frame, textvariable=self.piece_set_var, width=20).grid(row=0, column=1, sticky='w', padx=5)
+
+        # Square Size
+        ttk.Label(visual_frame, text="Square Size (px):").grid(row=0, column=2, sticky='w', pady=5)
+        ttk.Entry(visual_frame, textvariable=self.square_size_var, width=10).grid(row=0, column=3, sticky='w', padx=5)
+
+        # Board Color
+        ttk.Label(visual_frame, text="Board Theme:").grid(row=1, column=0, sticky='w', pady=5)
+        ttk.Entry(visual_frame, textvariable=self.board_var, width=20).grid(row=1, column=1, sticky='w', padx=5)
+
+        # --- Rij 5: OK / Cancel Knoppen ---
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=5, column=0, columnspan=3, pady=10)
+
+        ttk.Button(button_frame, text="OK", command=self.ok, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.cancel, width=10).pack(side=tk.LEFT, padx=5)
+
+        # Zorgt ervoor dat de Entry velden in de grid meegroeien
+        main_frame.grid_columnconfigure(1, weight=1)
+
+    def _browse_dir(self):
+        """Opent een dialoogvenster om de standaardmap te selecteren."""
+        new_dir = filedialog.askdirectory(
+            parent=self,
+            initialdir=self.default_dir_var.get() or "~",
+            title="Select Default PGN Directory"
+        )
+        if new_dir:
+            self.default_dir_var.set(new_dir)
+
+    def _browse_engine(self):
+        """Opent een dialoogvenster om het Stockfish uitvoerbare bestand te selecteren."""
+        new_path = filedialog.askopenfilename(
+            parent=self,
+            initialdir=self.engine_path_var.get() or "~",
+            title="Select Stockfish Executable"
+        )
+        if new_path:
+            self.engine_path_var.set(new_path)
+
+    def ok(self):
+        """Verwerkt de OK-knop: valideert, slaat op en sluit."""
+        try:
+            # Validatie (voorbeeld: zorg ervoor dat square_size een integer is)
+            square_size = self.square_size_var.get()
+            if not isinstance(square_size, int) or square_size < 10:
+                raise ValueError("Square Size must be a number greater than 10.")
+        except ValueError as e:
+            messagebox.showerror("Validation Error", str(e), parent=self)
+            return
+
+        # Roep de externe opslagfunctie aan met de nieuwe waarden
+        self.save_config_callback(
+            self.default_dir_var.get(),
+            self.last_pgn_path_var.get(),  # Wordt niet gewijzigd, maar wel opgeslagen
+            self.engine_path_var.get(),
+            self.piece_set_var.get(),
+            self.square_size_var.get(),
+            self.board_var.get()
+        )
+
+        self.result = True
+        self.destroy()
+
+    def cancel(self):
+        """Verwerkt de Cancel-knop of sluiting van het venster."""
+        self.result = False
+        self.destroy()
 # ----------------------------------------------------------------------
 # 1. PIECE IMAGE MANAGER (THE FACTORY/SINGLETON)
 # This class is responsible for loading all images once from the disk.
@@ -390,7 +542,7 @@ class PieceImageManager:
             print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
         else:
             print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
-
+IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
 
@@ -400,6 +552,7 @@ class ChessEventViewer:
     """
 
     def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard"):
+        image_manager = PieceImageManager(square_size, IMAGE_DIRECTORY, piece_set)
         self.current_movelistbox_info = None
         self.engine_path = engine_path
         self.piece_set = piece_set
@@ -439,9 +592,15 @@ class ChessEventViewer:
         self.square_size = square_size
         self.board_size = self.square_size * 8
 
-        self.color_light = "#F0D9B5"
-        self.color_dark = "#B58863"
+        self.theme_name = board
+        self.selected_theme = next(
+            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
+            BOARD_THEMES[0]  # Gebruik Standard als fallback
+        )
+        self.color_light, self.color_dark = (self.selected_theme["light"], self.selected_theme["dark"])
+
         self.piece_font = font.Font(family="Arial", size=int(self.square_size * 0.5), weight="bold")
+
         # --- 1. INITIALIZE STRINGVARS (THE DATA MODEL) ---
         # These variables hold the actual text content and are linked to the UI Labels.
         # When a new PGN is loaded, we only update these variables, and the UI refreshes automatically.
@@ -525,8 +684,24 @@ class ChessEventViewer:
         menubar.add_cascade(label="Tools", menu=game_menu)
         game_menu.add_command(label="Editor", command=lambda: self.start_editor(), state=tk.NORMAL, accelerator="Ctrl+Left")
         game_menu.add_command(label="Enter new Game", command=lambda: self.enter_new_game(), state=tk.NORMAL, accelerator="Ctrl+Right")
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(), state=tk.NORMAL)
 
         self.game_menu = game_menu
+
+    def _save_config_wrapper(self, *args):
+        _save_config(*args)
+        # Update the internal attributes after saving
+        self.default_pgn_dir = args[0]
+        self.engine_path = args[2]
+        self.piece_set = args[3]
+        self.square_size = args[4]
+        self.board = args[5]
+        self.image_manager = PieceImageManager(self.square_size, IMAGE_DIRECTORY, self.piece_set)
+        self._create_tabbed_event_viewer(self.master)
+        self.display_diagram_move(self.current_move_index)
+
 
     def _open_game_chooser(self):
         """
@@ -596,7 +771,7 @@ class ChessEventViewer:
 
     def enter_new_game(self):
         root = tk.Tk()
-        IMAGE_DIRECTORY = "pgn_entry/Images/60"
+
         SQUARE_SIZE = 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
@@ -1191,6 +1366,24 @@ class ChessEventViewer:
         _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set, self.square_size, self.board)
         exit()
 
+    def show_settings_dialog(self):
+
+        """Roept de instellingendialoog op."""
+
+        # De huidige configuratie ophalen (moet een dictionary zijn!)
+        current_settings = {
+            "default_directory": self.default_pgn_dir,
+            "lastLoadedPgnPath": self.lastLoadedPgnPath,
+            "engine_path": self.engine_path,
+            "piece_set": self.piece_set,
+            "square_size": self.square_size,
+            "board": self.board
+        }
+
+        # Roep de dialoog op. De _save_config functie wordt doorgegeven als callback.
+        # We gaan ervan uit dat _save_config elders in deze scope is gedefinieerd
+        SettingsDialog(self.master, current_settings, self._save_config_wrapper)
+
     def load_initial_pgn(self, lastLoadedPgnPath):
         """Loads a simulated PGN game upon application startup."""
         if not lastLoadedPgnPath:
@@ -1702,9 +1895,9 @@ if __name__ == "__main__":
         SQUARE_SIZE = int(square_size) if square_size else 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
-        asset_manager = PieceImageManager(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, asset_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board1)
+
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, None, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board1)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"
