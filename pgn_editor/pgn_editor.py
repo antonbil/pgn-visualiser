@@ -669,7 +669,7 @@ class ChessAnnotatorApp:
 
             # 2. Roep het handmatig eenmaal aan om de initiële breedte in te stellen
             # We gebruiken after() omdat winfo_width() soms 1 retourneert voordat de GUI is geladen
-            #master.after(100, self._resize_comment_frame)
+            master.after(100, self._resize_comment_frame)
 
         else:
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
