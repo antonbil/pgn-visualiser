@@ -561,8 +561,6 @@ class ChessAnnotatorApp:
         master.update_idletasks()
 
         self.set_screen_position(master)
-        if self.touch_screen:
-            master.after(100, self._resize_comment_frame)
 
         if not(pgn_game is None or len(pgn_game) == 0):
             try:
@@ -667,11 +665,6 @@ class ChessAnnotatorApp:
             moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
             comment_display_frame = tk.Frame(column1_frame)
             comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
-            board_frame.bind('<Configure>', self._resize_comment_frame)
-
-            # 2. Roep het handmatig eenmaal aan om de initiële breedte in te stellen
-            # We gebruiken after() omdat winfo_width() soms 1 retourneert voordat de GUI is geladen
-
 
         else:
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
@@ -983,30 +976,6 @@ class ChessAnnotatorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Error reading PGN: {e}")
 
-    def _resize_comment_frame(self, event=None):
-        """
-        Stelt de breedte van het comment_display_frame in op de breedte van self.board_frame
-        en zorgt ervoor dat de hoogte correct is.
-        """
-        if self.touch_screen:
-            board_width = self.board_frame.winfo_width()
-
-            # --- Nieuwe Hoogte Logica ---
-            # Bereken de pixelhoogte van de Text widget (gebaseerd op het aantal regels * fontgrootte)
-            # De winfo_reqheight() geeft de minimale vereiste hoogte voor de huidige instellingen.
-            required_height = self.comment_display.winfo_reqheight()
-
-            if board_width > 1 and required_height > 1:
-                # 1. Stel de vereiste pixelhoogte in op het ouderframe
-                self.comment_display_frame.config(
-                    width=board_width,
-                    height=required_height
-                )
-                # 2. Vraag het frame om zijn dimensies te respecteren (en niet de inhoud)
-                self.comment_display_frame.grid_propagate(False)
-            else:
-                # Laat de propagatie aan totdat er geldige waarden zijn (optioneel, voor debugging)
-                self.comment_display_frame.grid_propagate(True)
 
     # --- UI Component Setup ---
 
@@ -1072,8 +1041,8 @@ class ChessAnnotatorApp:
             display_height = 3  # 3 lines for desktop
             scrollbar_width = None
 
-        comment_display_frame.grid_columnconfigure(0, weight=0)
-        comment_display_frame.grid_rowconfigure(0, weight=0)
+        comment_display_frame.grid_columnconfigure(0)
+        comment_display_frame.grid_rowconfigure(0)
 
         self.comment_display = tk.Text(
             comment_display_frame,
