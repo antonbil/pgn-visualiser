@@ -621,7 +621,7 @@ class ChessAnnotatorApp:
 
         # Voor dit voorbeeld gebruiken we de SCHERMhoogte:
         screen_height = master.winfo_screenheight()
-        is_compact_layout = screen_height < COMPACT_HEIGHT_THRESHOLD
+        is_compact_layout = True#screen_height < COMPACT_HEIGHT_THRESHOLD
 
 
 
@@ -665,6 +665,11 @@ class ChessAnnotatorApp:
             moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
             comment_display_frame = tk.Frame(column1_frame)
             comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+            board_frame.bind('<Configure>', self._resize_comment_frame)
+
+            # 2. Roep het handmatig eenmaal aan om de initiële breedte in te stellen
+            # We gebruiken after() omdat winfo_width() soms 1 retourneert voordat de GUI is geladen
+            #master.after(100, self._resize_comment_frame)
 
         else:
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
@@ -976,6 +981,19 @@ class ChessAnnotatorApp:
         except Exception as e:
             messagebox.showerror("Error", f"Error reading PGN: {e}")
 
+    def _resize_comment_frame(self, event=None):
+        """
+        Stelt de breedte van het comment_display_frame in op de breedte van self.board_frame.
+        Dit wordt alleen gedaan als touchscreen is ingeschakeld.
+        """
+        if self.touch_screen:
+            # Krijg de breedte van het bord
+            board_width = self.board_frame.winfo_width()
+            if board_width > 1:  # Zorg ervoor dat de breedte is ingesteld (niet 1)
+                # Stel de breedte van het comment_display_frame in
+                self.comment_display_frame.config(width=board_width)
+                # Dwing de geometry manager om de nieuwe breedte te respecteren
+                self.comment_display_frame.grid_propagate(False)
 
     # --- UI Component Setup ---
 
@@ -1053,7 +1071,12 @@ class ChessAnnotatorApp:
             wrap=tk.WORD,  # Breek de tekst af op woordgrenzen
             state=tk.DISABLED  # Belangrijk: Maak het alleen-lezen
         )
-        self.comment_display.grid(row=0, column=0, sticky='nsew')
+        self.comment_display.grid(
+            row=0, column=0,
+            sticky='nsew',
+            padx=5,
+            pady=(0, 10)
+        )
 
         comment_scrollbar = ttk.Scrollbar(
             comment_display_frame,
