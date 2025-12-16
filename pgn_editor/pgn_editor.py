@@ -983,17 +983,28 @@ class ChessAnnotatorApp:
 
     def _resize_comment_frame(self, event=None):
         """
-        Stelt de breedte van het comment_display_frame in op de breedte van self.board_frame.
-        Dit wordt alleen gedaan als touchscreen is ingeschakeld.
+        Stelt de breedte van het comment_display_frame in op de breedte van self.board_frame
+        en zorgt ervoor dat de hoogte correct is.
         """
         if self.touch_screen:
-            # Krijg de breedte van het bord
             board_width = self.board_frame.winfo_width()
-            if board_width > 1:  # Zorg ervoor dat de breedte is ingesteld (niet 1)
-                # Stel de breedte van het comment_display_frame in
-                self.comment_display_frame.config(width=board_width)
-                # Dwing de geometry manager om de nieuwe breedte te respecteren
+
+            # --- Nieuwe Hoogte Logica ---
+            # Bereken de pixelhoogte van de Text widget (gebaseerd op het aantal regels * fontgrootte)
+            # De winfo_reqheight() geeft de minimale vereiste hoogte voor de huidige instellingen.
+            required_height = self.comment_display.winfo_reqheight()
+
+            if board_width > 1 and required_height > 1:
+                # 1. Stel de vereiste pixelhoogte in op het ouderframe
+                self.comment_display_frame.config(
+                    width=board_width,
+                    height=required_height
+                )
+                # 2. Vraag het frame om zijn dimensies te respecteren (en niet de inhoud)
                 self.comment_display_frame.grid_propagate(False)
+            else:
+                # Laat de propagatie aan totdat er geldige waarden zijn (optioneel, voor debugging)
+                self.comment_display_frame.grid_propagate(True)
 
     # --- UI Component Setup ---
 
