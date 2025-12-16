@@ -895,7 +895,7 @@ class ChessAnnotatorApp:
 
         # 3. Controleer of de map geldig is en bestaat
         if os.path.isdir(directory):
-            initial_dir = directory
+            initial_dir = self.default_pgn_dir
         filepath = filedialog.askopenfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
