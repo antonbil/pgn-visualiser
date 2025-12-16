@@ -421,8 +421,6 @@ class ChessEventViewer:
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
-        # --- TOP LEVEL FILE READER WIDGET ---
-        self._create_file_reader_widget(master)
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.current_game_index = 0
@@ -488,9 +486,13 @@ class ChessEventViewer:
         self.move_nav_panel = tk.Frame(self.navigation_container, pady=10)
         # Gebruik side=tk.LEFT zodat deze direct naast de vorige wordt geplaatst.
         self.move_nav_panel.pack(side=tk.LEFT,  padx=5)  # Fill=tk.Y om verticaal op te vullen
+        # --- TOP LEVEL FILE READER WIDGET ---
+        file_reader_frame = tk.Frame(self.navigation_container, padx=10, pady=5, bd=1, relief=tk.RIDGE)
+        file_reader_frame.pack(fill="x", padx=10, pady=10)
 
 
 
+        self._create_file_reader_widget(file_reader_frame)
         self._create_meta_info_widgets(self.meta_info_frame)
         self._create_navigation_widgets(self.nav_panel)
         self._create_move_navigation_widgets(self.move_nav_panel)
@@ -1423,13 +1425,12 @@ class ChessEventViewer:
             self.pgn_filepath.set(error_message)
             self._clear_content_frame()
 
-    def _create_file_reader_widget(self, master):
+    def _create_file_reader_widget(self, file_reader_frame):
         """
         Creates the UI elements for selecting and displaying the PGN file path.
         This is placed at the top of the window.
         """
-        file_reader_frame = tk.Frame(master, padx=10, pady=5, bd=1, relief=tk.RIDGE)
-        file_reader_frame.pack(fill="x", padx=10, pady=10)
+
 
         # 1. Label/Entry for File Path Display
         path_label = tk.Label(
