@@ -1542,12 +1542,12 @@ class ChessEventViewer:
 
         diagram_block = tk.LabelFrame(tab_frame,
                                       text=title,
-                                      padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
+                                      padx=10, pady=10, font=("Helvetica", 10, "bold"), bd=2, relief=tk.GROOVE)
         diagram_block.grid(row=0, column=0, padx=(0, 15), pady=5, sticky='nsw')
 
         # 1. Info Label
         info_text = (
-            f"Change: {event_data['score'] / 100.0:.2f} P\n"
+            f"Change: {event_data['score'] / 100.0:.2f} P"
             f"Eval BEFORE: {event_data['eval_before']:.2f} | Eval AFTER: {event_data['eval_after']:.2f}"
         )
         tk.Label(diagram_block, text=info_text, justify=tk.LEFT, pady=5).pack(anchor="w")
