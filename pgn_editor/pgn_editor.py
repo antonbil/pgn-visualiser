@@ -1034,19 +1034,39 @@ class ChessAnnotatorApp:
         # By removing wraplength or making it much larger and using fill=tk.X,
         # the label will fill the available width of the parent (nav_comment_frame).
 
-        self.comment_display = tk.Label(
+        if self.touch_screen:
+            display_height = 6  # 6 lines for touchscreen
+            scrollbar_width = 15
+        else:
+            display_height = 3  # 3 lines for desktop
+            scrollbar_width = None
+
+        comment_display_frame.grid_columnconfigure(0, weight=1)
+        comment_display_frame.grid_rowconfigure(0, weight=1)
+
+        self.comment_display = tk.Text(
             comment_display_frame,
-            text="No comment for this move.",
             font=('Arial', 9),
             bg='lightgray',
             relief=tk.SUNKEN,
-            height=3,          # Fixed height for 3 lines
-            wraplength=450, # Set to frame width (or omit and rely on fill=tk.X)
-            justify=tk.LEFT,   # Left alignment of the text
-            anchor=tk.NW      # Ensures the text starts at the top left
+            height=display_height,
+            wrap=tk.WORD,  # Breek de tekst af op woordgrenzen
+            state=tk.DISABLED  # Belangrijk: Maak het alleen-lezen
         )
+        self.comment_display.grid(row=0, column=0, sticky='nsew')
+
+        comment_scrollbar = ttk.Scrollbar(
+            comment_display_frame,
+            command=self.comment_display.yview,
+        )
+        if scrollbar_width:
+            comment_display_frame.grid_columnconfigure(1, minsize=scrollbar_width)
+
+        comment_scrollbar.grid(row=0, column=1, sticky='ns')
+
+        self.comment_display.config(yscrollcommand=comment_scrollbar.set)
         # Use fill=tk.X to make the label take the full width of nav_comment_frame
-        self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
+        self.comment_display.grid(padx=5, pady=(0, 10))
         self.variation_btn_frame = tk.Frame(nav_comment_frame, bg='white') # bg ter demo, kan weg
         self.variation_btn_frame.pack(fill=tk.X, padx=5, pady=(0, 10))
         # 3. Commentary Controls section (right in the header)
@@ -1471,7 +1491,14 @@ class ChessAnnotatorApp:
             self.current_move_index -= 1
             self.update_state()
 
-    # --- Update Functions ---
+
+    def update_comment(self, new_comment):
+        self.comment_display.config(state=tk.NORMAL) # 1. Activeer
+        self.comment_display.delete('1.0', tk.END)    # 2. Wis bestaande tekst
+        self.comment_display.insert(tk.END, new_comment) # 3. Voeg nieuwe tekst toe
+        self.comment_display.config(state=tk.DISABLED) # 4. Deactiveer
+        # Scroll naar de top na update (optioneel)
+        self.comment_display.yview_moveto(0)
 
     def update_state(self):
         """
@@ -1482,7 +1509,7 @@ class ChessAnnotatorApp:
             self.board = chess.Board()
             self.update_board_display()
             self.notation_label.config(text="No Game Loaded")
-            self.comment_display.config(text="—")
+            self.update_comment("—")
             self.prev_button.config(state=tk.DISABLED)
             self.next_button.config(state=tk.DISABLED)
             if self.insert_edit_comment_button: self.insert_edit_comment_button.config(state=tk.DISABLED)
@@ -1553,7 +1580,7 @@ class ChessAnnotatorApp:
         node = self._get_current_node()
         # The game root node can also have a comment
         comment = node.comment.strip() if node and node.comment and node.comment.strip() else "—"
-        self.comment_display.config(text=comment)
+        self.update_comment(comment)
 
     def update_move_listbox_selection(self):
         """
