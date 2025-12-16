@@ -561,6 +561,8 @@ class ChessAnnotatorApp:
         master.update_idletasks()
 
         self.set_screen_position(master)
+        if self.touch_screen:
+            master.after(100, self._resize_comment_frame)
 
         if not(pgn_game is None or len(pgn_game) == 0):
             try:
@@ -669,7 +671,7 @@ class ChessAnnotatorApp:
 
             # 2. Roep het handmatig eenmaal aan om de initiële breedte in te stellen
             # We gebruiken after() omdat winfo_width() soms 1 retourneert voordat de GUI is geladen
-            master.after(100, self._resize_comment_frame)
+
 
         else:
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
