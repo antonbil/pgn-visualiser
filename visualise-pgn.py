@@ -1086,9 +1086,11 @@ class ChessEventViewer:
             master,
             orient=tk.HORIZONTAL,
             sashrelief=tk.RAISED,
-            sashwidth=4
+            sashwidth=10,  # Increases the thickness of the bar itself
+            sashpad=2,  # Adds invisible padding around the bar to catch clicks
         )
         self.main_paned_window.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.main_paned_window.config(showhandle=True, handlepad=10, handlesize=15)
 
         # 1. Left Side: The Notebook (Board and Move List)
         # We place the Notebook inside a Frame so we can manage its internal expansion
