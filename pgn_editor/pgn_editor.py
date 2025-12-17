@@ -120,33 +120,35 @@ class SettingsDialog(tk.Toplevel):
         ttk.Label(visual_frame, text="Square Size (px):").grid(row=0, column=2, sticky='w', pady=5)
         ttk.Entry(visual_frame, textvariable=self.square_size_var, width=10).grid(row=0, column=3, sticky='w', padx=5)
 
-        # --- BOARD THEME AANPASSING: Gebruik Combobox ---
+        # --- BOARD THEME ADJUSTMENT: Use Combobox ---
         ttk.Label(visual_frame, text="Board Theme:").grid(row=1, column=0, sticky='w', pady=5)
 
-        # Combobox voor themakeuze
+        # Combobox for theme selection
         board_combobox = ttk.Combobox(
             visual_frame,
             textvariable=self.board_var,
-            values=self.theme_names,  # Gebruik de lijst met namen
-            state='readonly',  # Forceer selectie uit de lijst
+            values=self.theme_names,  # Use the list of names
+            state='readonly',  # Force selection from the list
             width=20
         )
         board_combobox.grid(row=1, column=1, sticky='w', padx=5)
-        # Zorg ervoor dat de combobox de huidige waarde toont als deze geldig is
+
+        # Ensure the combobox shows the current value if it is valid
         if self.board_var.get() not in self.theme_names:
-            self.board_var.set(
-                "Standard")  # Val terug op Standard als de naam ongeldig is# --- Rij 5: OK / Cancel Knoppen ---
+            self.board_var.set("Standard")  # Fallback to Standard if the name is invalid
+
+        # --- Row 5: OK / Cancel Buttons ---
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=5, column=0, columnspan=3, pady=10)
 
         ttk.Button(button_frame, text="OK", command=self.ok, width=10).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self.cancel, width=10).pack(side=tk.LEFT, padx=5)
 
-        # Zorgt ervoor dat de Entry velden in de grid meegroeien
+        # Ensure the Entry fields in the grid expand properly
         main_frame.grid_columnconfigure(1, weight=1)
 
     def _browse_dir(self):
-        """Opent een dialoogvenster om de standaardmap te selecteren."""
+        """Opens a dialog window to select the default directory."""
         new_dir = filedialog.askdirectory(
             parent=self,
             initialdir=self.default_dir_var.get() or "~",
@@ -156,7 +158,7 @@ class SettingsDialog(tk.Toplevel):
             self.default_dir_var.set(new_dir)
 
     def _browse_engine(self):
-        """Opent een dialoogvenster om het Stockfish uitvoerbare bestand te selecteren."""
+        """Opens a dialog window to select the Stockfish executable file."""
         new_path = filedialog.askopenfilename(
             parent=self,
             initialdir=self.engine_path_var.get() or "~",
@@ -166,9 +168,9 @@ class SettingsDialog(tk.Toplevel):
             self.engine_path_var.set(new_path)
 
     def ok(self):
-        """Verwerkt de OK-knop: valideert, slaat op en sluit."""
+        """Processes the OK button: validates, saves, and closes."""
         try:
-            # Validatie (voorbeeld: zorg ervoor dat square_size een integer is)
+            # Validation (example: ensure square_size is an integer)
             square_size = self.square_size_var.get()
             if not isinstance(square_size, int) or square_size < 10:
                 raise ValueError("Square Size must be a number greater than 10.")
@@ -176,30 +178,30 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Validation Error", str(e), parent=self)
             return
 
-            # Roep de externe opslagfunctie aan met de nieuwe waarden
+        # Call the external save function with the new values
         self.save_config_callback(
             self.default_dir_var.get(),
             self.last_pgn_path_var.get(),
             self.engine_path_var.get(),
             self.piece_set_var.get(),
             self.square_size_var.get(),
-            self.board_var.get()  # Stuurt nu de geselecteerde naam (bv. "Red")
+            self.board_var.get()  # Sends the selected name (e.g., "Red")
         )
 
         self.result = True
         self.destroy()
 
     def cancel(self):
-        """Verwerkt de Cancel-knop of sluiting van het venster."""
+        """Processes the Cancel button or window closure."""
         self.result = False
         self.destroy()
 
-# Required: pip install python-chess
+    # Required: pip install python-chess
 BOARD_THEMES = [
     {
         "name": "Standard",
-        "light": "#F0D9B5", # Zeer lichte beige/crème
-        "dark": "#B58863"   # Warme bruin/sepiakleur
+        "light": "#F0D9B5",  # Very light beige/cream
+        "dark": "#B58863"  # Warm brown/sepia color
     },
     {
         "name": "Blue Lagoon",
@@ -494,10 +496,10 @@ class ChessAnnotatorApp:
         self.selected_square = None
         self.highlight_item = None
         master.title("PGN Chess Annotator")
-        # Zoek het thema (bijvoorbeeld op basis van een gebruikersinstelling)
+        # Find the theme
         self.selected_theme = next(
             (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
-            BOARD_THEMES[0] # Gebruik Standard als fallback
+            BOARD_THEMES[0] # Use Standard as fallback
         )
 
         # --- Data Initialization ---
@@ -576,35 +578,35 @@ class ChessAnnotatorApp:
         self._setup_canvas_bindings()
 
     def set_screen_position(self, master):
-        # 1. Bepaal de maximale beschikbare breedte
+        # 1. Determine the maximum available width
         screen_width = master.winfo_screenwidth()
         screen_height = master.winfo_screenheight()
 
-        # 2. Bepaal de vereiste breedte van het venster (minimaal benodigde breedte)
-        # Dit is de breedte die uw huidige widgets in de gekozen lay-out nodig hebben.
+        # 2. Determine the required width of the window (minimum necessary width)
+        # This is the width that your current widgets need based on the chosen layout.
         required_width = master.winfo_reqwidth()
         required_height = master.winfo_reqheight()
 
-        # 3. Stel de maximale breedte in om te voorkomen dat het venster breder wordt dan het scherm.
-        # We gebruiken de hoogte die u al in uw lay-outlogica gebruikt (bijv. 1000 pixels als drempel)
+        # 3. Set the maximum width to prevent the window from becoming wider than the screen.
+        # We use the height defined in your layout logic (e.g., 1000 pixels as a threshold)
 
         if screen_height < COMPACT_HEIGHT_THRESHOLD:
-            # Dit is waarschijnlijk een compact/touchscreen apparaat.
+            # This is likely a compact/touchscreen device.
 
-            # Gebruik de breedte die de widgets nodig hebben, maar beperk tot de schermbreedte.
-            # Dit dwingt het venster om niet over de rand te gaan.
+            # Use the width required by the widgets, but limit it to the screen width.
+            # This prevents the window from extending beyond the screen edges.
 
-            # De breedte is de benodigde breedte, tenzij die de schermbreedte overschrijdt.
+            # The width is the required width, unless it exceeds the screen width.
             print(required_width, screen_width)
             print(required_height, screen_height)
             window_width = min(required_width, screen_width)
             window_height = min(required_height, screen_height)
 
-            # Startpositie: Linksboven (+0+0) om te garanderen dat alles zichtbaar is.
-            # We stellen de exacte geometrie in.
+            # Starting position: Top-left (+0+0) to guarantee everything is visible.
+            # Set the exact geometry.
             master.geometry(f"{window_width}x{window_height}+0+0")
 
-            # Optioneel: Stel de minimale grootte in om te voorkomen dat de gebruiker het te klein maakt
+            # Optional: Set the minimum size to prevent the user from shrinking it too much
             master.minsize(window_width, window_height)
 
     def setup_ui(self, master):
@@ -612,62 +614,69 @@ class ChessAnnotatorApp:
         Sets up the UI elements based on the initial screen height.
         """
 
-
-        # Forceer de vensterweergave en haal de initiële hoogte op
+        # Force window rendering to calculate initial dimensions
         master.update_idletasks()
 
-        # We gebruiken de SCHERM-hoogte om te beoordelen of we op een compact apparaat zijn.
-        # Als de gebruiker een venster van 100x100 op een 4K monitor start, zal deze breed zijn.
-        # U kunt master.winfo_height() gebruiken als u de initieel GEWENSTE vensterhoogte wilt meten.
+        # We use SCREEN height to determine if we are on a compact device.
+        # If a user starts a 100x100 window on a 4K monitor, it will still be considered wide.
+        # You can use master.winfo_height() if you prefer to measure the initial DESIRED window height.
 
-        # Voor dit voorbeeld gebruiken we de SCHERMhoogte:
+        # For this example, we use the SCREEN height:
         screen_height = master.winfo_screenheight()
         is_compact_layout = screen_height < COMPACT_HEIGHT_THRESHOLD
 
-
-
         if is_compact_layout:
             self.touch_screen = True
-            # --- 2. Frames Aanmaken ---
-            # Deze moeten altijd aangemaakt worden voordat we ze plaatsen of vullen.
+
+            # --- 2. Create Frames ---
+            # These must always be created before we place or fill them.
             self._setup_menu_bar(master)
 
-            # Hoofdcontainers
+            # Main containers
             main_frame = tk.Frame(master, padx=10, pady=10)
             main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
             # Column 1 (Left): Chess Diagram
             column1_frame = tk.Frame(main_frame)
             column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
+
             # Column 2: Move List
             column2_frame = tk.Frame(main_frame, width=400)
             column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
             column2_frame.pack_propagate(False)
+
+            # Column 3: Tools/Meta
             column3_frame = tk.Frame(main_frame)
             column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
             # 1. Game Meta-Tags section (left in the header)
             meta_frame = tk.LabelFrame(column3_frame, text="Game Meta-Tags", padx=5, pady=5)
             meta_frame.pack(side=tk.TOP, padx=10, pady=5)
+
             comment_frame = tk.LabelFrame(column3_frame, text="Annotation Tools", padx=10, pady=5)
             comment_frame.pack(fill=tk.Y, padx=10, pady=5)
-            nav_comment_frame = tk.Frame(column3_frame)
 
+            nav_comment_frame = tk.Frame(column3_frame)
             nav_comment_frame.pack(padx=30, fill=tk.BOTH, expand=True)
 
+            # Re-initializing main_frame for specific content
             main_frame = tk.Frame(master, padx=10, pady=10)
             main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-            # Column 1 (Left): Chess Diagram
+            # Column 1 Content: Board
             board_frame = tk.Frame(column1_frame)
             board_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5)
-            # Column 2: Move List
+
+            # Column 2 Content: Moves
             moves_frame = tk.Frame(column2_frame)
             moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
+
+            # Column 1 Content: Comment display below the board
             comment_display_frame = tk.Frame(column1_frame)
             comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
 
         else:
+            # Standard Desktop Layout
             header_frame = tk.Frame(master, bd=2, relief=tk.RAISED, padx=10, pady=5)
             header_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
@@ -676,7 +685,7 @@ class ChessAnnotatorApp:
             meta_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
 
             middle_column_frame = tk.Frame(header_frame)
-            # Dit frame moet de resterende horizontale ruimte innemen
+            # This frame should take up the remaining horizontal space
             middle_column_frame.pack(side=tk.LEFT, padx=30, fill=tk.BOTH, expand=True)
 
             nav_comment_frame = tk.Frame(middle_column_frame)
@@ -685,8 +694,10 @@ class ChessAnnotatorApp:
             # This ensures that this frame claims the remaining horizontal space between
             # meta_frame (LEFT) and comment_frame (RIGHT).
             nav_comment_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+
             comment_display_frame = tk.Frame(middle_column_frame)
             comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+
             comment_frame = tk.LabelFrame(header_frame, text="Annotation Tools", padx=10, pady=5)
             comment_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
 
@@ -701,9 +712,7 @@ class ChessAnnotatorApp:
             moves_frame = tk.Frame(main_frame)
             moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
-
-
-        # Sla ze op als klasse-attributen zodat de rest van de code ze kan bereiken
+        # Save as class attributes so the rest of the code can access them
         self.meta_frame = meta_frame
         self.nav_comment_frame = nav_comment_frame
         self.comment_frame = comment_frame
@@ -757,16 +766,16 @@ class ChessAnnotatorApp:
 
     def on_closing(self):
         """
-        Slaat de huidige sessie-informatie op en sluit de applicatie.
-        Wordt aangeroepen door root.protocol("WM_DELETE_WINDOW", ...).
+        Saves the current session information and closes the application.
+        Called via root.protocol("WM_DELETE_WINDOW", ...).
         """
         self.save_preferences_class()
 
-        # 3. Sluit de app
+        # 3. Close the app
         self.master.destroy()
 
     def save_preferences_class(self):
-        # 1. Verzamel data
+        # 1. Collect data
         preferences_data = {
             "default_directory": self.default_pgn_dir,
             "last_pgn_filepath": self.last_filepath,
@@ -775,10 +784,10 @@ class ChessAnnotatorApp:
             "square_size": self.square_size + 5,
             "piece_set": self.piece_set,
             "board": self.theme_name
-            # Hier kun je later meer opslaan, zoals laatst gebruikte engine, etc.
+            # More items can be added here later, such as last used engine, etc.
         }
 
-        # 2. Opslaan
+        # 2. Save
         save_preferences(preferences_data)
 
     # --- Game Chooser Logic ---
@@ -1009,25 +1018,25 @@ class ChessAnnotatorApp:
         nav_buttons_frame = tk.Frame(nav_comment_frame)
         nav_buttons_frame.pack(pady=10)
 
-        # Knoppen met kortere tekst en kleinere vaste breedte
-        # 1. Vorige Partij (Game)
+        # Buttons with shorter text and smaller fixed width
+        # 1. Previous Game
         self.prev_game_button = tk.Button(nav_buttons_frame, text="<<", command=lambda: self._navigate_game(-1),
-                                          width=2, bg='#fff0e6')  # Breedte verlaagd
+                                          width=2, bg='#fff0e6')  # Width reduced
         self.prev_game_button.pack(side=tk.LEFT, padx=(5, 3))
 
-        # 2. Vorige Zet (Move)
+        # 2. Previous Move
         self.prev_button = tk.Button(nav_buttons_frame, text="< Move", command=self.go_back_move,
-                                     width=6)  # Breedte verlaagd
+                                     width=6)  # Width reduced
         self.prev_button.pack(side=tk.LEFT, padx=3)
 
-        # 3. Volgende Zet (Move)
+        # 3. Next Move
         self.next_button = tk.Button(nav_buttons_frame, text="Move >", command=self.go_forward_move,
-                                     width=6)  # Breedte verlaagd
+                                     width=6)  # Width reduced
         self.next_button.pack(side=tk.LEFT, padx=3)
 
-        # 4. Volgende Partij (Game)
+        # 4. Next Game
         self.next_game_button = tk.Button(nav_buttons_frame, text=">>", command=lambda: self._navigate_game(1),
-                                          width=2, bg='#fff0e6')  # Breedte verlaagd
+                                          width=2, bg='#fff0e6')  # Width reduced
         self.next_game_button.pack(side=tk.LEFT, padx=(3, 5))
 
 
