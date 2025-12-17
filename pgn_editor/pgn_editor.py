@@ -12,6 +12,7 @@ import os
 import cairosvg
 from io import BytesIO
 from tkinter import ttk
+import textwrap
 
 PREFERENCES_FILE = "preferences.json"
 
@@ -1052,69 +1053,90 @@ class ChessAnnotatorApp:
         self.delete_comment_button.pack(pady=5)
 
     def setup_comment_display(self, comment_display_frame):
-        # Configuratie regels
+        # Configuration
         self.num_lines_limit = 6 if self.touch_screen else 3
-        self.all_comment_lines = []
+        self.all_comment_chunks = []
         self.current_page = 0
 
-        # De Widget
         self.comment_display = tk.Label(
             comment_display_frame,
             text="No comment for this move.",
             font=('Arial', 9),
             bg='lightgray',
             relief=tk.SUNKEN,
-            height=self.num_lines_limit,
+            # Set height to limit + 2 to ensure space for the indicator and a gap
+            height=self.num_lines_limit + 2,
             wraplength=450,
             justify=tk.LEFT,
             anchor=tk.NW,
-            cursor="hand2"  # Cursor verandert in een handje
+            cursor="hand2"
         )
-        self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
+        self.comment_display.grid(row=0, column=0, sticky='ew', padx=5, pady=(0, 10))
 
-        # Bind de klik-event
+        # Bind the click event for paging
         self.comment_display.bind("<Button-1>", self._toggle_comment_page)
 
     def set_comment_text(self, text):
-        """Gebruik deze functie om nieuwe tekst in het label te zetten."""
-        # We gebruiken een tijdelijke onzichtbare Text widget om te bepalen
-        # waar de tekst afbreekt (wrapping) bij de huidige breedte.
-        temp_text = tk.Text(width=60, font=('Arial', 9))
-        temp_text.insert("1.0", text)
+        """
+        Wraps the input text into lines based on width and resets view to page 0.
+        """
+        if not text or text.strip() == "":
+            text = "No comment for this move."
 
-        # Haal de regels op zoals ze gewrapt zouden worden
-        self.all_comment_lines = []
-        # Dit is een trucje om de visuele regels uit een Text widget te halen
-        # (vereist dat de widget even 'ge-update' wordt of een vaste breedte heeft)
-        self.all_comment_lines = text.split('\n')  # Simpele split, of gebruik complexere wrapping
+        # Use textwrap to break the string into a list of lines fitting the widget width
+        # Adjust 'width' (character count) if the wraplength changes
+        wrapper = textwrap.TextWrapper(width=65)
+        self.all_comment_chunks = wrapper.wrap(text)
 
         self.current_page = 0
         self._update_label_view()
 
     def _update_label_view(self):
-        """Toont de huidige 'pagina' van de tekst."""
+        """
+        Updates the label text to show the current page's lines and a visibility indicator.
+        """
+        if not self.all_comment_chunks:
+            self.comment_display.config(text="No comment for this move.")
+            return
+
+        # Calculate start and end indices for the current page
         start = self.current_page * self.num_lines_limit
         end = start + self.num_lines_limit
 
-        page_lines = self.all_comment_lines[start:end]
-        display_text = "\n".join(page_lines)
+        current_lines = self.all_comment_chunks[start:end]
 
-        # Check of er meer tekst is voor een indicator
-        if end < len(self.all_comment_lines):
-            display_text += "\n... [KLIK VOOR MEER]"
+        # Padding: Fill empty lines if the page is not full.
+        # This keeps the "[ CLICK FOR MORE ]" indicator at a fixed vertical position.
+        while len(current_lines) < self.num_lines_limit:
+            current_lines.append("")
+
+        display_text = "\n".join(current_lines)
+
+        # Append the paging indicator at the bottom
+        if end < len(self.all_comment_chunks):
+            display_text += "\n\n[ CLICK FOR MORE... ]"
         elif self.current_page > 0:
-            display_text += "\n[KLIK VOOR BEGIN]"
+            display_text += "\n\n[ CLICK: BACK TO START ]"
+        else:
+            # Add empty space for short comments to maintain consistent layout height
+            display_text += "\n\n"
 
         self.comment_display.config(text=display_text)
 
     def _toggle_comment_page(self, event):
-        """Springt naar de volgende pagina of terug naar het begin."""
-        if not self.all_comment_lines:
+        """
+        Cycles to the next page of comments. Safe against infinite loops.
+        """
+        if not self.all_comment_chunks:
             return
 
+        total_chunks = len(self.all_comment_chunks)
+
+        # Increment page index
         self.current_page += 1
-        # Als we aan het einde zijn, ga terug naar pagina 0
-        if self.current_page * self.num_lines_limit >= len(self.all_comment_lines):
+
+        # If the next page starts beyond the available lines, reset to the first page
+        if (self.current_page * self.num_lines_limit) >= total_chunks:
             self.current_page = 0
 
         self._update_label_view()
@@ -1539,7 +1561,7 @@ class ChessAnnotatorApp:
             self.board = chess.Board()
             self.update_board_display()
             self.notation_label.config(text="No Game Loaded")
-            self.comment_display.config(text="—")
+            self.set_comment_text("—")
             self.prev_button.config(state=tk.DISABLED)
             self.next_button.config(state=tk.DISABLED)
             if self.insert_edit_comment_button: self.insert_edit_comment_button.config(state=tk.DISABLED)
@@ -1610,7 +1632,7 @@ class ChessAnnotatorApp:
         node = self._get_current_node()
         # The game root node can also have a comment
         comment = node.comment.strip() if node and node.comment and node.comment.strip() else "—"
-        self.comment_display.config(text=comment)
+        self.set_comment_text(comment)
 
     def update_move_listbox_selection(self):
         """
