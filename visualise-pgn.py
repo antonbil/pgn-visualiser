@@ -762,7 +762,7 @@ class ChessEventViewer:
             # This catches illegal moves if the pgn were corrupt
             print(f"Error while simulating the moves: {e}")
             return
-
+        self.update_move_info(board, real_move_index)
         self.current_move_index = real_move_index
         chess_move = board.fullmove_number#int((real_move_index + 1)/2 - 1)
         if self.current_move_index % 2 == 1:
@@ -1079,18 +1079,121 @@ class ChessEventViewer:
 
     def _create_tabbed_event_viewer(self, master):
         """
-        Creates the ttk.Notebook (tabbed interface) to display individual chess diagrams/events.
+        Creates the tabbed interface and an info column where the left column is prioritized.
         """
-        main_frame = tk.Frame(master)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Main container for the content area
+        content_area = tk.Frame(master)
+        content_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # The Notebook widget is the container for the tabs
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(expand=True, fill="both")
+        # --- GRID CONFIGURATION ---
+        # Column 0 (Notebook) gets weight 1: it will expand to fill available space.
+        #content_area.grid_columnconfigure(0, weight=1)
+
+        # Column 1 (Move Info) gets weight 0: it will only take the space it strictly needs.
+        # We can also set a fixed or maximum width here.
+        content_area.grid_columnconfigure(1, weight=0)
+
+        content_area.grid_rowconfigure(0, weight=1, minsize=8*self.square_size + 400)
+
+        # 1. The Notebook widget (Column 0)
+        # This column is now the "primary" column.
+        self.notebook = ttk.Notebook(content_area)
+        self.notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
         self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_change)
 
-        # Load the simulated events into tabs
-        # self._populate_tabs(SIMULATED_EVENTS)
+        # 2. The Move Information Column (Column 1)
+        # This column acts as a sidebar.
+        self.move_info_side_panel = tk.LabelFrame(
+            content_area,
+            text="Current Move Info",
+            padx=10,
+            pady=10
+        )
+        # Using sticky='ns' ensures it stays the full height but doesn't force extra width.
+        self.move_info_side_panel.grid(row=0, column=1, sticky='ns')
+
+        # Populate the sidebar
+        self._setup_move_info_content(self.move_info_side_panel)
+
+    def _setup_move_info_content(self, parent):
+        """
+        Populates the move info panel with sections for Move, Comment, and Variations.
+        """
+        # 1. Display the Move itself (Large and bold)
+        self.move_val_frame = tk.LabelFrame(parent, text="Current Move", padx=5, pady=5)
+        self.move_val_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.current_move_label = tk.Label(self.move_val_frame, text="-", font=('Arial', 12, 'bold'))
+        self.current_move_label.pack(anchor='center')
+
+        # 2. Comment Section
+        self.comment_sect_frame = tk.LabelFrame(parent, text="Comment", padx=5, pady=5)
+        self.comment_sect_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        # We use a Text widget so the user can scroll if the comment is very long
+        self.move_comment_text = tk.Text(self.comment_sect_frame, height=8, wrap=tk.WORD,
+                                         font=('Arial', 9), bg=parent.cget('bg'), relief=tk.FLAT)
+        self.move_comment_text.pack(fill=tk.BOTH, expand=True)
+        self.move_comment_text.config(state=tk.DISABLED)  # Read-only by default
+
+        # 3. Variations Section
+        self.vars_sect_frame = tk.LabelFrame(parent, text="Variations", padx=5, pady=5)
+        self.vars_sect_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.variations_listbox = tk.Listbox(self.vars_sect_frame, font=('Arial', 9), height=6)
+        self.variations_listbox.pack(fill=tk.BOTH, expand=True)
+
+    def update_move_info(self, last_move, move_index):
+        """
+        Updates the sidebar widgets with data from the provided Move object.
+        :param move_index:
+        :param last_move: The current pgn node (chess.pgn.ChildNode)
+        """
+        if last_move is None:
+            self.current_move_label.config(text="Start Position")
+            self._set_text_widget_content(self.move_comment_text, "")
+            self.variations_listbox.delete(0, tk.END)
+            return
+
+        # 1. Update the Move Label (e.g., "12. Nf3")
+        node = self.game
+        i = 0
+        move_list = []
+        last_node = node
+        while i <=move_index:
+            # Always follow the main (first) variation
+            node = node.variation(0)
+            move_list.append(node)
+            last_node = node
+            i = i + 1
+        prev_board = last_node.parent.board()
+        move_san = prev_board.san(last_node.move)
+        move_number = last_node.parent.board().fullmove_number
+        turn = "..." if last_node.parent.board().turn == chess.BLACK else "."
+        self.current_move_label.config(text=f"{move_number}{turn} {move_san}")
+        # 2. Update Comment (English Translation Applied)
+        comment = last_node.comment
+        self._set_text_widget_content(self.move_comment_text, comment if comment else "No comment.")
+
+        # 3. Update Variations
+        self.variations_listbox.delete(0, tk.END)
+
+        # last_move.parent.variations contains all alternative moves at this point
+        # We skip index 0 because that is usually the main line move itself
+        all_variations = last_node.parent.variations
+        if len(all_variations) > 1:
+            for i, var in enumerate(all_variations):
+                prefix = "Main: " if i == 0 else f"Var {i}: "
+                self.variations_listbox.insert(tk.END, f"{prefix}{var}")
+        else:
+            self.variations_listbox.insert(tk.END, "No variations defined.")
+
+    def _set_text_widget_content(self, widget, content):
+        """Helper to update a read-only Text widget."""
+        widget.config(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.insert("1.0", content)
+        widget.config(state=tk.DISABLED)
 
     def _on_tab_change(self, event):
         """
