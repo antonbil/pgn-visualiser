@@ -1033,18 +1033,7 @@ class ChessAnnotatorApp:
         # Make the wraplength dynamic and use fill=tk.X and sticky=tk.N
         # By removing wraplength or making it much larger and using fill=tk.X,
         # the label will fill the available width of the parent (nav_comment_frame).
-
-        self.comment_display = tk.Label(
-            comment_display_frame,
-            text="No comment for this move.",
-            font=('Arial', 9),
-            bg='lightgray',
-            relief=tk.SUNKEN,
-            height=3,          # Fixed height for 3 lines
-            wraplength=450, # Set to frame width (or omit and rely on fill=tk.X)
-            justify=tk.LEFT,   # Left alignment of the text
-            anchor=tk.NW      # Ensures the text starts at the top left
-        )
+        self.setup_comment_display(comment_display_frame)
         # Use fill=tk.X to make the label take the full width of nav_comment_frame
         self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
         self.variation_btn_frame = tk.Frame(nav_comment_frame, bg='white') # bg ter demo, kan weg
@@ -1061,6 +1050,74 @@ class ChessAnnotatorApp:
 
         self.delete_comment_button = tk.Button(comment_frame, text="Delete Comment", command=lambda: self.manage_comment(delete=True), width=25, bg='#ffd9d9')
         self.delete_comment_button.pack(pady=5)
+
+    def setup_comment_display(self, comment_display_frame):
+        # Configuratie regels
+        self.num_lines_limit = 6 if self.touch_screen else 3
+        self.all_comment_lines = []
+        self.current_page = 0
+
+        # De Widget
+        self.comment_display = tk.Label(
+            comment_display_frame,
+            text="No comment for this move.",
+            font=('Arial', 9),
+            bg='lightgray',
+            relief=tk.SUNKEN,
+            height=self.num_lines_limit,
+            wraplength=450,
+            justify=tk.LEFT,
+            anchor=tk.NW,
+            cursor="hand2"  # Cursor verandert in een handje
+        )
+        self.comment_display.pack(fill=tk.X, padx=5, pady=(0, 10))
+
+        # Bind de klik-event
+        self.comment_display.bind("<Button-1>", self._toggle_comment_page)
+
+    def set_comment_text(self, text):
+        """Gebruik deze functie om nieuwe tekst in het label te zetten."""
+        # We gebruiken een tijdelijke onzichtbare Text widget om te bepalen
+        # waar de tekst afbreekt (wrapping) bij de huidige breedte.
+        temp_text = tk.Text(width=60, font=('Arial', 9))
+        temp_text.insert("1.0", text)
+
+        # Haal de regels op zoals ze gewrapt zouden worden
+        self.all_comment_lines = []
+        # Dit is een trucje om de visuele regels uit een Text widget te halen
+        # (vereist dat de widget even 'ge-update' wordt of een vaste breedte heeft)
+        self.all_comment_lines = text.split('\n')  # Simpele split, of gebruik complexere wrapping
+
+        self.current_page = 0
+        self._update_label_view()
+
+    def _update_label_view(self):
+        """Toont de huidige 'pagina' van de tekst."""
+        start = self.current_page * self.num_lines_limit
+        end = start + self.num_lines_limit
+
+        page_lines = self.all_comment_lines[start:end]
+        display_text = "\n".join(page_lines)
+
+        # Check of er meer tekst is voor een indicator
+        if end < len(self.all_comment_lines):
+            display_text += "\n... [KLIK VOOR MEER]"
+        elif self.current_page > 0:
+            display_text += "\n[KLIK VOOR BEGIN]"
+
+        self.comment_display.config(text=display_text)
+
+    def _toggle_comment_page(self, event):
+        """Springt naar de volgende pagina of terug naar het begin."""
+        if not self.all_comment_lines:
+            return
+
+        self.current_page += 1
+        # Als we aan het einde zijn, ga terug naar pagina 0
+        if self.current_page * self.num_lines_limit >= len(self.all_comment_lines):
+            self.current_page = 0
+
+        self._update_label_view()
 
     def _navigate_game(self, step):
         """
