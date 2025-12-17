@@ -1143,26 +1143,26 @@ class ChessAnnotatorApp:
 
     def _navigate_game(self, step):
         """
-        Navigeert naar de vorige (-1) of volgende (1) partij in self.all_games.
+        Navigates to the previous (-1) or next (1) game in self.all_games.
 
-        :param step: -1 voor vorige partij, 1 voor volgende partij.
+        :param step: -1 for previous game, 1 for next game.
         """
         if not self.all_games:
             return
 
         new_index = self.current_game_index + step
 
-        # Controleer of de nieuwe index binnen de grenzen valt
+        # Check if the new index is within bounds
         if 0 <= new_index < len(self.all_games):
             self._switch_to_game(new_index)
         else:
-            # Optioneel: Laat de gebruiker weten dat het einde/begin is bereikt
+            # Optional: Inform the user that the end or beginning has been reached
             if step == -1:
-                print("Reeds bij de eerste partij.")
+                print("Already at the first game.")
             else:
-                print("Reeds bij de laatste partij.")
+                print("Already at the last game.")
 
-        # Zorg ervoor dat de knoppen goed worden ingeschakeld/uitgeschakeld na de sprong
+        # Ensure buttons are correctly enabled/disabled after the jump
         self.update_state()
 
     def update_variation_buttons(self, game_node):
@@ -1296,26 +1296,28 @@ class ChessAnnotatorApp:
             text="Move List (Main Line)",
             font=('Arial', 12, 'bold')
         )
-        self.move_list_label.pack(side=tk.LEFT, padx=(5,0))
-        # 1. Maak de Canvas aan (de viewport)
-        # Zorg dat de Canvas vult wat het Listbox eerder deed
+        self.move_list_label.pack(side=tk.LEFT, padx=(5, 0))
+
+        # 1. Create the Canvas (the viewport)
+        # Ensure the Canvas fills the space previously occupied by the Listbox
         self.moves_canvas = tk.Canvas(moves_frame, borderwidth=0, highlightthickness=0)
         self.moves_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 2. Maak de Scrollbar aan en koppel deze aan de Canvas
+        # 2. Create the Scrollbar and link it to the Canvas
         scrollbar = tk.Scrollbar(moves_frame, orient=tk.VERTICAL, command=self.moves_canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.moves_canvas.config(yscrollcommand=scrollbar.set)
 
-        # 3. Maak een 'Inner Frame' aan BINNEN de Canvas
+        # 3. Create an 'Inner Frame' INSIDE the Canvas
         self.canvas_inner_frame = tk.Frame(self.moves_canvas)
-        # 4. Verwijder de Listbox en plaats een Frame voor de Labels
-        # We hebben geen self.move_listbox meer nodig als widget, we gebruiken nu de inner_frame.
-        # ECHTER, voor compatibiliteit met uw andere code, laten we self.move_listbox verwijzen naar een dummy.
-        # MAAR: We moeten de labels selecteren. We gaan de labels opslaan in een lijst.
-        self.move_labels = [] # Nieuwe lijst om de label-widgets in op te slaan
 
-        # 5. Koppel het Inner Frame aan de Canvas
+        # 4. Remove the Listbox and place a Frame for the Labels
+        # We no longer need self.move_listbox as a widget; we now use the inner_frame.
+        # HOWEVER, for compatibility with your other code, we could point self.move_listbox to a dummy.
+        # BUT: We need to select the labels. We will store the labels in a list.
+        self.move_labels = []  # New list to store the label widgets
+
+        # 5. Attach the Inner Frame to the Canvas
         self.canvas_window_id = self.moves_canvas.create_window(
             (0, 0),
             window=self.canvas_inner_frame,
@@ -1345,16 +1347,13 @@ class ChessAnnotatorApp:
         """
         Fills the Listbox with all moves, including any commentaries and variation indicators.
         """
-        #self.move_listbox.delete(0, tk.END)
-        # 1. Leegmaken van het Inner Frame
+        # 1. Empty the Inner Frame
         for widget in self.canvas_inner_frame.winfo_children():
             widget.destroy()
         self.move_labels.clear()
         if not self.game:
             return
 
-        # Start with a fresh board to calculate SAN notation correctly
-        base_board = self.game.board()
 
         for i, node in enumerate(self.move_list):
 
@@ -1383,7 +1382,7 @@ class ChessAnnotatorApp:
 
             list_item = f"{prefix}{san_move}{comment_text}{variation_indicator}"
             #self.move_listbox.insert(tk.END, list_item)
-            # 2. LABEL AANMAKEN EN BINDEN
+            # create and bind Label
             label = ttk.Label(
                 self.canvas_inner_frame,
                 text=list_item,
@@ -1395,10 +1394,10 @@ class ChessAnnotatorApp:
             )
             label.pack(fill=tk.X, pady=0)
 
-            # Sla de index op in het Label-object zelf voor selectie
+            # Store the index in the Label-object for selection
             label.list_index = i
 
-            # Bind Touch-events voor robuust scrollen
+            # Bind Touch-events for scrolling
             label.bind("<ButtonPress-1>", self._start_scroll)
             label.bind("<B1-Motion>", self._do_scroll)
             label.bind("<ButtonRelease-1>", self._on_release_or_select)
@@ -1407,47 +1406,47 @@ class ChessAnnotatorApp:
         self._update_scroll_region()
 
     def _start_scroll(self, event):
-        """Registreert de absolute startpositie van de klik."""
+        """Registers the absolute starting position of the click."""
         self._start_y = event.y_root
         self._is_dragging = False
         self.moves_canvas.focus_set()
         return "break"
 
     def _do_scroll(self, event):
-        """Berekent de delta en verschuift de Canvas inhoud."""
+        """Calculates the delta and shifts the Canvas content."""
         MIN_DRAG_DISTANCE = 5
 
         # 1. Start Drag Check
         if not self._is_dragging:
             if abs(event.y_root - self._start_y) > MIN_DRAG_DISTANCE:
                 self._is_dragging = True
-                self._last_y = event.y_root # Initialiseer _last_y met absolute Y
+                self._last_y = event.y_root  # Initialize _last_y with absolute Y
             else:
                 return
 
-        # 2. Scroll met delta (y_root zorgt voor coördinaat-onafhankelijkheid)
+        # 2. Scroll with delta (y_root ensures coordinate independence)
         delta = self._last_y - event.y_root
         self.moves_canvas.yview_scroll(int(delta / 4), "units")
         self._last_y = event.y_root
 
-        # 3. Annuleer selectie
-        #self.move_listbox.selection_clear(0, tk.END) # Belangrijk: wis selectie tijdens scroll
+        # 3. Cancel selection
+        # self.move_listbox.selection_clear(0, tk.END) # Important: clear selection during scroll
 
         return "break"
 
     def _on_canvas_configure(self, event):
-        """Past de breedte van het inner frame aan en update de scrollregion."""
+        """Adjusts the width of the inner frame and updates the scrollregion."""
 
         self.moves_canvas.update_idletasks()
 
-        # 1. Dwing het Inner Frame om de BREEDTE van de Canvas te hebben (GEEN HOOGTE!)
+        # 1. Force the Inner Frame to match the WIDTH of the Canvas (NOT HEIGHT!)
         self.moves_canvas.itemconfig(self.canvas_window_id, width=event.width)
 
-        # 2. Update de scrollregion
-        self._update_scroll_region() # Roep de helper aan
+        # 2. Update the scrollregion
+        self._update_scroll_region()  # Call the helper function
 
     def _update_scroll_region(self):
-        """Helper om de scrollregion in te stellen (cruciaal voor scrollen)."""
+        """Helper to set the scrollregion (crucial for scrolling)."""
 
         self.moves_canvas.update_idletasks()
         bbox = self.moves_canvas.bbox("all")
@@ -1456,58 +1455,58 @@ class ChessAnnotatorApp:
             canvas_height = self.moves_canvas.winfo_height()
 
             if bbox[3] > canvas_height:
-                # Inhoud is langer dan viewport: scrollen toestaan
+                # Content is longer than viewport: allow scrolling
                 self.moves_canvas.config(scrollregion=bbox)
             else:
-                # Inhoud is korter dan viewport: scrollen uitschakelen
+                # Content is shorter than viewport: disable scrolling
                 self.moves_canvas.config(scrollregion=(0, 0, bbox[2], canvas_height))
 
     def _on_release_or_select(self, event):
-        """Handelt selectie af door Label-kleur te veranderen."""
+        """Handles selection by changing the Label color."""
 
         if self._is_dragging:
             self._is_dragging = False
             return
 
-        # Wis eerst alle eerdere selecties (zet alle labels terug naar wit)
+        # First, clear all previous selections (reset all labels to white)
         for lbl in self.move_labels:
             lbl.config(background='white')
 
-        # Zoek welk label is aangeklikt
+        # Find which label was clicked
         widget_clicked = event.widget
 
-        # Controleer of het geklikte widget een label is dat we hebben gemaakt
+        # Check if the clicked widget is a label that we created
         if isinstance(widget_clicked, ttk.Label) and hasattr(widget_clicked, 'list_index'):
             index = widget_clicked.list_index
 
-            # Stel de selectie visueel in
-            widget_clicked.config(background='#0078D7', foreground='white') # Blauw voor selectie
+            # Visually set the selection
+            widget_clicked.config(background='#0078D7', foreground='white')  # Blue for selection
 
-            # Roep uw update-logica aan (vervang dit door uw ChessAnnotator logica)
+            # Call your update logic (replace this with your ChessAnnotator logic)
             if self.current_move_index != index:
                 self.current_move_index = index
-                self.update_state() # Uw functie om het bord bij te werken
+                self.update_state()  # Your function to update the board
 
         self._is_dragging = False
 
     def update_move_listbox_selection(self):
         """
-        Synchroniseert de selectie van het Label met de huidige zet-index.
+        Synchronizes the Label selection with the current move index.
         """
 
-        # Wis alle selecties
+        # Clear all selections
         for lbl in self.move_labels:
             lbl.config(background='white', foreground='black')
 
         if 0 <= self.current_move_index < len(self.move_labels):
-            # Selecteer het target label
+            # Select the target label
             target_label = self.move_labels[self.current_move_index]
             target_label.config(background='#0078D7', foreground='white')
 
-            # Scroll naar het item in de Canvas
-            # Dit is de Canvas-manier om naar een item te scrollen
+            # Scroll to the item in the Canvas
+            # This is the Canvas-specific way to scroll to an item
             target_label.update_idletasks()
-            self.moves_canvas.yview_moveto(target_label.winfo_y() / self.moves_canvas.winfo_height())
+            self.moves_canvas.yview_moveto
 
 
     def _get_board_at_index(self, index):
@@ -1638,57 +1637,56 @@ class ChessAnnotatorApp:
         """
         Synchronizes the selection in the Listbox.
         """
+        # Reset all labels to default colors
         for lbl in self.move_labels:
             lbl.config(background='white', foreground='black')
 
         if 0 <= self.current_move_index < len(self.move_labels):
 
-            # De index is geldig: voer selectie uit
+            # The index is valid: perform selection
             target_label = self.move_labels[self.current_move_index]
 
-            # 2. SELECTEER HET ITEM (visueel)
-            # Stel de geselecteerde kleuren in
+            # 1. SELECT THE ITEM (visually)
+            # Set the selected colors
             target_label.config(background='#0078D7', foreground='white')
 
-            # 3. SCROLL NAAR HET ITEM (simuleert .see())
+            # 2. SCROLL TO THE ITEM (simulates .see() functionality)
 
-            # Eerst: zorg ervoor dat de widget volledig is getekend om de Y-positie te bepalen
+            # First: ensure the widget is fully rendered to determine its Y-position
             target_label.update_idletasks()
 
-            # Haal de absolute Y-positie van de bovenkant van het label op binnen de Canvas
+            # Get the absolute Y-position of the top of the label within the Canvas
             label_y_position = target_label.winfo_y()
 
-            # Bereken de fractie van de scroll die nodig is om dit punt bovenaan de Canvas te plaatsen.
-            # We scrollen zodat het label in het midden van de viewport komt voor betere zichtbaarheid.
+            # Calculate the scroll fraction needed to position this point.
+            # We scroll so that the label appears in the center of the viewport for better visibility.
 
             canvas_height = self.moves_canvas.winfo_height()
             label_height = target_label.winfo_height()
 
-            # Bepaal de target Y-positie in de Canvas view:
-            # We willen de top van het label in het midden van de canvas
+            # Determine the target Y-position in the Canvas view:
+            # We aim to place the center of the label in the center of the canvas
             target_y = label_y_position - (canvas_height / 2) + (label_height / 2)
 
-            # Zorg ervoor dat de target niet negatief is
+            # Ensure the target position is not negative
             if target_y < 0:
                 target_y = 0
 
-            # Haal de maximale scrollhoogte op (bbox[3])
+            # Retrieve the maximum scrollable height (bbox[3])
             self.moves_canvas.update_idletasks()
             bbox = self.moves_canvas.bbox("all")
             if bbox:
                 max_scroll_height = bbox[3]
 
-                # Zorg ervoor dat de target niet verder gaat dan de bodem van de inhoud
+                # Ensure the target does not exceed the bottom of the content
                 if target_y > (max_scroll_height - canvas_height):
                     target_y = max_scroll_height - canvas_height
 
-                # Voer de scroll uit: yview_moveto vereist een fractie (0.0 tot 1.0)
+                # Perform the scroll: yview_moveto requires a fraction (0.0 to 1.0)
                 scroll_fraction = target_y / max_scroll_height
                 self.moves_canvas.yview_moveto(scroll_fraction)
 
-        # Optioneel: Als de index -1 is (startpositie), zorg dan dat we naar de top scrollen
-        elif self.current_move_index == -1:
-            self.moves_canvas.yview_moveto(0.0)
+        # Optional: If index is -1 (starting position), ensure we
 
     def update_listbox_item(self, index):
         """
@@ -1719,18 +1717,12 @@ class ChessAnnotatorApp:
 
         new_list_item_text = f"{prefix}{san_move}{comment_text}{variation_indicator}"
 
-        # 2. VIND EN UPDATE HET DOEL LABEL
-
-        # Haal het Label-object op uit de opgeslagen lijst
+        # Fetch the> Label-object from the stored list
         target_label = self.move_labels[index]
 
-        # Gebruik .config() om het 'text' attribuut te wijzigen
+        # Use .config() to change the 'text' attribute
         target_label.config(text=new_list_item_text)
 
-        # 3. Synchroniseer selectie (indien nodig)
-        # Roep de geüpdate functie aan om de selectie en scrollpositie te herstellen
-        # We gebruiken update_idletasks om te garanderen dat de tekst is bijgewerkt voordat we scrollen
-        self.update_move_listbox_selection
 
     # --- Commentary Logic ---
 
@@ -1850,12 +1842,12 @@ class ChessAnnotatorApp:
             # previous_enginepath = enginepath # This variable is not used in this scope
         except FileNotFoundError:
             errormsg = "Engine '{}' was not found. Aborting...".format(enginepath)
-            logger.critical(errormsg)
+            print(errormsg)
             raise
         except PermissionError:
             errormsg = "Engine '{}' could not be executed. Aborting...".format(
                 enginepath)
-            logger.critical(errormsg)
+            print(errormsg)
             raise
 
         return engine
