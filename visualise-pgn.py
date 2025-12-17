@@ -332,7 +332,7 @@ class PieceImageManager:
         # Wis oude afbeeldingen om Garbage Collector problemen te voorkomen bij herladen
         self.images = {}
 
-        print(f"Laden van schaakset '{self.set_identifier}' uit: {self.image_dir_path}")
+        print(f"Loading chess-pieces '{self.set_identifier}' from: {self.image_dir_path}")
 
         for symbol, base_prefix in self.piece_map.items():
 
@@ -353,7 +353,7 @@ class PieceImageManager:
                     try:
                         if ext == '.svg':
                             # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
-                            print(f"Laden SVG: {image_path}")
+                            print(f"Loading SVG: {image_path}")
                             # Hieronder moet u de cairosvg import en logica toevoegen
                             # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
 
@@ -372,7 +372,7 @@ class PieceImageManager:
                             break # Bestand gevonden, stop de lus
 
                     except Exception as e:
-                        print(f"Fout bij het laden van {image_path}: {e}")
+                        print(f"Error with loading from {image_path}: {e}")
                         img = None # Bij fout, probeer volgende extensie
 
             # Controleer of we een afbeelding hebben geladen
@@ -383,12 +383,12 @@ class PieceImageManager:
                 # 3. Converteren naar Tkinter-formaat en opslaan
                 self.images[symbol] = ImageTk.PhotoImage(img)
             else:
-                print(f"Waarschuwing: Geen afbeelding gevonden voor set {self.set_identifier} en stuk {symbol}. Laat leeg.")
+                print(f"Warning: No image found for set {self.set_identifier} and piece {symbol}. Leave empty.")
 
         if self.images:
-            print(f"Schaakset '{self.set_identifier}' succesvol geladen.")
+            print(f"Chess-set '{self.set_identifier}' successfully loaded.")
         else:
-            print(f"Fout: Geen schaakstukken geladen. Controleer of de bestanden bestaan: *K{self.set_identifier}.(png/svg)")
+            print(f"Error: No chess-pieces loaded. Check if files exist: *K{self.set_identifier}.(png/svg)")
 IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
@@ -942,10 +942,8 @@ class ChessEventViewer:
     def _go_to_next_move(self):
         """Go to the next move in the game."""
         info = self.get_info_current_listbox()
-        print(info)
         if self.current_move_index < 2*(info["max_move_number"]-1) and self.current_move_index < len(self.all_moves_chess):
             self.display_diagram_move(self.current_move_index + 1)
-        #
 
     def _go_to_last_move(self):
         """Go to the last move of the game."""
@@ -1079,40 +1077,50 @@ class ChessEventViewer:
 
     def _create_tabbed_event_viewer(self, master):
         """
-        Creates the tabbed interface and an info column where the left column is prioritized.
+        Creates a draggable interface using PanedWindow to separate
+        the Notebook and the Move Info sidebar.
         """
         # Main container for the content area
-        content_area = tk.Frame(master)
-        content_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # We use a PanedWindow instead of a standard Frame
+        self.main_paned_window = tk.PanedWindow(
+            master,
+            orient=tk.HORIZONTAL,
+            sashrelief=tk.RAISED,
+            sashwidth=4
+        )
+        self.main_paned_window.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # --- GRID CONFIGURATION ---
-        # Column 0 (Notebook) gets weight 1: it will expand to fill available space.
-        #content_area.grid_columnconfigure(0, weight=1)
+        # 1. Left Side: The Notebook (Board and Move List)
+        # We place the Notebook inside a Frame so we can manage its internal expansion
+        left_container = tk.Frame(self.main_paned_window)
 
-        # Column 1 (Move Info) gets weight 0: it will only take the space it strictly needs.
-        # We can also set a fixed or maximum width here.
-        content_area.grid_columnconfigure(1, weight=0)
-
-        content_area.grid_rowconfigure(0, weight=1, minsize=8*self.square_size + 400)
-
-        # 1. The Notebook widget (Column 0)
-        # This column is now the "primary" column.
-        self.notebook = ttk.Notebook(content_area)
-        self.notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
+        self.notebook = ttk.Notebook(left_container)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
         self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_change)
 
-        # 2. The Move Information Column (Column 1)
-        # This column acts as a sidebar.
+        # Add the left container to the PanedWindow
+        # stretch="always" ensures the Notebook gets the extra space when resizing
+        self.main_paned_window.add(left_container, stretch="always")
+
+        # 2. Right Side: The Move Information Column
         self.move_info_side_panel = tk.LabelFrame(
-            content_area,
+            self.main_paned_window,
             text="Current Move Info",
             padx=10,
-            pady=10
+            pady=10,
+            width=250  # Initial width
         )
-        # Using sticky='ns' ensures it stays the full height but doesn't force extra width.
-        self.move_info_side_panel.grid(row=0, column=1, sticky='ns')
 
-        # Populate the sidebar
+        # Add the side panel to the PanedWindow
+        # stretch="never" prevents the sidebar from growing automatically when the window expands
+        self.main_paned_window.add(self.move_info_side_panel, stretch="never")
+        min_left_width = (8 * self.square_size) + 300
+
+        # Apply the constraints
+        self.main_paned_window.paneconfig(left_container, minsize=min_left_width)
+        self.main_paned_window.paneconfig(self.move_info_side_panel, minsize=200)
+
+        # Populate the sidebar content
         self._setup_move_info_content(self.move_info_side_panel)
 
     def _setup_move_info_content(self, parent):
