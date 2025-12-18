@@ -11,7 +11,7 @@ import re
 from PIL import Image, ImageTk
 from pathlib import Path
 import json
-from pgn_editor.pgn_editor import ChessAnnotatorApp
+from pgn_editor.pgn_editor import ChessAnnotatorApp, Tooltip
 from pgn_editor.pgn_editor import GameChooserDialog, BOARD_THEMES, SettingsDialog
 from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
 import cairosvg
@@ -493,6 +493,7 @@ class ChessEventViewer:
         self.move_nav_panel = tk.Frame(self.navigation_container, pady=10)
         # Gebruik side=tk.LEFT zodat deze direct naast de vorige wordt geplaatst.
         self.move_nav_panel.pack(side=tk.LEFT,  padx=5)  # Fill=tk.Y om verticaal op te vullen
+
         # --- TOP LEVEL FILE READER WIDGET ---
         file_reader_frame = tk.Frame(self.navigation_container, padx=10, pady=5, bd=1, relief=tk.RIDGE)
         file_reader_frame.pack(fill="x", padx=10, pady=10)
@@ -538,6 +539,82 @@ class ChessEventViewer:
         settings_menu.add_command(label="Swap Colours", command=lambda: self.swap_colours_func())
 
         self.game_menu = game_menu
+
+    def _setup_quick_toolbar(self, parent):
+        """
+        Creates a compact row of icon-only buttons for common tasks.
+        """
+        toolbar_frame = tk.Frame(parent)
+        toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=2)
+
+        # Styling for compact "Icon" buttons
+        btn_style = {
+            "font": ("Segoe UI Symbol", 10),  # Good for symbols
+            "width": 3,
+            "height": 1,
+            "relief": tk.FLAT,
+            "bg": "#f0f0f0"
+        }
+
+        # 1. Open File Button (Folder icon)
+        self.open_btn = tk.Button(
+            toolbar_frame,
+            text="\U0001F4C2",  # 📂 Folder emoji
+            command=self.load_pgn_file,
+            **btn_style
+        )
+        self.open_btn.pack(side=tk.LEFT, padx=2)
+
+        self.save_btn = tk.Button(
+            toolbar_frame,
+            text="\U0001F4BE",  # 💾 Floppy Disk
+            command=self.save_pgn_file,
+            **btn_style
+        )
+        self.save_btn.pack(side=tk.LEFT, padx=2)
+
+        self.choose_btn = tk.Button(
+            toolbar_frame,
+            text="\u2630",  # ☰ Menu/List icon
+            command=self._open_game_chooser,
+            **btn_style
+        )
+        self.choose_btn.pack(side=tk.LEFT, padx=2)
+
+        # 2. Swap Colors Button (Vertical flip arrows)
+        self.swap_btn = tk.Button(
+            toolbar_frame,
+            text="\u21C5",  # ⇅ Up/Down arrows
+            command=self.swap_colours_func,
+            **btn_style
+        )
+        self.swap_btn.pack(side=tk.LEFT, padx=2)
+
+        self.exit_btn = tk.Button(
+            toolbar_frame,
+            text="\u23FB",  # ⏻ Power symbol
+            command=self.master.destroy,
+            fg="red",
+            **btn_style
+        )
+        self.exit_btn.pack(side=tk.RIGHT, padx=2)  # Place Exit on the far right
+
+        def on_enter(e):
+            e.widget.config(bg="#dddddd")
+
+        def on_leave(e):
+            e.widget.config(bg="#f0f0f0")
+
+        self.swap_btn.bind("<Enter>", on_enter)
+        self.swap_btn.bind("<Leave>", on_leave)
+
+        # 3. Add Tooltips (Optional, helps users know what the icons do)
+        Tooltip(self.open_btn, "Open PGN File")
+        Tooltip(self.swap_btn, "Flip Board (Swap Colors)")
+        Tooltip(self.save_btn, "Save PGN File")
+        Tooltip(self.choose_btn, "Choose game")
+        Tooltip(self.exit_btn, "Exit program")
+        return toolbar_frame
 
     def _save_config_wrapper(self, *args):
         _save_config(*args)
@@ -1137,6 +1214,7 @@ class ChessEventViewer:
 
         # Populate the sidebar content
         self._setup_move_info_content(self.move_info_side_panel)
+        self._setup_quick_toolbar(self.move_info_side_panel)
 
     def _setup_move_info_content(self, parent):
         """
