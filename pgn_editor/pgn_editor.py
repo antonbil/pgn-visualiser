@@ -38,13 +38,16 @@ def save_preferences(data):
 
 class Tooltip:
     """
-    A class to create a hover-over tooltip for any Tkinter widget.
+    A class to create a hover-over tooltip for any Tkinter widget
+    with an automatic timeout.
     """
 
-    def __init__(self, widget, text):
+    def __init__(self, widget, text, timeout_ms=3000):
         self.widget = widget
         self.text = text
+        self.timeout_ms = timeout_ms  # Time in milliseconds before it disappears
         self.tip_window = None
+        self.after_id = None  # To keep track of the timer
 
         # Bind mouse events
         self.widget.bind("<Enter>", self.show_tip)
@@ -54,17 +57,16 @@ class Tooltip:
         if self.tip_window or not self.text:
             return
 
-        # Calculate position (slightly below and to the right of the cursor)
+        # Calculate position
         x, y, _, _ = self.widget.bbox("insert")
         x = x + self.widget.winfo_rootx() + 25
         y = y + self.widget.winfo_rooty() + 25
 
-        # Create a borderless top-level window
+        # Create window
         self.tip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)  # Remove window decorations
+        tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
 
-        # Style the label (Yellow background is standard for tooltips)
         label = tk.Label(
             tw, text=self.text, justify=tk.LEFT,
             background="#ffffe0", relief=tk.SOLID, borderwidth=1,
@@ -72,7 +74,16 @@ class Tooltip:
         )
         label.pack(ipadx=1)
 
+        # 1. Schedule the tooltip to hide after the specified timeout
+        self.after_id = self.widget.after(self.timeout_ms, self.hide_tip)
+
     def hide_tip(self, event=None):
+        # 2. Cancel the scheduled timeout if it exists
+        if self.after_id:
+            self.widget.after_cancel(self.after_id)
+            self.after_id = None
+
+        # 3. Destroy the window
         tw = self.tip_window
         self.tip_window = None
         if tw:
