@@ -35,6 +35,57 @@ def save_preferences(data):
     except Exception as e:
         print(f"Warning: cannot save preferences: {e}")
 
+
+class Tooltip:
+    """
+    A class to create a hover-over tooltip for any Tkinter widget.
+    """
+
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip_window = None
+
+        # Bind mouse events
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+
+        # Calculate position (slightly below and to the right of the cursor)
+        x, y, _, _ = self.widget.bbox("insert")
+        x = x + self.widget.winfo_rootx() + 25
+        y = y + self.widget.winfo_rooty() + 25
+
+        # Create a borderless top-level window
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)  # Remove window decorations
+        tw.wm_geometry(f"+{x}+{y}")
+
+        # Style the label (Yellow background is standard for tooltips)
+        label = tk.Label(
+            tw, text=self.text, justify=tk.LEFT,
+            background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+            font=("tahoma", "8", "normal"), padx=4, pady=2
+        )
+        label.pack(ipadx=1)
+
+    def hide_tip(self, event=None):
+        tw = self.tip_window
+        self.tip_window = None
+        if tw:
+            tw.destroy()
+
+
+# Add this method to your main class to make the previous code work:
+def _add_tooltip(widget, text):
+    """
+    Helper function to attach a tooltip to a widget.
+    """
+    return Tooltip(widget, text)
+
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, current_config, save_config_callback):
         """
@@ -555,6 +606,7 @@ class ChessAnnotatorApp:
 
         # --- UI Setup ---
         self._setup_menu_bar(master)
+
         self.touch_screen = False
         self.setup_ui( master)
 
@@ -626,6 +678,7 @@ class ChessAnnotatorApp:
         screen_height = master.winfo_screenheight()
         is_compact_layout = screen_height < COMPACT_HEIGHT_THRESHOLD
 
+
         if is_compact_layout:
             self.touch_screen = True
 
@@ -675,6 +728,7 @@ class ChessAnnotatorApp:
             # Column 1 Content: Comment display below the board
             comment_display_frame = tk.Frame(column1_frame)
             comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+            toolbar_frame = self._setup_quick_toolbar(column3_frame)
 
         else:
             # Standard Desktop Layout
@@ -712,6 +766,8 @@ class ChessAnnotatorApp:
             # Column 2 (Right): Move List
             moves_frame = tk.Frame(main_frame)
             moves_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            #no tolbar in ordinary view
+            #toolbar_frame = self._setup_quick_toolbar(moves_frame)
 
         # Save as class attributes so the rest of the code can access them
         self.meta_frame = meta_frame
@@ -765,6 +821,82 @@ class ChessAnnotatorApp:
         # Bind shortcuts
         master.bind('<Control-Left>', lambda e: self.go_game(-1))
         master.bind('<Control-Right>', lambda e: self.go_game(1))
+
+    def _setup_quick_toolbar(self, parent):
+        """
+        Creates a compact row of icon-only buttons for common tasks.
+        """
+        toolbar_frame = tk.Frame(parent)
+        toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=2)
+
+        # Styling for compact "Icon" buttons
+        btn_style = {
+            "font": ("Segoe UI Symbol", 10),  # Good for symbols
+            "width": 3,
+            "height": 1,
+            "relief": tk.FLAT,
+            "bg": "#f0f0f0"
+        }
+
+        # 1. Open File Button (Folder icon)
+        self.open_btn = tk.Button(
+            toolbar_frame,
+            text="\U0001F4C2",  # 📂 Folder emoji
+            command=self.load_pgn_file,
+            **btn_style
+        )
+        self.open_btn.pack(side=tk.LEFT, padx=2)
+
+        self.save_btn = tk.Button(
+            toolbar_frame,
+            text="\U0001F4BE",  # 💾 Floppy Disk
+            command=self.save_pgn_file,
+            **btn_style
+        )
+        self.save_btn.pack(side=tk.LEFT, padx=2)
+
+        self.choose_btn = tk.Button(
+            toolbar_frame,
+            text="\u2630",  # ☰ Menu/List icon
+            command=self._open_game_chooser,
+            **btn_style
+        )
+        self.choose_btn.pack(side=tk.LEFT, padx=2)
+
+        # 2. Swap Colors Button (Vertical flip arrows)
+        self.swap_btn = tk.Button(
+            toolbar_frame,
+            text="\u21C5",  # ⇅ Up/Down arrows
+            command=self.swap_colours_func,
+            **btn_style
+        )
+        self.swap_btn.pack(side=tk.LEFT, padx=2)
+
+        self.exit_btn = tk.Button(
+            toolbar_frame,
+            text="\u23FB",  # ⏻ Power symbol
+            command=self.master.destroy,
+            fg="red",
+            **btn_style
+        )
+        self.exit_btn.pack(side=tk.RIGHT, padx=2)  # Place Exit on the far right
+
+        def on_enter(e):
+            e.widget.config(bg="#dddddd")
+
+        def on_leave(e):
+            e.widget.config(bg="#f0f0f0")
+
+        self.swap_btn.bind("<Enter>", on_enter)
+        self.swap_btn.bind("<Leave>", on_leave)
+
+        # 3. Add Tooltips (Optional, helps users know what the icons do)
+        _add_tooltip(self.open_btn, "Open PGN File")
+        _add_tooltip(self.swap_btn, "Flip Board (Swap Colors)")
+        _add_tooltip(self.save_btn, "Save PGN File")
+        _add_tooltip(self.choose_btn, "Choose game")
+        _add_tooltip(self.exit_btn, "Exit program")
+        return toolbar_frame
 
     def on_closing(self):
         """
