@@ -406,6 +406,7 @@ class ChessEventViewer:
         self.board = board
         self.all_moves_chess = None
         self.all_games = []
+        self.swap_colours = False
         self.current_move_index = None
         self.game = None
         self.board_canvases = []
@@ -534,12 +535,14 @@ class ChessEventViewer:
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Settings", menu=settings_menu)
         settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(), state=tk.NORMAL)
+        settings_menu.add_command(label="Swap Colours", command=lambda: self.swap_colours_func())
 
         self.game_menu = game_menu
 
     def _save_config_wrapper(self, *args):
         _save_config(*args)
-        # Update the internal attributes after saving
+        # Update the internal attributes after saving,
+        #                                   state=tk.NORMAL)
         self.default_pgn_dir = args[0]
         self.engine_path = args[2]
         self.piece_set = args[3]
@@ -557,6 +560,7 @@ class ChessEventViewer:
         if not hasattr(self, 'all_games') or not self.all_games:
             messagebox.showinfo("Information", "No PGN games are currently loaded.")
             return
+        print("self.swap_colours a", self.swap_colours)
 
         GameChooserDialog(
             master=self.master,
@@ -612,7 +616,8 @@ class ChessEventViewer:
             string_var_value = self.pgn_filepath.get()
         except:
             string_var_value = ""
-        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None, square_size = 75, current_game_index = self.current_game_index,  piece_set = "staunty", board="Standard")
+        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None,
+                                square_size = 75, current_game_index = self.current_game_index,  piece_set = "staunty", board="Standard", swap_colours = self.swap_colours)
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 False <__main__.PieceImageManager1 object at 0x78f90a0dfb30> 75 0 ../../../Images/piece/tatiana Rosewood
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
 
@@ -732,6 +737,27 @@ class ChessEventViewer:
             # Unexpected error
             print(f"An unexpected error occurred: {e}")
 
+    def _get_square_coords(self, rank, file):
+        """
+        Translates chess rank/file to canvas pixel coordinates.
+        Handles board flipping via self.swap_colours.
+        """
+        if self.swap_colours:
+            # Black at bottom: Rank 0 is at the top, File 0 is at the right
+            display_rank = rank
+            display_file = 7 - file
+        else:
+            # White at bottom: Rank 7 is at the top, File 0 is at the left
+            display_rank = 7 - rank
+            display_file = file
+
+        x1 = display_file * self.square_size
+        y1 = display_rank * self.square_size
+        x2 = x1 + self.square_size
+        y2 = y1 + self.square_size
+
+        return x1, y1, x2, y2
+
     def display_diagram_move(self, real_move_index: int):
         board = self.game.board()
         last_move = None
@@ -743,7 +769,6 @@ class ChessEventViewer:
                 if i < len(self.all_moves_chess):
                     move = self.all_moves_chess[i]
                     # Execute the move on the board
-                    previous_move = board
                     if last_move:
                         previous_board.push(last_move)
                     last_move = move
@@ -783,46 +808,34 @@ class ChessEventViewer:
         # Initialize the board with the FEN BEFORE the event
 
         # Draw the board squares
-        for r in range(8):
-            for c in range(8):
-                x1 = c * self.square_size
-                y1 = r * self.square_size
-                x2 = x1 + self.square_size
-                y2 = y1 + self.square_size
+        for square in chess.SQUARES:
+            rank = chess.square_rank(square)
+            file = chess.square_file(square)
 
-                color = self.color_light if (r + c) % 2 == 0 else self.color_dark
-                self.current_board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
+            x1, y1, x2, y2 = self._get_square_coords(rank, file)
 
-        # Draw the pieces
+            # Determine color (light/dark)
+            color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
+            self.current_board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+
+            # 4. Highlight Last Move
+        if last_move:
+            for sq in [last_move.from_square, last_move.to_square]:
+                r, f = chess.square_rank(sq), chess.square_file(sq)
+                x1, y1, x2, y2 = self._get_square_coords(r, f)
+
+                self.current_board_canvas.create_rectangle(
+                    x1, y1, x2, y2,
+                    outline="#FFC300", width=4, tags="highlight"
+                )
+
+            # 5. Draw Pieces
+            # Note: Ensure your draw_pieces function also uses _get_square_coords
+            # internally to place piece images correctly!
         self.draw_pieces(self.current_board_canvas, board)
-        try:
-            move_san = f"{last_move}".split()[-1].strip('.')
-            move_to_highlight = previous_board.parse_san(move_san)
-            from_square = move_to_highlight.from_square
 
-            from_rank = 7 - chess.square_rank(from_square)
-            from_file = chess.square_file(from_square)
-
-            x1 = from_file * self.square_size
-            y1 = from_rank * self.square_size
-
-            # Add a yellow highlight to the starting square
-            self.current_board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
-                                          outline="#FFC300", width=4, tags="highlight")
-            from_rank = 7 - chess.square_rank(move_to_highlight.to_square)
-            from_file = chess.square_file(move_to_highlight.to_square)
-
-            x1 = from_file * self.square_size
-            y1 = from_rank * self.square_size
-
-            # Add a yellow highlight to the starting square
-            self.current_board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
-                                                       outline="#FFC300", width=4, tags="highlight")
-            self.current_board_canvas.tag_raise("highlight", "square")
-            self.current_board_canvas.tag_raise("text")
-        except Exception as e:
-            print(f"Error highlighting move: {e}")
-            pass
+        # Final Layering
+        self.current_board_canvas.tag_raise("highlight")
 
     def get_info_current_listbox(self):
         """
@@ -1232,6 +1245,7 @@ class ChessEventViewer:
         self.current_move_index = number_
 
         self.current_board_canvas = self.board_canvases[self.current_tab]
+        self.display_diagram_move(self.current_move_index)
 
     def _create_meta_info_widgets(self, parent_frame):
         """
@@ -1633,48 +1647,39 @@ class ChessEventViewer:
         else:
             print("File selection cancelled.")
 
-
     def draw_pieces(self, canvas, board):
         """
-        Draws the pieces on a given Canvas, using PNG images.
-
-        The original code that used Unicode characters has been replaced by code
-        that uses the preloaded PNG images via canvas.create_image.
+        Draws the chess pieces on the canvas using preloaded PNG images.
+        Uses _get_square_coords to handle board flipping automatically.
         """
-        # First, delete any existing pieces
+        # 1. Clear existing pieces from the canvas
         canvas.delete("piece")
 
         for square in chess.SQUARES:
             piece = board.piece_at(square)
 
             if piece:
-                # 1. Determine the screen coordinates (x, y)
+                # 2. Get the square boundaries using our helper
                 rank = chess.square_rank(square)
                 file = chess.square_file(square)
+                x1, y1, x2, y2 = self._get_square_coords(rank, file)
 
-                # Calculate the row and column on the Tkinter canvas (row 0 = rank 8)
-                tk_row = 7 - rank
-                tk_col = file
+                # 3. Calculate the center of the square for image placement
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
 
-                # The coordinates (x, y) must refer to the CENTER of the square
-                x = tk_col * self.square_size + self.square_size / 2
-                y = tk_row * self.square_size + self.square_size / 2
-
-                # 2. Determine the key for the image (e.g., 'P', 'n', 'K')
+                # 4. Retrieve the preloaded image from the manager
                 symbol = piece.symbol()
+                piece_img = self.image_manager.images.get(symbol)
 
-                # We check if the image for this symbol has been loaded
-                if symbol in self.image_manager.images:
-                    # We retrieve the cached image from the manager
-                    piece_img = self.image_manager.images.get(symbol)
-
-                    # 3. Draw the image in the center of the square
+                if piece_img:
+                    # 5. Draw the image at the calculated center
                     canvas.create_image(
-                        x, y,
+                        center_x,
+                        center_y,
                         image=piece_img,
-                        tags="piece"  # Use tags for easy removal/movement later
+                        tags="piece"
                     )
-                # If the image is not loaded, the piece is skipped.
 
 
     def _add_event_tab(self, index, event_data):
@@ -1718,40 +1723,44 @@ class ChessEventViewer:
             board_canvas.pack_forget()
             self.notebook.add(tab_frame, text=f"ERROR {index}")
             return
+        for square in chess.SQUARES:
+            rank = chess.square_rank(square)
+            file = chess.square_file(square)
 
-        # Draw the board squares
-        for r in range(8):
-            for c in range(8):
-                x1 = c * self.square_size
-                y1 = r * self.square_size
-                x2 = x1 + self.square_size
-                y2 = y1 + self.square_size
+            # Use our helper for all coordinate math
+            x1, y1, x2, y2 = self._get_square_coords(rank, file)
 
-                color = self.color_light if (r + c) % 2 == 0 else self.color_dark
-                board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, tags="square")
+            # Determine square color
+            # In python-chess, (rank + file) % 2 == 0 is always a dark square (like a1)
+            color = self.color_dark if (rank + file) % 2 == 0 else self.color_light
+            board_canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="", tags="square")
 
         # Draw the pieces
         self.draw_pieces(board_canvas, board)
-        # Mark the starting square of the event-move
+        # 4. Mark the move squares (From and To)
         try:
-            move_san = event_data['move_text'].split()[-1].strip('.')
-            move_to_highlight = board.parse_san(move_san)
-            from_square = move_to_highlight.from_square
+            # Extract SAN move (e.g., "12. Nf3" -> "Nf3")
+            move_raw = event_data.get('move_text', "").split()[-1].strip('.')
+            if move_raw:
+                move = board.parse_san(move_raw)
 
-            from_rank = 7 - chess.square_rank(from_square)
-            from_file = chess.square_file(from_square)
+                # Highlight both departure and arrival squares for better UX
+                for sq in [move.from_square, move.to_square]:
+                    r, f = chess.square_rank(sq), chess.square_file(sq)
+                    hx1, hy1, hx2, hy2 = self._get_square_coords(r, f)
 
-            x1 = from_file * self.square_size
-            y1 = from_rank * self.square_size
+                    board_canvas.create_rectangle(
+                        hx1, hy1, hx2, hy2,
+                        outline="#FFC300",
+                        width=4,
+                        tags="highlight"
+                    )
 
-            # Add a yellow highlight to the starting square
-            board_canvas.create_rectangle(x1, y1, x1 + self.square_size, y1 + self.square_size,
-                                          outline="#FFC300", width=4, tags="highlight")
-            board_canvas.tag_raise("highlight", "square")
-            board_canvas.tag_raise("text")
+                # Ensure highlights are above squares but below pieces
+                board_canvas.tag_raise("highlight", "square")
         except Exception as e:
-            print(f"Error highlighting move: {e}")
-            pass
+            # If move parsing fails (e.g. at start of game), we simply skip highlighting
+            print(f"Highlighting skipped: {e}")
 
         # --- COLUMN 1: PGN SNIPPET & DESCRIPTION (Right) ---
         pgn_block = tk.LabelFrame(tab_frame, text="Relevant Moves",
@@ -1841,6 +1850,11 @@ class ChessEventViewer:
         # Select the first tab
         if self.notebook.tabs():
             self.notebook.select(self.notebook.tabs()[0])
+
+    def swap_colours_func(self):
+        self.swap_colours = not self.swap_colours
+        self.display_diagram_move(self.current_move_index)
+
 
 # --- Main execution ---
 

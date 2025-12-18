@@ -482,7 +482,7 @@ class GameChooserDialog(tk.Toplevel):
 COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard"):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.last_filepath = pgn_game
         self.theme_name=board
@@ -495,6 +495,7 @@ class ChessAnnotatorApp:
         self.is_manual = False
         self.selected_square = None
         self.highlight_item = None
+        self.swap_colours = swap_colours
         master.title("PGN Chess Annotator")
         # Find the theme
         self.selected_theme = next(
@@ -756,6 +757,7 @@ class ChessAnnotatorApp:
             menubar.add_cascade(label="Settings", menu=settings_menu)
             settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(),
                                       state=tk.NORMAL)
+            settings_menu.add_command(label="Swap Colours", command=lambda: self.swap_colours_func())
 
         self.game_menu = game_menu
         self.variations_menu = variations_menu
@@ -789,6 +791,10 @@ class ChessAnnotatorApp:
 
         # 2. Save
         save_preferences(preferences_data)
+
+    def swap_colours_func(self):
+        self.swap_colours = not self.swap_colours
+        self.update_board_display()
 
     # --- Game Chooser Logic ---
 
@@ -2183,6 +2189,26 @@ class ChessAnnotatorApp:
     def manual_move(self):
         self.is_manual = True
         messagebox.showinfo("Information", "Enter move on chess-board.")
+    def _get_square_coords(self, rank, file):
+        """
+        Translates chess rank/file to canvas pixel coordinates.
+        Handles board flipping via self.swap_colours.
+        """
+        if self.swap_colours:
+            # Black at bottom: Rank 0 is at the top, File 0 is at the right
+            display_rank = rank
+            display_file = 7 - file
+        else:
+            # White at bottom: Rank 7 is at the top, File 0 is at the left
+            display_rank = 7 - rank
+            display_file = file
+
+        x1 = display_file * self.square_size
+        y1 = display_rank * self.square_size
+        x2 = x1 + self.square_size
+        y2 = y1 + self.square_size
+
+        return x1, y1, x2, y2
 
     def restore_variation(self):
         if len(self.stored_moves) == 0:
@@ -2232,7 +2258,7 @@ class ChessAnnotatorApp:
         self.canvas.delete("all")
 
         square_size = self.square_size#board_size / 8
-        colors = (self.selected_theme["light"], self.selected_theme["dark"])
+        self.colors = (self.selected_theme["light"], self.selected_theme["dark"])
         #colors = ("#F0D9B5", "#B58863")  # Light and dark square colors
 
         # Unicode pieces (White: Uppercase, Black: Lowercase)
@@ -2241,88 +2267,93 @@ class ChessAnnotatorApp:
             'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚',
         }
 
-        # Draw squares and pieces
-        for row in range(8):
-            for col in range(8):
-                x1 = col * square_size
-                y1 = row * square_size
-                x2 = x1 + square_size
-                y2 = y1 + square_size
+        self.canvas.delete("all")
 
-                # Square color
-                color_index = (row + col) % 2
-                fill_color = colors[color_index]
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill_color, outline="black", tags="square")
+        # 1. Iterate through all chess squares (0 to 63)
+        for square_index in chess.SQUARES:
+            rank = chess.square_rank(square_index)
+            file = chess.square_file(square_index)
 
-                # Algebraic notation (for the border)
-                file_char = chr(ord('a') + col)
-                rank_char = str(8 - row)
+            # Get GUI coordinates from helper
+            x1, y1, x2, y2 = self._get_square_coords(rank, file)
 
-                if col == 0:
-                    self.canvas.create_text(x1 + 3, y1 + 3, text=rank_char, anchor="nw", font=('Arial', 8), fill=colors[1 - color_index])
-                if row == 7:
-                    self.canvas.create_text(x2 - 3, y2 - 3, text=file_char, anchor="se", font=('Arial', 8), fill=colors[1 - color_index])
+            # Determine square color
+            color_index = (rank + file) % 2
+            fill_color = self.colors[1 - color_index]  # Ensuring consistent light/dark logic
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill=fill_color, outline="black", tags="square")
 
-                # Place the piece
-                square_index = chess.square(col, 7 - row)
-                if self.image_manager is None:
-                 piece = self.board.piece_at(square_index)
+            # 2. Draw Algebraic Notation (Labels)
+            self._draw_notation(x1, y1, x2, y2, rank, file, color_index)
 
-                 if piece:
-                    piece_char = piece_map.get(piece.symbol())
-                    piece_size = int(square_size * 0.7)
-                    if self.touch_screen:
-                        piece_size = int(piece_size * 0.7)
-                    self.canvas.create_text(
-                        x1 + square_size / 2,
-                        y1 + square_size / 2,
-                        text=piece_char,
-                        font=('Arial', piece_size, 'bold'),
-                        fill='black',
-                        tags="piece"
-                    )
-                else:
-                    piece = self.board.piece_at(square_index)
+            # 3. Draw the Piece (Image or Unicode fallback)
+            self._draw_single_piece(square_index, x1, y1, x2, y2)
 
-                    if piece:
-                        symbol = piece.symbol()
+        # 4. Highlight the Last Move
+        self._highlight_last_move()
 
-                        if symbol in self.image_manager.images:
-                            # We retrieve the cached image from the manager
-                            piece_img = self.image_manager.images.get(symbol)
+        # Ensure correct layering
+        self.canvas.tag_raise("highlight", "square")
+        self.canvas.tag_raise("piece")
+        self.canvas.tag_raise("notation")
 
-                            # 3. Draw the image in the center of the square
-                            self.canvas.create_image(
-                                x1 + square_size / 2,
-                                y1 + square_size / 2,
-                                image=piece_img,
-                                tags="piece"  # Use tags for easy removal/movement later
-                            )
+    def _draw_notation(self, x1, y1, x2, y2, rank, file, color_index):
+        """Draws rank and file characters on the edges of the board."""
+        file_char = chr(ord('a') + file)
+        rank_char = str(rank + 1)
+        label_color = self.colors[color_index]  # Contrast color
 
-        # Highlight the last move
-        if self.current_move_index >= 0:
-            last_move = self.move_list[self.current_move_index].move
-            from_sq = last_move.from_square
-            to_sq = last_move.to_square
+        # Draw Rank (1-8) on the left-most visible squares
+        if (not self.swap_colours and file == 0) or (self.swap_colours and file == 7):
+            self.canvas.create_text(x1 + 3, y1 + 3, text=rank_char, anchor="nw",
+                                    font=('Arial', 8), fill=label_color, tags="notation")
 
-            def get_coords(sq):
-                # Helper to get GUI coordinates
-                col = chess.square_file(sq)
-                row = 7 - chess.square_rank(sq)
-                x1 = col * square_size
-                y1 = row * square_size
-                x2 = x1 + square_size
-                y2 = y1 + square_size
-                return x1, y1, x2, y2
+        # Draw File (a-h) on the bottom-most visible squares
+        if (not self.swap_colours and rank == 0) or (self.swap_colours and rank == 7):
+            self.canvas.create_text(x2 - 3, y2 - 3, text=file_char, anchor="se",
+                                    font=('Arial', 8), fill=label_color, tags="notation")
 
-            # Highlight the 'from' and 'to' squares
-            for sq in [from_sq, to_sq]:
-                x1, y1, x2, y2 = get_coords(sq)
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill='#ffe066', outline="black", stipple='gray50', tags="highlight")
+    def _draw_single_piece(self, square_index, x1, y1, x2, y2):
+        """Draws a piece using either a PNG image or a Unicode character fallback."""
+        piece = self.board.piece_at(square_index)
+        if not piece:
+            return
 
-            # Ensure pieces are drawn above the highlights
-            self.canvas.tag_raise("piece")
-            self.canvas.tag_raise("highlight", "square")
+        center_x = (x1 + x2) / 2
+        center_y = (y1 + y2) / 2
+        symbol = piece.symbol()
+
+        # Use PNG images if ImageManager is available
+        if self.image_manager and symbol in self.image_manager.images:
+            piece_img = self.image_manager.images.get(symbol)
+            self.canvas.create_image(center_x, center_y, image=piece_img, tags="piece")
+
+        # Fallback to Unicode characters
+        else:
+            piece_map = {'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+                         'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚'}
+            piece_char = piece_map.get(symbol, '?')
+
+            # Adjust size for touch screens
+            piece_size = int(self.square_size * 0.7)
+            if hasattr(self, 'touch_screen') and self.touch_screen:
+                piece_size = int(piece_size * 0.7)
+
+            self.canvas.create_text(center_x, center_y, text=piece_char,
+                                    font=('Arial', piece_size, 'bold'), fill='black', tags="piece")
+
+    def _highlight_last_move(self):
+        """Highlights the 'from' and 'to' squares of the current move."""
+        if self.current_move_index < 0 or not self.move_list:
+            return
+
+        last_move = self.move_list[self.current_move_index].move
+        for sq in [last_move.from_square, last_move.to_square]:
+            r, f = chess.square_rank(sq), chess.square_file(sq)
+            x1, y1, x2, y2 = self._get_square_coords(r, f)
+
+            # Using a semi-transparent effect if supported, otherwise solid highlight
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill='#ffe066',
+                                         outline="black", stipple='gray50', tags="highlight")
 
     def _setup_canvas_bindings(self):
         """Binds the left mouse click to the processing method."""
