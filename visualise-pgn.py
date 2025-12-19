@@ -1958,6 +1958,8 @@ class ChessEventViewer:
         except Exception as e:
             # If move parsing fails (e.g. at start of game), we simply skip highlighting
             print(f"Highlighting skipped: {e}")
+        # Bind the left mouse button click to our handler
+        board_canvas.bind("<Button-1>", self._on_board_click)
 
         # --- COLUMN 1: PGN SNIPPET & DESCRIPTION (Right) ---
         pgn_block = tk.LabelFrame(tab_frame, text="Relevant Moves",
@@ -1976,6 +1978,29 @@ class ChessEventViewer:
         self._update_move_listbox_content(self.current_game_moves)
         tab_title = f"{index}. {event_data['move_text']}"  # Short title for the tab
         self.notebook.add(tab_frame, text=tab_title)
+
+    def _on_board_click(self, event):
+        """
+        Handles clicks on the board:
+        Left half goes back one move, Right half goes forward one move.
+        """
+        # 1. Get the total width of the canvas
+        canvas_width = self.current_board_canvas.winfo_width()
+        mid_x = canvas_width / 2
+
+        # 2. Determine the direction based on the click position
+        if event.x < mid_x:
+            # Left side clicked: Go back
+            print("Left side clicked - Previous move")
+            self._go_to_previous_move()  # Or your specific move navigation function
+        else:
+            # Right side clicked: Go forward
+            print("Right side clicked - Next move")
+            self._go_to_next_move()
+
+            # 3. Always update the board state after moving
+        self.display_diagram_move(self.current_move_index)
+
 
     def _update_move_listbox_content(self, moves):
         """
