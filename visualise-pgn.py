@@ -1269,6 +1269,31 @@ class ChessEventViewer:
 
         self.variations_listbox = tk.Listbox(self.vars_sect_frame, font=('Arial', 9), height=6)
         self.variations_listbox.pack(fill=tk.BOTH, expand=True)
+        # 2. Bind the selection event to a callback function
+        self.variations_listbox.bind("<<ListboxSelect>>", self._on_variation_selected)
+
+    def _on_variation_selected(self, event):
+        """
+        Callback triggered when a user clicks an item in the variations listbox.
+        """
+        # Get the widget that triggered the event
+        widget = event.widget
+
+        # Get the index of the current selection (returns a tuple)
+        selection = widget.curselection()
+
+        if not selection:
+            return  # Nothing selected
+
+        index = selection[0]
+        # Get the actual text or value of the selected item
+        selected_value = widget.get(index)
+
+        print(f"Selected variation at index {index}: {selected_value}")
+
+        # --- YOUR LOGIC HERE ---
+        # Example: If you want to jump to this variation:
+        # self.restore_selected_variation(index)
 
     def update_move_info(self, last_move, move_index):
         """
