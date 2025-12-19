@@ -2354,25 +2354,42 @@ class ChessAnnotatorApp:
         return x1, y1, x2, y2
 
     def restore_variation(self):
+        """
+        Restores a stored variation and updates the board state instantly.
+        """
         if len(self.stored_moves) == 0:
             messagebox.showinfo("Information", "No variations to restore.")
             return
+
+        # 1. Pop the stored state
         base_node, move_to_restore, index_move_to_restore = self.stored_moves.pop()
+
+        # 2. Promote the variation in the PGN tree
         base_node.promote_to_main(move_to_restore)
-        previous_current_move_index = index_move_to_restore
+
+        # 3. Rebuild the main move_list
         self.move_list = []
         node = self.game
         while node.variations:
-            # Always follow the main (first) variation
-            node = node.variation(0)
+            node = node.variation(0)  # Follow the new main line
             self.move_list.append(node)
 
-        self._populate_move_listbox()
-        #self.current_move_index = index_move_to_restore
-        self.current_move_index=0
-        while self.current_move_index<index_move_to_restore:
-             self.go_forward_move()
+        # 4. INSTANT BOARD UPDATE
+        # Get the board object directly from the node at the target index
+        if 0 <= index_move_to_restore < len(self.move_list):
+            target_node = self.move_list[index_move_to_restore]
+            # This replaces the while loop with go_forward_move()
+            self.board = target_node.board()
+            self.current_move_index = index_move_to_restore
+        else:
+            # If the index is out of bounds or at start, reset to game start
+            self.board = self.game.board()
+            self.current_move_index = -1
 
+        # 5. SYNC GUI
+        self._populate_move_listbox()
+
+        # Redraw everything once
         self.update_state()
 
     def restore_all_variations(self):
