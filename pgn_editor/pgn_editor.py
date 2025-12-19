@@ -1509,14 +1509,14 @@ class ChessAnnotatorApp:
         # OPTIONAl BUTTON: 'Clear variation'
         self.clear_variation_button = tk.Button(
             moves_header_frame,
-            text="Clear Variation ❌",
+            text="Clear ❌",
             fg="red", # Mkae the button red to make the status clear
             command=self.restore_variation
         )
         # by default the button is INVISIBLE
         self.clear_variation_button.pack_forget()
 
-        # Store the refrence to the Label
+        # Store the reference to the Label
         self.move_list_label = tk.Label(
             moves_header_frame,
             text="Move List (Main Line)",
@@ -1560,12 +1560,12 @@ class ChessAnnotatorApp:
             # Set the button VISIBLE
             self.clear_variation_button.pack(side=tk.LEFT, padx=5)
             # Change the text of the label
-            self.move_list_label.config(text="Move List (Variation)")
+            self.move_list_label.config(text="Moves (Variation)")
         else:
             # Hide the button
             self.clear_variation_button.pack_forget()
             # Restore the label
-            self.move_list_label.config(text="Move List (Main Line)")
+            self.move_list_label.config(text="Moves (Main Line)")
 
     # --- State Update Logic ---
 
