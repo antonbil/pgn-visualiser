@@ -1,4 +1,4 @@
-import json
+import json, sys
 import tkinter as tk
 from tkinter import messagebox, simpledialog, filedialog
 from io import StringIO
@@ -708,6 +708,7 @@ class ChessAnnotatorApp:
 
             # --- COLUMN 1: BOARD & COMMENTS ---
             column1_frame = tk.Frame(self.content_paned)
+            self.column1_frame = column1_frame
             self.content_paned.add(column1_frame, stretch="never")
             # Column 2: Move List
             # --- COLUMN 2: MOVES (The Expanding Column) ---
@@ -1051,10 +1052,11 @@ class ChessAnnotatorApp:
         SettingsDialog(self.master, current_settings, self._save_config_wrapper)
 
     def _save_config_wrapper(self, *args):
-        self.save_preferences_class()
         # Update the internal attributes after saving
         self.default_pgn_dir = args[0]
         self.ENGINE_PATH = args[2]
+        new_piece_set = args[3]
+        piece_set_changed = (new_piece_set != self.piece_set)
         self.piece_set = args[3]
         # Check if square_size has changed to trigger a resize
         new_square_size = int(args[4])
@@ -1062,6 +1064,9 @@ class ChessAnnotatorApp:
         self.square_size = new_square_size
         self.theme_name = args[5]
         self.set_theme()
+        self.save_preferences_class()
+        if piece_set_changed:
+            self.force_restart()
         # 2. Update Board and Comments Width if size changed
         if size_changed:
             self._resize_board_and_comments()
@@ -1078,6 +1083,7 @@ class ChessAnnotatorApp:
             # Assuming your canvas is self.current_board_canvas
             self.board_frame.config(width=new_width, height=new_width)
             self.canvas.config(width=new_width, height=new_width)
+            self.content_paned.paneconfigure(self.column1_frame, width=new_width+60)
 
             # Update the comment frame width
             # We use .config(width=...) because pack_propagate(False) is active
@@ -1087,6 +1093,21 @@ class ChessAnnotatorApp:
                 # If you have a label inside for comments, update its wraplength too
                 if hasattr(self, 'comment_label'):
                     self.comment_label.config(wraplength=new_width - 10)
+
+    def force_restart(self):
+        """
+        Closes the current application and starts a fresh instance.
+        """
+        # 1. Ask for confirmation (Optional but recommended)
+        if not messagebox.askyesno("Restart", "Piece-set has changed. Are you sure you want to restart?"):
+            return
+
+        # 2. Close the Tkinter window properly
+        self.master.destroy()
+
+        # 3. Get the path to the current Python executable and the script
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
 
     # --- File & Load Logic ---
 
