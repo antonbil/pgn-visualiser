@@ -559,11 +559,7 @@ class ChessAnnotatorApp:
         self.highlight_item = None
         self.swap_colours = swap_colours
         master.title("PGN Chess Annotator")
-        # Find the theme
-        self.selected_theme = next(
-            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
-            BOARD_THEMES[0] # Use Standard as fallback
-        )
+        self.set_theme()
 
         # --- Data Initialization ---
         self.all_games = []      # List of all chess.pgn.Game objects in the PGN file
@@ -619,6 +615,7 @@ class ChessAnnotatorApp:
         self._setup_menu_bar(master)
 
         self.touch_screen = False
+        self.large_screen = True
         self.setup_ui( master)
 
         self._setup_header_frame(master, self.meta_frame, self.nav_comment_frame, self.comment_frame, self.comment_display_frame)
@@ -640,6 +637,13 @@ class ChessAnnotatorApp:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
+
+    def set_theme(self):
+        # Find the theme
+        self.selected_theme = next(
+            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
+            BOARD_THEMES[0]  # Use Standard as fallback
+        )
 
     def set_screen_position(self, master):
         # 1. Determine the maximum available width
@@ -690,29 +694,32 @@ class ChessAnnotatorApp:
         is_compact_layout = screen_height < COMPACT_HEIGHT_THRESHOLD
 
 
-        if is_compact_layout:
+        if is_compact_layout or self.large_screen:
             self.touch_screen = True
 
             # --- 2. Create Frames ---
             # These must always be created before we place or fill them.
             self._setup_menu_bar(master)
 
-            # Main containers
-            main_frame = tk.Frame(master, padx=10, pady=10)
-            main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            # --- MAIN CONTAINER ---
+            # Use a PanedWindow or a Frame with grid to manage the three columns
+            self.content_paned = tk.PanedWindow(master, orient=tk.HORIZONTAL, sashwidth=6)
+            self.content_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-            # Column 1 (Left): Chess Diagram
-            column1_frame = tk.Frame(main_frame)
-            column1_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-
+            # --- COLUMN 1: BOARD & COMMENTS ---
+            column1_frame = tk.Frame(self.content_paned)
+            self.content_paned.add(column1_frame, stretch="never")
             # Column 2: Move List
-            column2_frame = tk.Frame(main_frame, width=400)
-            column2_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            # --- COLUMN 2: MOVES (The Expanding Column) ---
+            column2_frame = tk.Frame(self.content_paned, width=400)
+            # stretch="always" ensures this column takes all remaining horizontal space
+            self.content_paned.add(column2_frame, stretch="always")
             column2_frame.pack_propagate(False)
 
             # Column 3: Tools/Meta
-            column3_frame = tk.Frame(main_frame)
-            column3_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+            # --- COLUMN 3: TOOLBAR ---
+            column3_frame = tk.Frame(self.content_paned)
+            self.content_paned.add(column3_frame, stretch="never")
 
             # 1. Game Meta-Tags section (left in the header)
             meta_frame = tk.LabelFrame(column3_frame, text="Game Meta-Tags", padx=5, pady=5)
@@ -737,8 +744,20 @@ class ChessAnnotatorApp:
             moves_frame.pack(fill=tk.BOTH, expand=True, padx=5)
 
             # Column 1 Content: Comment display below the board
-            comment_display_frame = tk.Frame(column1_frame)
-            comment_display_frame.pack(side=tk.TOP, padx=5, fill=tk.X)
+            # Calculate the exact width of the chess board
+            board_width = 8 * self.square_size
+
+            # 1. Create the frame with a specific width
+            # You might want to add a fixed height as well if you use pack_propagate(False)
+            comment_display_frame = tk.Frame(column1_frame, width=board_width, height=100)
+
+            # 2. Prevent the frame from resizing to fit its internal widgets
+            comment_display_frame.pack_propagate(False)
+
+            # 3. Pack it.
+            # Remove 'fill=tk.X' if you want it to stay strictly at board_width.
+            # Use 'anchor=tk.W' or 'anchor=tk.CENTER' to align it with the board above.
+            comment_display_frame.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.NW)
             toolbar_frame = self._setup_quick_toolbar(column3_frame)
 
         else:
@@ -1037,9 +1056,37 @@ class ChessAnnotatorApp:
         self.default_pgn_dir = args[0]
         self.ENGINE_PATH = args[2]
         self.piece_set = args[3]
-        self.square_size = args[4]
+        # Check if square_size has changed to trigger a resize
+        new_square_size = int(args[4])
+        size_changed = (new_square_size != self.square_size)
+        self.square_size = new_square_size
         self.theme_name = args[5]
+        self.set_theme()
+        # 2. Update Board and Comments Width if size changed
+        if size_changed:
+            self._resize_board_and_comments()
+            self.update_board_display()
         self.update_state()
+
+    def _resize_board_and_comments(self):
+            """
+            Recalculates and applies the new width to the board and comments frame.
+            """
+            new_width = 8 * self.square_size
+
+            # Update the board canvas size
+            # Assuming your canvas is self.current_board_canvas
+            self.board_frame.config(width=new_width, height=new_width)
+            self.canvas.config(width=new_width, height=new_width)
+
+            # Update the comment frame width
+            # We use .config(width=...) because pack_propagate(False) is active
+            if hasattr(self, 'comment_display_frame'):
+                self.comment_display_frame.config(width=new_width)
+
+                # If you have a label inside for comments, update its wraplength too
+                if hasattr(self, 'comment_label'):
+                    self.comment_label.config(wraplength=new_width - 10)
 
     # --- File & Load Logic ---
 
@@ -1052,7 +1099,7 @@ class ChessAnnotatorApp:
             # Extract the directory from the path
             directory = os.path.dirname(self.last_filepath)
 
-        # 3. Controleer of de map geldig is en bestaat
+        # Check if the directory is valid, and exists
         if os.path.isdir(directory):
             initial_dir = self.default_pgn_dir
         filepath = filedialog.askopenfilename(
