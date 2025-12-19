@@ -1,6 +1,6 @@
 # This program requires the 'python-chess' library.
 # Installation: pip install python-chess
-import os
+import os, sys
 import tkinter as tk
 from tkinter import ttk, filedialog, font, messagebox
 import chess
@@ -441,11 +441,7 @@ class ChessEventViewer:
         self.board_size = self.square_size * 8
 
         self.theme_name = board
-        self.selected_theme = next(
-            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
-            BOARD_THEMES[0]  # Gebruik Standard als fallback
-        )
-        self.color_light, self.color_dark = (self.selected_theme["light"], self.selected_theme["dark"])
+        self.set_theme()
 
         self.piece_font = font.Font(family="Arial", size=int(self.square_size * 0.5), weight="bold")
 
@@ -508,6 +504,13 @@ class ChessEventViewer:
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
+
+    def set_theme(self):
+        self.selected_theme = next(
+            (theme for theme in BOARD_THEMES if theme["name"] == self.theme_name),
+            BOARD_THEMES[0]  # Gebruik Standard als fallback
+        )
+        self.color_light, self.color_dark = (self.selected_theme["light"], self.selected_theme["dark"])
 
     # --- Menu Logic ---
 
@@ -617,18 +620,41 @@ class ChessEventViewer:
         return toolbar_frame
 
     def _save_config_wrapper(self, *args):
-        _save_config(*args)
+
         # Update the internal attributes after saving,
         #                                   state=tk.NORMAL)
         self.default_pgn_dir = args[0]
         self.engine_path = args[2]
+        new_piece_set = args[3]
+        piece_set_changed = (new_piece_set != self.piece_set)
         self.piece_set = args[3]
-        self.square_size = args[4]
+        new_square_size = int(args[4])
+        size_changed = (new_square_size != self.square_size)
+        self.square_size = new_square_size
         self.board = args[5]
-        self.image_manager = PieceImageManager(self.square_size, IMAGE_DIRECTORY, self.piece_set)
-        self._create_tabbed_event_viewer(self.master)
+        self.theme_name = self.board
+        self.set_theme()
+        _save_config(*args)
+        if piece_set_changed or size_changed:
+            self.force_restart()
+        #self.image_manager = PieceImageManager(self.square_size, IMAGE_DIRECTORY, self.piece_set)
+        #self._create_tabbed_event_viewer(self.master)
         self.display_diagram_move(self.current_move_index)
 
+    def force_restart(self):
+        """
+        Closes the current application and starts a fresh instance.
+        """
+        # 1. Ask for confirmation (Optional but recommended)
+        if not messagebox.askyesno("Restart", "Settings have changed. Restart to see them?"):
+            return
+
+        # 2. Close the Tkinter window properly
+        self.master.destroy()
+
+        # 3. Get the path to the current Python executable and the script
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
 
     def _open_game_chooser(self):
         """
