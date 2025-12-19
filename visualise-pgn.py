@@ -1272,24 +1272,85 @@ class ChessEventViewer:
         # 2. Bind the selection event to a callback function
         self.variations_listbox.bind("<<ListboxSelect>>", self._on_variation_selected)
 
+    def _show_variation_preview(self, start_node):
+        """
+        Creates a popup window with a structured layout: move numbers,
+        White/Black moves, and comments aligned in columns.
+        """
+        preview_win = tk.Toplevel(self.master)
+        preview_win.title("Variation Detail View")
+        preview_win.geometry("600x450")
+
+        # Use a Text widget with tabs for column alignment
+        # Tab 1: 40px (Move number), Tab 2: 120px (White), Tab 3: 200px (Black/Comments)
+        text_area = tk.Text(
+            preview_win, wrap=tk.WORD, padx=15, pady=15,
+            font=("Consolas", 10),  # Monospaced font works best for alignment
+            tabs=("40p", "120p", "200p")
+        )
+        text_area.pack(fill=tk.BOTH, expand=True)
+
+        # Styling tags
+        text_area.tag_configure("move_num", foreground="gray")
+        text_area.tag_configure("move", font=("Consolas", 10, "bold"))
+        text_area.tag_configure("comment", foreground="#008000", font=("Consolas", 9, "italic"))
+
+        # To track move numbers and turns, we need a board object
+        board = start_node.parent.board()
+        current_node = start_node
+
+        while current_node is not None:
+            move_num = board.fullmove_number
+            is_white = board.turn  # True if White's turn
+
+            # If it's White's turn, we start a new line with the move number
+            if is_white:
+                text_area.insert(tk.END, f"{move_num}.\t", "move_num")
+            elif current_node == start_node:
+                # Special case: if the variation starts with a Black move
+                text_area.insert(tk.END, f"{move_num}...\t\t", "move_num")
+
+            # Insert the move
+            move_san = current_node.san()
+            text_area.insert(tk.END, f"{move_san}\t", "move")
+
+            # Add comment if exists
+            if current_node.comment:
+                text_area.insert(tk.END, f"({current_node.comment})\t", "comment")
+
+            # If we just finished a Black move (or it's the end), start a new line
+            if not is_white or not current_node.variations:
+                text_area.insert(tk.END, "\n")
+
+            # Advance board and node
+            board.push(current_node.move)
+            if current_node.variations:
+                current_node = current_node.variation(0)
+            else:
+                current_node = None
+
+        text_area.config(state=tk.DISABLED)
+        tk.Button(preview_win, text="Close", command=preview_win.destroy).pack(pady=5)
+
     def _on_variation_selected(self, event):
         """
         Callback triggered when a user clicks an item in the variations listbox.
         """
-        # Get the widget that triggered the event
         widget = event.widget
-
-        # Get the index of the current selection (returns a tuple)
         selection = widget.curselection()
 
         if not selection:
-            return  # Nothing selected
+            return
 
         index = selection[0]
-        # Get the actual text or value of the selected item
-        selected_value = widget.get(index)
+        # In your logic, index 0 in the listbox is usually variation 1 in the node
+        # because variation 0 is the main line.
+        all_variations = self.last_node.parent.variations
 
-        print(f"Selected variation at index {index}: {selected_value}")
+        if len(all_variations) > 1:
+            # Match the listbox index to the variation object
+            selected_variation = all_variations[index + 1]
+            self._show_variation_preview(selected_variation)
 
         # --- YOUR LOGIC HERE ---
         # Example: If you want to jump to this variation:
@@ -1309,17 +1370,21 @@ class ChessEventViewer:
 
         # 1. Update the Move Label (e.g., "12. Nf3")
         node = self.game
-        i = 0
         move_list = []
         last_node = node
-        while i <=move_index:
-            # Always follow the main (first) variation
-            node = node.variation(0)
-            move_list.append(node)
-            last_node = node
-            i = i + 1
+
+        for i in range(move_index + 1):
+            if node.variations:
+                node = node.variation(0)
+                move_list.append(node)
+                last_node = node
+            else:
+                # End of line reached earlier than expected
+                break
+        self.last_node = last_node
         prev_board = last_node.parent.board()
         move_san = prev_board.san(last_node.move)
+        print("last node", str(last_node)[:8])
         move_number = last_node.parent.board().fullmove_number
         turn = "..." if last_node.parent.board().turn == chess.BLACK else "."
         self.current_move_label.config(text=f"{move_number}{turn} {move_san}")
@@ -1335,6 +1400,8 @@ class ChessEventViewer:
         all_variations = last_node.parent.variations
         if len(all_variations) > 1:
             for i, var in enumerate(all_variations):
+                if i == 0:
+                    continue
                 prefix = "Main: " if i == 0 else f"Var {i}: "
                 self.variations_listbox.insert(tk.END, f"{prefix}{var}")
         else:
@@ -1661,6 +1728,7 @@ class ChessEventViewer:
         self._clear_content_frame()
 
         all_events, game = self.get_all_significant_events_game(game)
+        self.game = game
         self._update_meta_info(game)
         print(f"Full analysis complete. {len(all_events)} significant events found (> 50 cp loss).")
 
