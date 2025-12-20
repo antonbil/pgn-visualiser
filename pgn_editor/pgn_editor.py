@@ -158,9 +158,9 @@ class CommentManager:
 
         # Pagination indicator
         if self.current_page < len(self.all_chunks) - 1:
-            display_text += "\n\n[ CLICK FOR MORE... ]"
+            display_text += "[ CLICK FOR MORE... ]"
         elif len(self.all_chunks) > 1:
-            display_text += "\n\n[ CLICK: BACK TO START ]"
+            display_text += "[ CLICK: BACK TO START ]"
         else:
             display_text += "\n\n"
 
