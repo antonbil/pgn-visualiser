@@ -97,6 +97,90 @@ def _add_tooltip(widget, text):
     """
     return Tooltip(widget, text)
 
+
+class CommentManager:
+    def __init__(self, label_widget, lines_per_page=5):
+        self.display = label_widget
+        self.lines_per_page = lines_per_page
+        self.all_chunks = []
+        self.current_page = 0
+
+        # 1. Set a reasonable starting wrap length (e.g., 300 pixels)
+        # 2. Use 'w' anchor to keep text left-aligned
+        self.display.config(
+            justify="left",
+            anchor="nw",
+            wraplength=300
+        )
+
+        self.display.bind("<Button-1>", self.on_click)
+        self.display.bind("<Configure>", self.update_wraplength)
+
+    def update_wraplength(self, event):
+        """
+        This event fires whenever the label changes size.
+        """
+        # Take the actual width of the widget and subtract padding
+        padding = 20
+        new_width = event.width - padding
+
+        if new_width > 10:  # Only update if there is actual width
+            self.display.config(wraplength=new_width)
+            # Optional: print(f"New wraplength: {new_width}") # Debugging
+        #self.comment_manager.set_comments()
+    def set_comments(self, comments_text):
+        """
+        Cleans the input text and splits it into chunks based on lines_per_page.
+        """
+        # 1. Clean the text: remove newlines and double spaces
+        clean_text = " ".join(comments_text.split())
+
+        # 2. Split into words to create artificial "lines" or chunks
+        # Note: In a wrapping label, "lines" are subjective.
+        # Here we split by words and group them.
+        words = clean_text.split()
+        words_per_page = self.lines_per_page * 10  # Estimate 10 words per line
+
+        self.all_chunks = [words[i:i + words_per_page] for i in range(0, len(words), words_per_page)]
+        self.current_page = 0
+        self.refresh_display()
+
+    def refresh_display(self):
+        """
+        Updates the label text with the current page's content.
+        """
+        if not self.all_chunks:
+            self.display.config(text="")
+            return
+
+        current_words = self.all_chunks[self.current_page]
+        display_text = " ".join(current_words)
+
+        # Pagination indicator
+        if self.current_page < len(self.all_chunks) - 1:
+            display_text += "\n\n[ CLICK FOR MORE... ]"
+        elif len(self.all_chunks) > 1:
+            display_text += "\n\n[ CLICK: BACK TO START ]"
+        else:
+            display_text += "\n\n"
+
+        self.display.config(text=display_text)
+
+    def on_click(self, event):
+        """
+        Handles the click event to cycle through pages.
+        """
+        if not self.all_chunks:
+            return
+
+        if self.current_page < len(self.all_chunks) - 1:
+            self.current_page += 1
+        else:
+            self.current_page = 0
+
+        self.refresh_display()
+
+
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, current_config, save_config_callback):
         """
@@ -1095,10 +1179,26 @@ class ChessAnnotatorApp:
             # We use .config(width=...) because pack_propagate(False) is active
             if hasattr(self, 'comment_display_frame'):
                 self.comment_display_frame.config(width=new_width)
+                self.comment_display.config(
+                    justify="left",  # Align text to the left
+                    anchor="nw",  # Position text in the Top-West (top-left) corner
+                    wraplength=400  # Initial wrap length in pixels
+                )
+                # Bind a function to resize the wrap length automatically
+                self.comment_display.bind('<Configure>', self.update_wraplength)
 
                 # If you have a label inside for comments, update its wraplength too
                 if hasattr(self, 'comment_label'):
                     self.comment_label.config(wraplength=new_width - 10)
+
+    def update_wraplength(self, event):
+        """
+        Dynamically updates the text wrapping width based on the widget's current size.
+        """
+        # Subtract a small margin (e.g., 20px) to prevent text from touching the edges
+        new_width = event.width - 20
+        if new_width > 0:
+            self.comment_display.config(wraplength=new_width)
 
     def force_restart(self):
         """
@@ -1288,91 +1388,21 @@ class ChessAnnotatorApp:
     def setup_comment_display(self, comment_display_frame):
         # Configuration
         self.num_lines_limit = 6 if self.touch_screen else 3
+        self.comment_display = tk.Label(comment_display_frame, text="", bg="white", relief="sunken")
+        self.comment_display.pack(fill="both", expand=True)
         self.all_comment_chunks = []
-        self.current_page = 0
 
-        self.comment_display = tk.Label(
-            comment_display_frame,
-            text="No comment for this move.",
-            font=('Arial', 9),
-            bg='lightgray',
-            relief=tk.SUNKEN,
-            # Set height to limit + 2 to ensure space for the indicator and a gap
-            height=self.num_lines_limit + 2,
-            wraplength=450,
-            justify=tk.LEFT,
-            anchor=tk.NW,
-            cursor="hand2"
-        )
-        self.comment_display.grid(row=0, column=0, sticky='ew', padx=5, pady=(0, 10))
+        # # Create the manager and tell it how many "lines" (chunks) to show
+        self.comment_manager = CommentManager(self.comment_display, lines_per_page=4 if self.touch_screen else 3)
+        # self.num_lines_limit = 6 if self.touch_screen else 3
 
-        # Bind the click event for paging
-        self.comment_display.bind("<Button-1>", self._toggle_comment_page)
 
     def set_comment_text(self, text):
         """
         Wraps the input text into lines based on width and resets view to page 0.
         """
-        if not text or text.strip() == "":
-            text = "No comment for this move."
+        self.comment_manager.set_comments(text)
 
-        # Use textwrap to break the string into a list of lines fitting the widget width
-        # Adjust 'width' (character count) if the wraplength changes
-        wrapper = textwrap.TextWrapper(width=65)
-        self.all_comment_chunks = wrapper.wrap(text)
-
-        self.current_page = 0
-        self._update_label_view()
-
-    def _update_label_view(self):
-        """
-        Updates the label text to show the current page's lines and a visibility indicator.
-        """
-        if not self.all_comment_chunks:
-            self.comment_display.config(text="No comment for this move.")
-            return
-
-        # Calculate start and end indices for the current page
-        start = self.current_page * self.num_lines_limit
-        end = start + self.num_lines_limit
-
-        current_lines = self.all_comment_chunks[start:end]
-
-        # Padding: Fill empty lines if the page is not full.
-        # This keeps the "[ CLICK FOR MORE ]" indicator at a fixed vertical position.
-        while len(current_lines) < self.num_lines_limit:
-            current_lines.append("")
-
-        display_text = "\n".join(current_lines)
-
-        # Append the paging indicator at the bottom
-        if end < len(self.all_comment_chunks):
-            display_text += "\n\n[ CLICK FOR MORE... ]"
-        elif self.current_page > 0:
-            display_text += "\n\n[ CLICK: BACK TO START ]"
-        else:
-            # Add empty space for short comments to maintain consistent layout height
-            display_text += "\n\n"
-
-        self.comment_display.config(text=display_text)
-
-    def _toggle_comment_page(self, event):
-        """
-        Cycles to the next page of comments. Safe against infinite loops.
-        """
-        if not self.all_comment_chunks:
-            return
-
-        total_chunks = len(self.all_comment_chunks)
-
-        # Increment page index
-        self.current_page += 1
-
-        # If the next page starts beyond the available lines, reset to the first page
-        if (self.current_page * self.num_lines_limit) >= total_chunks:
-            self.current_page = 0
-
-        self._update_label_view()
 
     def _navigate_game(self, step):
         """
