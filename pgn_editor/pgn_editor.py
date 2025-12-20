@@ -1393,7 +1393,7 @@ class ChessAnnotatorApp:
         self.all_comment_chunks = []
 
         # # Create the manager and tell it how many "lines" (chunks) to show
-        self.comment_manager = CommentManager(self.comment_display, lines_per_page=3 if self.touch_screen else 3)
+        self.comment_manager = CommentManager(self.comment_display, lines_per_page=2 if self.touch_screen else 2)
         # self.num_lines_limit = 6 if self.touch_screen else 3
 
 
