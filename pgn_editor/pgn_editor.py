@@ -999,10 +999,7 @@ class ChessAnnotatorApp:
         Sets the current game, rebuilds the move list, and resets the UI.
         """
         if 0 <= index < len(self.all_games):
-            if not self.game is None:
-                for tag, entry in self.meta_entries.items():
-                    print("store", tag, entry.get())
-                    self.game.headers[tag] = entry.get()
+            self.store_meta_data()
             self.current_game_index = index
             self.game = self.all_games[index]
 
@@ -1021,6 +1018,11 @@ class ChessAnnotatorApp:
             self._populate_move_listbox()
             self.show_clear_variation_button()
             self.update_state()
+
+    def store_meta_data(self):
+        if not self.game is None:
+            for tag, entry in self.meta_entries.items():
+                self.game.headers[tag] = entry.get()
 
     def _update_game_navigation_state(self):
         """
@@ -1164,8 +1166,7 @@ class ChessAnnotatorApp:
                 # Important: Ensure the current active game in the UI is updated
                 # in the self.all_games list before saving, if you made changes.
                 # 1. Update the game's headers with the modified meta-tags from the UI
-                for tag, entry in self.meta_entries.items():
-                    self.game.headers[tag] = entry.get()
+                self.store_meta_data()
 
                 with open(filepath, 'w', encoding='utf-8') as f:
                     # We use FileExporter for clean PGN formatting
