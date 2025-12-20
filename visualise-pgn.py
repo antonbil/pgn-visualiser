@@ -525,7 +525,7 @@ class ChessEventViewer:
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
-        file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
+        #file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
         file_menu.add_separator()
         file_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
         file_menu.add_separator()
@@ -568,13 +568,13 @@ class ChessEventViewer:
         )
         self.open_btn.pack(side=tk.LEFT, padx=2)
 
-        self.save_btn = tk.Button(
-            toolbar_frame,
-            text="\U0001F4BE",  # 💾 Floppy Disk
-            command=self.save_pgn_file,
-            **btn_style
-        )
-        self.save_btn.pack(side=tk.LEFT, padx=2)
+        # self.save_btn = tk.Button(
+        #     toolbar_frame,
+        #     text="\U0001F4BE",  # 💾 Floppy Disk
+        #     command=self.save_pgn_file,
+        #     **btn_style
+        # )
+        # self.save_btn.pack(side=tk.LEFT, padx=2)
 
         self.choose_btn = tk.Button(
             toolbar_frame,
@@ -614,7 +614,7 @@ class ChessEventViewer:
         # 3. Add Tooltips (Optional, helps users know what the icons do)
         Tooltip(self.open_btn, "Open PGN File")
         Tooltip(self.swap_btn, "Flip Board (Swap Colors)")
-        Tooltip(self.save_btn, "Save PGN File")
+        # Tooltip(self.save_btn, "Save PGN File")
         Tooltip(self.choose_btn, "Choose game")
         Tooltip(self.exit_btn, "Exit program")
         return toolbar_frame

@@ -999,6 +999,10 @@ class ChessAnnotatorApp:
         Sets the current game, rebuilds the move list, and resets the UI.
         """
         if 0 <= index < len(self.all_games):
+            if not self.game is None:
+                for tag, entry in self.meta_entries.items():
+                    print("store", tag, entry.get())
+                    self.game.headers[tag] = entry.get()
             self.current_game_index = index
             self.game = self.all_games[index]
 
@@ -1141,39 +1145,41 @@ class ChessAnnotatorApp:
 
     def save_pgn_file(self):
         """
-        Saves the current game, including headers and commentary, to a PGN file.
+        Saves all games in self.all_games to a PGN file, preserving order.
         """
-        if not self.game:
-            messagebox.showwarning("Save Failed", "No game loaded to save.")
+        # Check if the list exists and is not empty
+        if not hasattr(self, 'all_games') or not self.all_games:
+            messagebox.showwarning("Save Failed", "No games in the database to save.")
             return
 
         # Ask the user where to save the file
         filepath = filedialog.asksaveasfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
-            title="Save PGN Game"
+            title="Save PGN Database"
         )
 
         if filepath:
             try:
-                while len(self.stored_moves) > 0:
-                    self.restore_variation()
-
+                # Important: Ensure the current active game in the UI is updated
+                # in the self.all_games list before saving, if you made changes.
                 # 1. Update the game's headers with the modified meta-tags from the UI
                 for tag, entry in self.meta_entries.items():
                     self.game.headers[tag] = entry.get()
 
-                # 2. Convert the game object to PGN format (including all commentaries)
-                pgn_output = str(self.game)
-
-                # 3. Write to file
                 with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(pgn_output)
+                    # We use FileExporter for clean PGN formatting
+                    for game in self.all_games:
+                        # Export each game one by one
+                        exporter = chess.pgn.FileExporter(f)
+                        game.accept(exporter)
+                        # Add extra newlines between games for readability
+                        f.write("\n\n")
 
-                messagebox.showinfo("Save Complete", f"Game successfully saved to:\n{filepath}")
+                messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).")
 
             except Exception as e:
-                messagebox.showerror("Saving Error", f"Could not save the file: {e}")
+                messagebox.showerror("Saving Error", f"Could not save the database: {e}")
 
     def _load_game_from_content(self, pgn_content):
         """
