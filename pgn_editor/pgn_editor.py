@@ -1,5 +1,6 @@
 import json, sys
 import tkinter as tk
+import threading
 from tkinter import messagebox, simpledialog, filedialog
 from io import StringIO
 import chess
@@ -12,6 +13,7 @@ import os
 import cairosvg
 from io import BytesIO
 from tkinter import ttk
+import traceback
 import textwrap
 
 PREFERENCES_FILE = "preferences.json"
@@ -97,6 +99,128 @@ def _add_tooltip(widget, text):
     """
     return Tooltip(widget, text)
 
+
+class AnalysisManager:
+    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None):
+        """
+        Handles asynchronous chess engine analysis.
+        :param root: The main Tkinter root window (for thread safety).
+        :param pgn_game: The chess.pgn.Game object to analyze.
+        :param stockfish_path: Absolute path to the Stockfish executable.
+        :param on_finished_callback: A function to call when analysis is done.
+        """
+        self.root = root
+        self.game = pgn_game
+        self.stockfish_path = stockfish_path
+        self.on_finished_callback = on_finished_callback
+
+        # Settings
+        self.threshold = 0.3  # Min pawn advantage to add a variation
+        self.time_per_move = 0.5  # Time for Multi-PV analysis
+        self.multipv = 3
+
+        # UI Elements
+        self.progress_win = None
+        self.progress_bar = None
+        self.status_label = None
+
+    def start(self):
+        """Creates the progress UI and starts the background thread."""
+        self._create_progress_window()
+
+        # Start the background thread
+        analysis_thread = threading.Thread(target=self._run_analysis)
+        analysis_thread.daemon = True
+        analysis_thread.start()
+
+    def _create_progress_window(self):
+        """Creates a small popup window to show progress."""
+        self.progress_win = tk.Toplevel(self.root)
+        self.progress_win.title("Analyzing Game")
+        self.progress_win.geometry("350x120")
+        self.progress_win.transient(self.root)  # Keeps window on top of main app
+        self.progress_win.grab_set()  # Prevents interaction with main app during analysis
+
+        self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=300)
+        self.status_label.pack(pady=10)
+
+        self.progress_bar = ttk.Progressbar(self.progress_win, length=280, mode='determinate')
+        self.progress_bar.pack(pady=10)
+
+    def _run_analysis(self):
+        """The core analysis loop running in the background thread."""
+        try:
+            engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
+
+            # Count moves in mainline for progress bar
+            total_moves = sum(1 for _ in self.game.mainline_moves())
+            self.root.after(0, lambda: self.progress_bar.config(max=total_moves))
+
+            node = self.game
+            move_count = 0
+
+            while not node.is_end():
+                main_variation = node.variation(0)
+                played_move = main_variation.move
+                board = node.board()
+
+                # Update status in UI
+                move_text = f"Analyzing move {board.fullmove_number}: {played_move}"
+                self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
+
+                # 1. Analyze the played move to get a baseline score
+                played_info = engine.analyse(board, chess.engine.Limit(time=0.2), root_moves=[played_move])
+                played_score = played_info.get("score").relative.score(mate_score=10000)
+
+                # 2. Analyze top 3 alternatives
+                analysis = engine.analyse(board, chess.engine.Limit(time=self.time_per_move), multipv=self.multipv)
+
+                for entry in analysis:
+                    engine_move = entry["pv"][0]
+                    engine_score = entry["score"].relative.score(mate_score=10000)
+
+                    # Skip if it's the played move or already exists as a variation
+                    if engine_move == played_move:
+                        continue
+                    if any(v.move == engine_move for v in node.variations):
+                        continue
+
+                    # 3. Check if engine move is significantly better
+                    if engine_score > (played_score + (self.threshold * 100)):
+                        new_var = node.add_variation(engine_move)
+                        diff = round((engine_score - played_score) / 100.0, 2)
+                        new_var.comment = f"Stockfish: +{diff} better than played move"
+
+                # Update progress
+                move_count += 1
+                self.root.after(0, lambda v=move_count: self.progress_bar.config(value=v))
+
+                node = main_variation
+
+            engine.quit()
+            self.root.after(0, self._on_complete)
+
+
+        except Exception as e:
+            # We use 'err=e' to capture the current value of e
+            # into the lambda's own scope immediately.
+            traceback.print_exc()
+            print(e)
+            self.root.after(0, lambda err=e: self._on_error(err))
+
+    def _on_complete(self):
+        """Cleanup after successful analysis."""
+        if self.progress_win:
+            self.progress_win.destroy()
+        messagebox.showinfo("Analysis Complete", "Stockfish has finished analyzing the game.")
+        if self.on_finished_callback:
+            self.on_finished_callback()
+
+    def _on_error(self, error):
+        """Handles errors during analysis."""
+        if self.progress_win:
+            self.progress_win.destroy()
+        messagebox.showerror("Engine Error", f"An error occurred: {error}")
 
 class CommentManager:
     def __init__(self, label_widget, lines_per_page=5):
@@ -916,6 +1040,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Previous Game", command=lambda: self.go_game(-1), state=tk.DISABLED, accelerator="Ctrl+Left")
         game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
+        game_menu.add_command(label="Analyse Game...", command=self.handle_analyze_button)
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
         variations_menu.add_command(label="Restore Variation", command=self.restore_variation)
@@ -2048,6 +2173,23 @@ class ChessAnnotatorApp:
 
         self.master.wait_window(dialog)
 
+    def handle_analyze_button(self):
+        # Path to your Stockfish executable
+        sf_path = self.ENGINE_PATH  # Or your Windows/Mac path
+
+        # Define what should happen when it's done (e.g., refresh your move list)
+        def refresh_ui():
+            self.update_state()  # refresh method here
+            print("Analysis successfully integrated into the UI.")
+
+        # Create the manager and start
+        self.analyzer = AnalysisManager(
+            root=self.master,
+            pgn_game=self.game,
+            stockfish_path=sf_path,
+            on_finished_callback=refresh_ui
+        )
+        self.analyzer.start()
 
     def manage_comment(self, delete=False):
         """
