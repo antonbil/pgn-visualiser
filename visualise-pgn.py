@@ -725,15 +725,18 @@ class ChessEventViewer:
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
 
     def enter_new_game(self):
-        root = tk.Tk()
 
         SQUARE_SIZE = 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
         # asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, "2")
 
-        app = PGNEntryApp(root,None , self.pgn_filepath)#self.image_manager
-        root.mainloop()
+        new_window = tk.Toplevel(self.master)
+        new_window.title("New Game Entry")
+
+        app = PGNEntryApp(new_window, self.image_manager, self.pgn_filepath, square_size=self.square_size)
+
+        new_window.focus_set()
 
     def save_pgn_file(self):
         """

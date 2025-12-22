@@ -123,7 +123,7 @@ class PGNEntryApp:
     """
     Applicatie voor het invoeren van schaakpartijen via bordklikken en het genereren van een PGN-bestand.
     """
-    def __init__(self, master, image_manager, pgn_filepath = None):
+    def __init__(self, master, image_manager, pgn_filepath = None, square_size = 60):
         self.master = master
         self.pgn_filepath = pgn_filepath
         self.image_manager = image_manager
@@ -132,7 +132,7 @@ class PGNEntryApp:
         master.title("PGN Invoer Applicatie")
 
         # --- Configuraties ---
-        self.square_size = 60
+        self.square_size = square_size
         self.color_light = "#F0D9B5"
         self.color_dark = "#B58863"
         self.selected_color = "#FF8080" # Kleur voor geselecteerd veld
