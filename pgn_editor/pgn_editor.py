@@ -176,45 +176,38 @@ class OpeningClassifier:
 
 
 class AnalysisManager:
+    # --- CONFIGURATION PARAMETERS ---
+    # Adjust these to balance speed vs. quality
+    THREADS = 4  # Number of CPU cores Stockfish may use
+    MEMORY_HASH = 256  # Memory in MB for Stockfish's lookup table
+    DEPTH_LIMIT = 16  # How deep Stockfish looks (14=fast, 20=pro)
+    MULTIPV_COUNT = 4  # Number of top moves to calculate
+    PAWN_THRESHOLD = 0.5  # Min. improvement needed to add a variation
+
+    # --------------------------------
+
     def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None):
-        """
-        Handles asynchronous chess engine analysis.
-        :param root: The main Tkinter root window (for thread safety).
-        :param pgn_game: The chess.pgn.Game object to analyze.
-        :param stockfish_path: Absolute path to the Stockfish executable.
-        :param on_finished_callback: A function to call when analysis is done.
-        """
         self.root = root
         self.game = pgn_game
         self.stockfish_path = stockfish_path
         self.on_finished_callback = on_finished_callback
 
-        # Settings
-        self.threshold = 0.3  # Min pawn advantage to add a variation
-        self.time_per_move = 0.5  # Time for Multi-PV analysis
-        self.multipv = 3
-
-        # UI Elements
         self.progress_win = None
         self.progress_bar = None
         self.status_label = None
 
     def start(self):
-        """Creates the progress UI and starts the background thread."""
         self._create_progress_window()
-
-        # Start the background thread
         analysis_thread = threading.Thread(target=self._run_analysis)
         analysis_thread.daemon = True
         analysis_thread.start()
 
     def _create_progress_window(self):
-        """Creates a small popup window to show progress."""
         self.progress_win = tk.Toplevel(self.root)
         self.progress_win.title("Analyzing Game")
         self.progress_win.geometry("350x120")
-        self.progress_win.transient(self.root)  # Keeps window on top of main app
-        self.progress_win.grab_set()  # Prevents interaction with main app during analysis
+        self.progress_win.transient(self.root)
+        self.progress_win.grab_set()
 
         self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=300)
         self.status_label.pack(pady=10)
@@ -223,11 +216,14 @@ class AnalysisManager:
         self.progress_bar.pack(pady=10)
 
     def _run_analysis(self):
-        """The core analysis loop running in the background thread."""
         try:
+            # Initialize engine with performance settings
             engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
+            engine.configure({
+                "Threads": self.THREADS,
+                "Hash": self.MEMORY_HASH
+            })
 
-            # Count moves in mainline for progress bar
             total_moves = sum(1 for _ in self.game.mainline_moves())
             self.root.after(0, lambda: self.progress_bar.config(max=total_moves))
 
@@ -239,63 +235,72 @@ class AnalysisManager:
                 played_move = main_variation.move
                 board = node.board()
 
-                # Update status in UI
+                # Update UI
                 move_text = f"Analyzing move {board.fullmove_number}: {played_move}"
                 self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
 
-                # 1. Analyze the played move to get a baseline score
-                played_info = engine.analyse(board, chess.engine.Limit(time=0.2), root_moves=[played_move])
-                played_score = played_info.get("score").relative.score(mate_score=10000)
+                # 1. Run Multi-PV analysis (Top 4 moves)
+                analysis = engine.analyse(
+                    board,
+                    chess.engine.Limit(depth=self.DEPTH_LIMIT),
+                    multipv=self.MULTIPV_COUNT
+                )
 
-                # 2. Analyze top 3 alternatives
-                analysis = engine.analyse(board, chess.engine.Limit(time=self.time_per_move), multipv=self.multipv)
+                # 2. Extract the score of the played move from the analysis
+                played_move_score = None
+                for entry in analysis:
+                    if entry["pv"][0] == played_move:
+                        played_move_score = entry["score"].relative.score(mate_score=10000)
+                        break
 
+                # 3. If played move was NOT in top 4, do a quick separate scan for it
+                if played_move_score is None:
+                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
+                    played_move_score = p_info.get("score").relative.score(mate_score=10000)
+
+                # 4. Compare alternatives to the played move
+                best_move_entry = analysis[0]
+                best_move = best_move_entry["pv"][0]
+                best_score = best_move_entry["score"].relative.score(mate_score=10000)
+
+                # Only add variations for the top moves that are better than our move
                 for entry in analysis:
                     engine_move = entry["pv"][0]
                     engine_score = entry["score"].relative.score(mate_score=10000)
 
-                    # Skip if it's the played move or already exists as a variation
                     if engine_move == played_move:
                         continue
+
+                    # Check if already exists
                     if any(v.move == engine_move for v in node.variations):
                         continue
 
-                    # 3. Check if engine move is significantly better
-                    if engine_score > (played_score + (self.threshold * 100)):
+                    # If this move is significantly better than what we played
+                    if engine_score > (played_move_score + (self.PAWN_THRESHOLD * 100)):
                         new_var = node.add_variation(engine_move)
-                        diff = round((engine_score - played_score) / 100.0, 2)
-                        new_var.comment = f"Stockfish: +{diff} better than played move"
+                        diff = round((engine_score - played_move_score) / 100.0, 2)
+                        new_var.comment = f"Stockfish: +{diff}"
 
-                # Update progress
                 move_count += 1
                 self.root.after(0, lambda v=move_count: self.progress_bar.config(value=v))
-
                 node = main_variation
 
             engine.quit()
             self.root.after(0, self._on_complete)
 
-
         except Exception as e:
-            # We use 'err=e' to capture the current value of e
-            # into the lambda's own scope immediately.
-            traceback.print_exc()
             print(e)
+            traceback.print_exc()
             self.root.after(0, lambda err=e: self._on_error(err))
 
     def _on_complete(self):
-        """Cleanup after successful analysis."""
-        if self.progress_win:
-            self.progress_win.destroy()
-        messagebox.showinfo("Analysis Complete", "Stockfish has finished analyzing the game.")
-        if self.on_finished_callback:
-            self.on_finished_callback()
+        if self.progress_win: self.progress_win.destroy()
+        messagebox.showinfo("Analysis Complete", "Game analyzed successfully!")
+        if self.on_finished_callback: self.on_finished_callback()
 
     def _on_error(self, error):
-        """Handles errors during analysis."""
-        if self.progress_win:
-            self.progress_win.destroy()
-        messagebox.showerror("Engine Error", f"An error occurred: {error}")
+        if self.progress_win: self.progress_win.destroy()
+        messagebox.showerror("Engine Error", f"Error: {error}")
 
 class CommentManager:
     def __init__(self, label_widget, lines_per_page=5):
@@ -2276,6 +2281,7 @@ class ChessAnnotatorApp:
             self.update_state()  # refresh method here
             print("Analysis successfully integrated into the UI.")
 
+        self.classifier = OpeningClassifier("eco.json")
         self.classifier.annotate_opening(self.game)
 
         # Create the manager and start
