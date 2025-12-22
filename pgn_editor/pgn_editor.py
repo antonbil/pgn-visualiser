@@ -100,6 +100,81 @@ def _add_tooltip(widget, text):
     return Tooltip(widget, text)
 
 
+class OpeningClassifier:
+    def __init__(self, json_path="eco.json"):
+        """
+        Loads the ECO database and prepares it for FEN-based lookup.
+        """
+        self.opening_db = {}
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Map standardized FEN to opening data for fast lookup
+                for entry in data:
+                    clean_fen = entry['f']
+                    self.opening_db[clean_fen] = {
+                        "name": entry['n'],
+                        "code": entry['c']
+                    }
+        except FileNotFoundError:
+            print(f"Error: {json_path} not found.")
+        except Exception as e:
+            print(f"Error loading ECO database: {e}")
+
+    def _standardize_fen(self, fen):
+        """
+        Standardizes FEN by removing move clocks.
+        Opening databases usually only care about the board,
+        turn, castling, and en passant square.
+        """
+        parts = fen.split()
+        # Keep only board, turn, castling, and en passant (first 4 parts)
+        return " ".join(parts[:3])
+
+    def annotate_opening(self, game):
+        """
+        Uses a while-loop to traverse the mainline and annotate the last matching opening move.
+        """
+        if not game:
+            return None
+
+        node = game
+        last_matched_node = None
+        opening_info = None
+
+        # Traverse the mainline using the requested while-loop
+        while not node.is_end():
+            # Move to the next node in the main variation
+            node = node.variation(0)
+
+            # Get the board position at this specific node
+            board = node.board()
+            current_fen = self._standardize_fen(board.fen())
+
+            # Check if this position is in our opening database
+            if current_fen in self.opening_db:
+                opening_info = self.opening_db[current_fen]
+                last_matched_node = node
+
+        # If we found a match, add it as a comment to the specific node
+        if last_matched_node and opening_info:
+            annotation = f"{opening_info['name']}"
+
+            # Check if the annotation is already there to avoid duplicates
+            existing_comment = last_matched_node.comment or ""
+            if annotation not in existing_comment:
+                if existing_comment:
+                    last_matched_node.comment = f"{existing_comment} ({annotation})"
+                    print("opening", annotation, "added to:", last_matched_node)
+                else:
+                    last_matched_node.comment = annotation
+                    print("opening", annotation, "added to:", last_matched_node)
+
+            return opening_info
+
+        return None
+
+
 class AnalysisManager:
     def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None):
         """
@@ -1041,6 +1116,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
         game_menu.add_command(label="Analyse Game...", command=self.handle_analyze_button)
+        game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
         variations_menu.add_command(label="Restore Variation", command=self.restore_variation)
@@ -2173,6 +2249,24 @@ class ChessAnnotatorApp:
 
         self.master.wait_window(dialog)
 
+    def handle_classify_opening_button(self):
+        # 1. Initialize once in your app
+        self.classifier = OpeningClassifier("eco.json")
+
+        # 2. Use it whenever a game is loaded or a move is made
+        opening_info = self.classifier.annotate_opening(self.game)
+
+        if opening_info:
+            self.update_state()
+            # Update your UI labels
+            #self.eco_label.config(text=f"ECO: {opening_info['code']}")
+            #self.opening_name_label.config(text=opening_info['name'])
+            pass
+        else:
+            #self.eco_label.config(text="ECO: ---")
+            #self.opening_name_label.config(text="Unknown Opening")
+            pass
+
     def handle_analyze_button(self):
         # Path to your Stockfish executable
         sf_path = self.ENGINE_PATH  # Or your Windows/Mac path
@@ -2181,6 +2275,8 @@ class ChessAnnotatorApp:
         def refresh_ui():
             self.update_state()  # refresh method here
             print("Analysis successfully integrated into the UI.")
+
+        self.classifier.annotate_opening(self.game)
 
         # Create the manager and start
         self.analyzer = AnalysisManager(
