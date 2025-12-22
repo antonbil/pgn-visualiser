@@ -534,7 +534,7 @@ class PGNEntryApp:
     def _save_pgn(self):
         """Genereert het PGN-bestand en slaat het op naar een bestand."""
         if not self.move_history:
-            messagebox.showwarning("Opslaan Mislukt", "Voer eerst zetten in om een PGN te genereren.")
+            messagebox.showwarning("Opslaan Mislukt", "Voer eerst zetten in om een PGN te genereren.", parent=self.master)
             return
 
         # 1. Creeër de PGN Game instantie
@@ -555,6 +555,7 @@ class PGNEntryApp:
 
         # 5. Opslaan via dialoogvenster
         file_path = filedialog.asksaveasfilename(
+            parent=self.master,
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
             title="Sla PGN-bestand op"
@@ -565,9 +566,9 @@ class PGNEntryApp:
             try:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(pgn_string)
-                messagebox.showinfo("Succes", f"PGN succesvol opgeslagen naar:\n{file_path}")
+                messagebox.showinfo("Succes", f"PGN succesvol opgeslagen naar:\n{file_path}", parent=self.master)
             except Exception as e:
-                messagebox.showerror("Fout bij Opslaan", f"Kon het bestand niet opslaan: {e}")
+                messagebox.showerror("Fout bij Opslaan", f"Kon het bestand niet opslaan: {e}", parent=self.master)
 
 if __name__ == '__main__':
 

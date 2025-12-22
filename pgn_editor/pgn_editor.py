@@ -1777,8 +1777,28 @@ class ChessAnnotatorApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.moves_canvas.config(yscrollcommand=scrollbar.set)
 
-        # 3. Create an 'Inner Frame' INSIDE the Canvas
-        self.canvas_inner_frame = tk.Frame(self.moves_canvas)
+
+        # 3. Create a frame INSIDE the canvas for the moves
+        self.inner_moves_frame = tk.Frame(self.moves_canvas)
+
+        # Place the frame inside the canvas, and STORE the id
+        self.canvas_window_id = self.moves_canvas.create_window(
+            (0, 0),
+            window=self.inner_moves_frame,
+            anchor="nw"
+        )
+
+        # The inner_frame grabs the whole width
+        def on_canvas_configure(event):
+            self.moves_canvas.itemconfig(self.canvas_window_id, width=event.width)
+
+        self.moves_canvas.bind('<Configure>', on_canvas_configure)
+
+        # the scrollregion will be notified if moves will be added
+        def on_frame_configure(event):
+            self.moves_canvas.configure(scrollregion=self.moves_canvas.bbox("all"))
+
+        self.inner_moves_frame.bind('<Configure>', on_frame_configure)
 
         # 4. Remove the Listbox and place a Frame for the Labels
         # We no longer need self.move_listbox as a widget; we now use the inner_frame.
@@ -1789,7 +1809,7 @@ class ChessAnnotatorApp:
         # 5. Attach the Inner Frame to the Canvas
         self.canvas_window_id = self.moves_canvas.create_window(
             (0, 0),
-            window=self.canvas_inner_frame,
+            window=self.inner_moves_frame,
             anchor="nw",
             tags="inner_frame"
         )
@@ -1817,7 +1837,7 @@ class ChessAnnotatorApp:
         Fills the Listbox with all moves, including any commentaries and variation indicators.
         """
         # 1. Empty the Inner Frame
-        for widget in self.canvas_inner_frame.winfo_children():
+        for widget in self.inner_moves_frame.winfo_children():
             widget.destroy()
         self.move_labels.clear()
         if not self.game:
@@ -1853,7 +1873,7 @@ class ChessAnnotatorApp:
             #self.move_listbox.insert(tk.END, list_item)
             # create and bind Label
             label = ttk.Label(
-                self.canvas_inner_frame,
+                self.inner_moves_frame,
                 text=list_item,
                 font=('Consolas', 10),
                 anchor='w',
@@ -2263,9 +2283,7 @@ class ChessAnnotatorApp:
 
         if opening_info:
             self.update_state()
-            # Update your UI labels
-            #self.eco_label.config(text=f"ECO: {opening_info['code']}")
-            #self.opening_name_label.config(text=opening_info['name'])
+            self._populate_move_listbox()
             pass
         else:
             #self.eco_label.config(text="ECO: ---")
@@ -2278,7 +2296,8 @@ class ChessAnnotatorApp:
 
         # Define what should happen when it's done (e.g., refresh your move list)
         def refresh_ui():
-            self.update_state()  # refresh method here
+            self.update_state()
+            self._populate_move_listbox()
             print("Analysis successfully integrated into the UI.")
 
         self.classifier = OpeningClassifier("eco.json")
