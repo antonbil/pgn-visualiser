@@ -832,7 +832,7 @@ class GameChooserDialog(tk.Toplevel):
 COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.last_filepath = pgn_game
         self.theme_name=board
@@ -846,8 +846,11 @@ class ChessAnnotatorApp:
         self.selected_square = None
         self.highlight_item = None
         self.swap_colours = swap_colours
+        self.call_back = call_back
+        self.is_dirty = False
         master.title("PGN Chess Annotator")
         self.set_theme()
+        master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # --- Data Initialization ---
         self.all_games = []      # List of all chess.pgn.Game objects in the PGN file
@@ -1222,12 +1225,37 @@ class ChessAnnotatorApp:
     def on_closing(self):
         """
         Saves the current session information and closes the application.
-        Called via root.protocol("WM_DELETE_WINDOW", ...).
+        Checks for unsaved changes (is_dirty) before exiting.
         """
+        if self.is_dirty:
+            # Ask the user what to do with unsaved changes
+            response = messagebox.askyesnocancel(
+                "Unsaved Changes",
+                "You have unsaved changes. Do you want to save before exiting?",
+                parent=self.master
+            )
+
+            if response:
+                # User clicked 'Yes' -> Save and then proceed to close
+                self.save_pgn_file()
+                # Note: you might want to check if _save_pgn actually succeeded
+                # before continuing, but usually we proceed here.
+            elif response is False:
+                # User clicked 'No' -> Do not save, just proceed to close
+                pass
+            else:
+                # User clicked 'Cancel' or closed the dialog -> Stop the closing process
+                return
+
+        # 1. Save general settings/preferences
         self.save_preferences_class()
 
-        # 3. Close the app
+        # 2. Close the app
         self.master.destroy()
+
+        # 3. Handle the callback if present
+        if self.call_back is not None:
+            self.call_back()
 
     def save_preferences_class(self):
         # 1. Collect data
@@ -1482,6 +1510,7 @@ class ChessAnnotatorApp:
                         game.accept(exporter)
                         # Add extra newlines between games for readability
                         f.write("\n\n")
+                    self.is_dirty = False
 
                 messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).")
 
@@ -2251,6 +2280,7 @@ class ChessAnnotatorApp:
         button_frame.pack()
 
         def save_comment():
+            self.is_dirty = True
             new_comment = text_widget.get("1.0", tk.END).strip()
             node.comment = new_comment
             if self.current_move_index != -1: # Only update listbox item if it's not the root
@@ -2284,7 +2314,7 @@ class ChessAnnotatorApp:
         if opening_info:
             self.update_state()
             self._populate_move_listbox()
-            pass
+            self.is_dirty = True
         else:
             #self.eco_label.config(text="ECO: ---")
             #self.opening_name_label.config(text="Unknown Opening")
@@ -2311,6 +2341,7 @@ class ChessAnnotatorApp:
             on_finished_callback=refresh_ui
         )
         self.analyzer.start()
+        self.is_dirty = True
 
     def manage_comment(self, delete=False):
         """
@@ -2324,6 +2355,7 @@ class ChessAnnotatorApp:
         current_move_text = self.notation_label.cget('text')
 
         if delete:
+            self.is_dirty = True
             node.comment = ""
             if self.current_move_index != -1: # Only update listbox item if it's not the root
                 self.update_listbox_item(self.current_move_index)
@@ -2534,6 +2566,7 @@ class ChessAnnotatorApp:
                     # The first move is added to the current node
                     new_node = previous_node.add_variation(move)
                     new_variation_root = new_node
+                    self.is_dirty = True
 
                     # Add comment to the first move of the variation
                     new_node.comment = (
@@ -2668,6 +2701,7 @@ class ChessAnnotatorApp:
 
             # The chess.pgn.GameNode variation list is a standard list.
             if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete Variation {index+1}?", parent=dialog):
+                self.is_dirty = True
                 del current_node.variations[index]
                 _populate_variations()
                 if self.current_move_index != -1:
@@ -3177,7 +3211,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
     app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board)
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
+
     root.mainloop()
 #example call
 ##python3 pgn_editor.py --pgn_game "/home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn" --engine_name "/home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2"

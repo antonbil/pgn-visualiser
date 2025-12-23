@@ -714,15 +714,25 @@ class ChessEventViewer:
                 messagebox.showerror("Loading Error", f"Could not read the file: {e}")
 
     def start_editor(self):
-        root = tk.Tk()
+        new_window = tk.Toplevel(self.master)
+        new_window.title("New Game Entry")
+
         try:
             string_var_value = self.pgn_filepath.get()
         except:
             string_var_value = ""
-        app = ChessAnnotatorApp(root, string_var_value, self.engine_path, hide_file_load = True, image_manager = None,
-                                square_size = 75, current_game_index = self.current_game_index,  piece_set = "staunty", board="Standard", swap_colours = self.swap_colours)
+        app = ChessAnnotatorApp(new_window, string_var_value, self.engine_path, hide_file_load=True, image_manager=self.image_manager,
+                                square_size=85, current_game_index=self.current_game_index, piece_set=self.piece_set,
+                                board=self.board, swap_colours=self.swap_colours, call_back = self.annotator_callback)
+
+        new_window.focus_set()
+
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 False <__main__.PieceImageManager1 object at 0x78f90a0dfb30> 75 0 ../../../Images/piece/tatiana Rosewood
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
+
+    def annotator_callback(self):
+        #messagebox.showinfo("Information", "No PGN games are currently loaded.", parent=self.master,)
+        pass
 
     def enter_new_game(self):
 
