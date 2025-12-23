@@ -709,7 +709,8 @@ class ChessEventViewer:
         )
         if filepath:
             try:
-                pass
+                self.lastLoadedPgnPath = filepath
+                self._read_file_and_analyze(self.lastLoadedPgnPath)
             except Exception as e:
                 messagebox.showerror("Loading Error", f"Could not read the file: {e}")
 
