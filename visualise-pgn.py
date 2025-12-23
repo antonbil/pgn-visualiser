@@ -716,7 +716,7 @@ class ChessEventViewer:
 
     def start_editor(self):
         new_window = tk.Toplevel(self.master)
-        new_window.title("New Game Entry")
+        new_window.title("Update Game")
 
         try:
             string_var_value = self.pgn_filepath.get()
@@ -745,9 +745,20 @@ class ChessEventViewer:
         new_window = tk.Toplevel(self.master)
         new_window.title("New Game Entry")
 
-        app = PGNEntryApp(new_window, self.image_manager, self.pgn_filepath, square_size=self.square_size)
+        app = PGNEntryApp(new_window, self.image_manager, self.pgn_filepath, square_size=self.square_size, call_back=self.pgn_entry_callback,color_light = self.color_light,
+        color_dark = self.color_dark)
 
         new_window.focus_set()
+
+    def pgn_entry_callback(self, pgn_chess):
+        print("callback received in visualise",pgn_chess)
+        new_window = tk.Toplevel(self.master)
+        new_window.title("Update New Game")
+        ChessAnnotatorApp(new_window, "default.pgn", self.engine_path, hide_file_load=True,
+                          image_manager=self.image_manager,
+                          square_size=85, current_game_index=0, piece_set=self.piece_set,
+                          board=self.board, swap_colours=self.swap_colours, call_back=self.annotator_callback)
+        pass
 
     def save_pgn_file(self):
         """

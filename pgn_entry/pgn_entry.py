@@ -123,18 +123,20 @@ class PGNEntryApp:
     """
     Applicatie voor het invoeren van schaakpartijen via bordklikken en het genereren van een PGN-bestand.
     """
-    def __init__(self, master, image_manager, pgn_filepath = None, square_size = 60):
+    def __init__(self, master, image_manager, pgn_filepath = None, square_size = 60, call_back = None, color_light = "#F0D9B5",
+        color_dark = "#B58863"):
         self.master = master
         self.pgn_filepath = pgn_filepath
         self.image_manager = image_manager
+        self.call_back = call_back
         master.protocol("WM_DELETE_WINDOW", self.handle_close)
         self.file_path = ""
         master.title("PGN Invoer Applicatie")
 
         # --- Configuraties ---
         self.square_size = square_size
-        self.color_light = "#F0D9B5"
-        self.color_dark = "#B58863"
+        self.color_light = color_light
+        self.color_dark = color_dark
         self.selected_color = "#FF8080" # Kleur voor geselecteerd veld
 
         # --- Schaakdata Initialisatie ---
@@ -287,7 +289,7 @@ class PGNEntryApp:
         self.board_canvas.delete("all")
 
         square_size = self.square_size
-        colors = ("#F0D9B5", "#B58863")  # Light and dark square colors
+        colors = (self.color_light, self.color_dark)  # Light and dark square colors
         # Unicode pieces (White: Uppercase, Black: Lowercase)
         piece_map = {
             'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
@@ -326,7 +328,7 @@ class PGNEntryApp:
 
                 if piece:
                     symbol = piece.symbol()
-                    print(symbol)
+                    #print(symbol)
                     if self.image_manager is None:
                      piece_char = piece_map.get(piece.symbol())
                      self.board_canvas.create_text(
@@ -526,6 +528,9 @@ class PGNEntryApp:
         # Optioneel: Gebruik de waarde voor verdere verwerking, bijv. teruggeven aan een ouder-venster.
         if not self.pgn_filepath is None and len(self.file_path) > 0:
             self.pgn_filepath.set(self.file_path)
+        self.store_pgn("default.pgn")
+
+        self.call_back(self.board)
 
         # 2. Sluit het venster handmatig
         # Aannemende dat 'master' het hoofdvenster is van deze klasse.
@@ -569,6 +574,27 @@ class PGNEntryApp:
                 messagebox.showinfo("Succes", f"PGN succesvol opgeslagen naar:\n{file_path}", parent=self.master)
             except Exception as e:
                 messagebox.showerror("Fout bij Opslaan", f"Kon het bestand niet opslaan: {e}", parent=self.master)
+
+    def store_pgn(self, png_name):
+        # 1. Creeër de PGN Game instantie
+        game = chess.pgn.Game()
+
+        # 2. Stel de headers in
+        for field, var in self.header_vars.items():
+            game.headers[field] = var.get()
+
+        # 3. Voeg de zetten toe
+        node = game
+        for move in self.move_history:
+            node = node.add_variation(move)
+        exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+        pgn_string = game.accept(exporter)
+        try:
+            with open(png_name, "w", encoding="utf-8") as f:
+                f.write(pgn_string)
+        except Exception as e:
+            messagebox.showerror("Fout bij Opslaan", f"Kon het bestand niet opslaan: {e}", parent=self.master)
+
 
 if __name__ == '__main__':
 

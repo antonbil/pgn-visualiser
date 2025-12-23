@@ -14,7 +14,7 @@ import cairosvg
 from io import BytesIO
 from tkinter import ttk
 import traceback
-import textwrap
+from pathlib import Path
 
 PREFERENCES_FILE = "preferences.json"
 
@@ -105,9 +105,11 @@ class OpeningClassifier:
         """
         Loads the ECO database and prepares it for FEN-based lookup.
         """
+        self.script_path = Path(__file__).resolve().parent
+        eco_path = self.script_path / json_path
         self.opening_db = {}
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(eco_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # Map standardized FEN to opening data for fast lookup
                 for entry in data:
@@ -117,7 +119,7 @@ class OpeningClassifier:
                         "code": entry['c']
                     }
         except FileNotFoundError:
-            print(f"Error: {json_path} not found.")
+            print(f"Error: {eco_path} not found.")
         except Exception as e:
             print(f"Error loading ECO database: {e}")
 
@@ -295,12 +297,12 @@ class AnalysisManager:
 
     def _on_complete(self):
         if self.progress_win: self.progress_win.destroy()
-        messagebox.showinfo("Analysis Complete", "Game analyzed successfully!")
+        messagebox.showinfo("Analysis Complete", "Game analyzed successfully!", parent=self.root)
         if self.on_finished_callback: self.on_finished_callback()
 
     def _on_error(self, error):
         if self.progress_win: self.progress_win.destroy()
-        messagebox.showerror("Engine Error", f"Error: {error}")
+        messagebox.showerror("Engine Error", f"Error: {error}", parent=self.root)
 
 class CommentManager:
     def __init__(self, label_widget, lines_per_page=5):
@@ -744,7 +746,7 @@ class GameChooserDialog(tk.Toplevel):
         elif self.drag_data["selected_label"]:
             final_index = self.drag_data["selected_label"].game_index
         else:
-            messagebox.showwarning("Selection Error", "Please select a game from the list.")
+            messagebox.showwarning("Selection Error", "Please select a game from the list.", parent=self.master)
             return
 
         if final_index is not None and final_index != self.current_game_index:
@@ -923,7 +925,7 @@ class ChessAnnotatorApp:
                     pgn_content = f.read()
                 self._load_game_from_content(pgn_content)
             except Exception as e:
-                messagebox.showerror("Loading Error", f"Could not read the file: {e}")
+                messagebox.showerror("Loading Error", f"Could not read the file: {e}", parent=self.master)
         else:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
@@ -1284,7 +1286,7 @@ class ChessAnnotatorApp:
         Opens the Game Chooser dialog, which handles game selection and switching.
         """
         if not hasattr(self, 'all_games') or not self.all_games:
-            messagebox.showinfo("Information", "No PGN games are currently loaded.")
+            messagebox.showinfo("Information", "No PGN games are currently loaded.", parent=self.master)
             return
 
         GameChooserDialog(
@@ -1310,7 +1312,7 @@ class ChessAnnotatorApp:
         if 0 <= new_index < len(self.all_games):
             self._switch_to_game(new_index)
         else:
-            messagebox.showinfo("Navigation", "This is the beginning or end of the PGN collection.")
+            messagebox.showinfo("Navigation", "This is the beginning or end of the PGN collection.", parent=self.master)
 
     def _switch_to_game(self, index):
         """
@@ -1439,7 +1441,7 @@ class ChessAnnotatorApp:
         Closes the current application and starts a fresh instance.
         """
         # 1. Ask for confirmation (Optional but recommended)
-        if not messagebox.askyesno("Restart", "Piece-set has changed. Are you sure you want to restart?"):
+        if not messagebox.askyesno("Restart", "Piece-set has changed. Are you sure you want to restart?", parent=self.master):
             return
 
         # 2. Close the Tkinter window properly
@@ -1477,7 +1479,7 @@ class ChessAnnotatorApp:
                 self.current_game_index = 0
                 self._load_game_from_content(pgn_content)
             except Exception as e:
-                messagebox.showerror("Loading Error", f"Could not read the file: {e}")
+                messagebox.showerror("Loading Error", f"Could not read the file: {e}", parent=self.master)
 
     def save_pgn_file(self):
         """
@@ -1485,7 +1487,7 @@ class ChessAnnotatorApp:
         """
         # Check if the list exists and is not empty
         if not hasattr(self, 'all_games') or not self.all_games:
-            messagebox.showwarning("Save Failed", "No games in the database to save.")
+            messagebox.showwarning("Save Failed", "No games in the database to save.", parent=self.master)
             return
 
         # Ask the user where to save the file
@@ -1512,10 +1514,10 @@ class ChessAnnotatorApp:
                         f.write("\n\n")
                     self.is_dirty = False
 
-                messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).")
+                messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).", parent=self.master)
 
             except Exception as e:
-                messagebox.showerror("Saving Error", f"Could not save the database: {e}")
+                messagebox.showerror("Saving Error", f"Could not save the database: {e}", parent=self.master)
 
     def _load_game_from_content(self, pgn_content):
         """
@@ -1531,7 +1533,7 @@ class ChessAnnotatorApp:
                 self.all_games.append(game)
 
             if not self.all_games:
-                messagebox.showerror("Error", "Could not read PGN. Invalid game or empty file.")
+                messagebox.showerror("Error", "Could not read PGN. Invalid game or empty file.", parent=self.master)
                 self.game = None
                 self.current_game_index = -1
                 self.move_list = []
@@ -1543,7 +1545,7 @@ class ChessAnnotatorApp:
             self._switch_to_game(self.current_game_index)
 
         except Exception as e:
-            messagebox.showerror("Error", f"Error reading PGN: {e}")
+            messagebox.showerror("Error", f"Error reading PGN: {e}", parent=self.master)
 
 
     # --- UI Component Setup ---
@@ -2349,7 +2351,7 @@ class ChessAnnotatorApp:
         """
         node = self._get_current_node()
         if not node:
-            messagebox.showinfo("Information", "Please select a move or the starting position to manage commentary.")
+            messagebox.showinfo("Information", "Please select a move or the starting position to manage commentary.", parent=self.master)
             return
 
         current_move_text = self.notation_label.cget('text')
@@ -2360,7 +2362,7 @@ class ChessAnnotatorApp:
             if self.current_move_index != -1: # Only update listbox item if it's not the root
                 self.update_listbox_item(self.current_move_index)
             self.update_comment_display()
-            messagebox.showinfo("Commentary", f"Commentary deleted for {current_move_text}.")
+            messagebox.showinfo("Commentary", f"Commentary deleted for {current_move_text}.", parent=self.master)
         else:
             # Open the custom multi-line editor
             self._open_commentary_editor(node, current_move_text)
@@ -2467,10 +2469,10 @@ class ChessAnnotatorApp:
             return suggestions
 
         except FileNotFoundError:
-            messagebox.showerror("Engine Error", f"Stockfish engine not found at path: {self.ENGINE_PATH}. Please check the path and permissions.")
+            messagebox.showerror("Engine Error", f"Stockfish engine not found at path: {self.ENGINE_PATH}. Please check the path and permissions.", parent=self.master)
             return None
         except Exception as e:
-            messagebox.showerror("Engine Error", f"An error occurred while communicating with the engine: {e}")
+            messagebox.showerror("Engine Error", f"An error occurred while communicating with the engine: {e}", parent=self.master)
             return None
         finally:
             # IMPORTANT: Always close the engine process
@@ -2486,13 +2488,13 @@ class ChessAnnotatorApp:
         previous_current_move_index = self.current_move_index
         current_node = self._get_current_node()
         if not current_node:
-            messagebox.showinfo("Information", "No game loaded.")
+            messagebox.showinfo("Information", "No game loaded.", parent=self.master)
             return
 
         current_board = current_node.board()
 
         if current_board.is_game_over():
-            messagebox.showinfo("Information", "Game is over. Cannot add new variations.")
+            messagebox.showinfo("Information", "Game is over. Cannot add new variations.", parent=self.master)
             return
 
         # 1. Get suggestions from the engine (Blocking call)
@@ -2548,7 +2550,7 @@ class ChessAnnotatorApp:
         def select_and_add():
             selection = suggestion_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a move to add as a variation.")
+                messagebox.showwarning("Warning", "Please select a move to add as a variation.", parent=self.master)
                 return
 
             selected_index = selection[0]
@@ -2582,7 +2584,7 @@ class ChessAnnotatorApp:
 
             if new_variation_root:
 
-                messagebox.showinfo("Success", f"Variation starting with {selected_sug['move_san']} added successfully.")
+                messagebox.showinfo("Success", f"Variation starting with {selected_sug['move_san']} added successfully.", parent=self.master)
                 # 5. Update UI
                 self.current_move_index = previous_current_move_index
                 if self.current_move_index != -1:
@@ -2619,7 +2621,7 @@ class ChessAnnotatorApp:
         previous_current_move_index = self.current_move_index
         current_node = self._get_current_node()
         if not current_node:
-            messagebox.showinfo("Information", "Please select a move or the starting position to manage variations.")
+            messagebox.showinfo("Information", "Please select a move or the starting position to manage variations.", parent=self.master)
             return
 
         dialog = tk.Toplevel(self.master)
@@ -2678,7 +2680,7 @@ class ChessAnnotatorApp:
         def _activate_selected_variation():
             selection = variation_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a variation to edit.")
+                messagebox.showwarning("Warning", "Please select a variation to edit.", parent=self.master)
                 return
 
             index = selection[0]
@@ -2694,7 +2696,7 @@ class ChessAnnotatorApp:
         def _delete_selected_variation():
             selection = variation_listbox.curselection()
             if not selection:
-                messagebox.showwarning("Warning", "Please select a variation to delete.")
+                messagebox.showwarning("Warning", "Please select a variation to delete.", parent=self.master)
                 return
 
             index = selection[0]
@@ -2733,7 +2735,7 @@ class ChessAnnotatorApp:
 
     def manual_move(self):
         self.is_manual = True
-        messagebox.showinfo("Information", "Enter move on chess-board.")
+        messagebox.showinfo("Information", "Enter move on chess-board.", parent=self.master)
     def _get_square_coords(self, rank, file):
         """
         Translates chess rank/file to canvas pixel coordinates.
@@ -2760,7 +2762,7 @@ class ChessAnnotatorApp:
         Restores a stored variation and updates the board state instantly.
         """
         if len(self.stored_moves) == 0:
-            messagebox.showinfo("Information", "No variations to restore.")
+            messagebox.showinfo("Information", "No variations to restore.", parent=self.master)
             return
 
         # 1. Pop the stored state
@@ -2973,7 +2975,7 @@ class ChessAnnotatorApp:
                     self._add_move_as_variation(move)
                     self.selected_square = None
                     self._clear_selection_highlight()
-                    messagebox.showinfo("Information", f"Valid move: {move.uci()} added...")
+                    messagebox.showinfo("Information", f"Valid move: {move.uci()} added...", parent=self.master)
 
                     return # Handled, stop click processing
 
