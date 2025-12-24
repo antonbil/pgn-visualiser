@@ -139,7 +139,7 @@ def get_cp_from_comment(comment):
     if not comment:
         return None
     try:
-        comment = comment.strip()
+        comment = comment.strip().replace("Stockfish:", "").strip()
         prefixes = ["+", "-", "0", "1", "2", "3","4", "5", "6", "7", "8", "9"]
 
         # Checking if the string starts with any element in the list
@@ -731,7 +731,10 @@ class ChessEventViewer:
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 False <__main__.PieceImageManager1 object at 0x78f90a0dfb30> 75 0 ../../../Images/piece/tatiana Rosewood
         #parameters: /home/user/Schaken/2025-12-11-Anton-Gerrit-annotated.pgn /home/user/Schaken/stockfish-python/Python-Easy-Chess-GUI/Engines/stockfish-ubuntu-x86-64-avx2 True None 75 -1 staunty Standard
 
-    def annotator_callback(self):
+    def annotator_callback(self, file_name):
+        #reload the dta from filename, check if selected_index is still valid
+        self.lastLoadedPgnPath = file_name
+        self._read_file_and_analyze(self.lastLoadedPgnPath)
         #messagebox.showinfo("Information", "No PGN games are currently loaded.", parent=self.master,)
         pass
 
@@ -1455,8 +1458,20 @@ class ChessEventViewer:
 
         # 4. Update the UI and log the change
         print(f"Tab changed. New index: {self.current_tab}")
+        try:
+            self.current_movelistbox = self.move_listboxes[self.current_tab]
+        except (KeyError, IndexError, AttributeError):
+            # Analysis or move list data is missing
+            # English translation: "This PGN has not been analyzed yet. Would you like to start the analysis now?"
+            msg = "This PGN has not been analyzed yet.\n\nWould you like to start the analysis now?"
 
-        self.current_movelistbox = self.move_listboxes[self.current_tab]
+            if messagebox.askyesno("Analysis Required", msg, parent=self.master):
+                # The user wants to proceed with the analysis
+                self.start_editor()
+            else:
+                # The user declined; you might want to show an empty state or log it
+                print("User declined analysis for the current PGN.")
+            return
         self.current_movelistbox_info = None
         info = self.get_info_current_listbox()
 
@@ -1620,6 +1635,7 @@ class ChessEventViewer:
         """
         Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
         """
+        print("1a")
         pgn_io = io.StringIO(pgn_string)
         games = []
         while True:
@@ -1631,13 +1647,15 @@ class ChessEventViewer:
                 break
 
         self.num_games = len(self.game_descriptions)
+        print("1b")
         current_game_index = 0
         self.set_game_var_descriptions(current_game_index)
-
+        print("1c")
         if len(games) == 0:
             print("Error: Could not read chess game from PGN string.")
             return []
         else:
+            print("1d")
             game = games[0]
             if self.num_games == 1:
                 # hide the navigation-panel
@@ -1646,7 +1664,9 @@ class ChessEventViewer:
                 # show the navigation-panel
                 NAV_PACK_ARGS = {'side': tk.TOP, 'fill': tk.X, 'pady': 5}
                 self.nav_panel.pack(**NAV_PACK_ARGS)
+        print("1e")
         self.game = game
+        print("1f")
         return self.get_all_significant_events_game(game)
 
     def get_all_significant_events_game(self, game):
@@ -1666,6 +1686,7 @@ class ChessEventViewer:
 
         # Iterate over the main line
         for node in game.mainline():
+            print("move", node.move)
             if node.move is None:
                 continue
 
@@ -1717,6 +1738,7 @@ class ChessEventViewer:
                     'full_move_history': list(moves_made_so_far),
                     'move_index': len(moves_made_so_far) - 1  # Index of the move
                 })
+                print("event", 'score', event_score,'eval_before', eval_before_cp / 100.0,'eval_after', eval_after_cp / 100.0)
 
             # --- EXECUTE MOVE AND TRACK EVALUATION ---
             try:

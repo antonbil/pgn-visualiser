@@ -275,27 +275,68 @@ class AnalysisManager:
                 played_move_score = None
                 for entry in analysis:
                     if entry["pv"][0] == played_move:
-                        played_move_score = entry["score"].relative.score(mate_score=10000)
+                        played_move_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
                         break
+                if played_move_score is None and not self.is_cancelled:
+                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
+                    played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
+
 
                 # Step 3: Supplemental scan if played move wasn't in top PVs
                 if played_move_score is None and not self.is_cancelled:
                     p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
-                    played_move_score = p_info.get("score").relative.score(mate_score=10000)
+                    played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
 
+                # --- IMPROVEMENT 1: Annotate the mainline move ---
+                score_val = round(played_move_score / 100.0, 2)
+                # Add or append the score to the existing comment
+                existing_comment = main_variation.comment
+                prefix = f" {score_val} "
+                main_variation.comment = f"{prefix}{existing_comment}".strip()
+
+                turn = board.turn  # chess.WHITE or chess.BLACK
                 # Step 4: Add variations if they are significantly better than the played move
                 if not self.is_cancelled:
                     for entry in analysis:
                         engine_move = entry["pv"][0]
-                        engine_score = entry["score"].relative.score(mate_score=10000)
-
                         if engine_move == played_move: continue
                         if any(v.move == engine_move for v in node.variations): continue
+                        engine_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
 
-                        if engine_score > (played_move_score + (self.PAWN_THRESHOLD * 100)):
-                            new_var = node.add_variation(engine_move)
-                            diff = round((engine_score - played_move_score) / 100.0, 2)
-                            new_var.comment = f"Stockfish: +{diff}"
+                        engine_line = entry["pv"]  # This is a list of chess.Move objects
+                        engine_move = engine_line[0]
+                        engine_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
+
+                        if engine_move == played_move:
+                            continue
+
+                        # Calculate improvement based on whose turn it is
+                        # White wants higher score, Black wants lower score
+                        is_better = False
+                        diff = engine_score - played_move_score
+                        if turn == chess.WHITE and diff > (self.PAWN_THRESHOLD * 100):
+                            is_better = True
+                        elif turn == chess.BLACK and diff < -(self.PAWN_THRESHOLD * 100):
+                            is_better = True
+
+                        if is_better and not any(v.move == engine_move for v in node.variations):
+                            # Start a new variation branch
+                            var_node = node.add_variation(engine_move)
+
+                            # --- MULTI-MOVE LOGIC ---
+                            # Follow the engine's suggested line (Principal Variation)
+                            # We add up to 4 subsequent moves to show the intent
+                            temp_board = board.copy()
+                            temp_board.push(engine_move)
+
+                            current_branch_node = var_node
+                            for next_move in engine_line[1:5]:  # Get moves 2 through 5
+                                current_branch_node = current_branch_node.add_variation(next_move)
+                                temp_board.push(next_move)
+
+                            # Add a comment to the start of the variation
+                            eval_diff = round(abs(diff) / 100.0, 2)
+                            var_node.comment = f"{round(engine_score / 100.0, 2)} (+{eval_diff} gain)"
 
                 # Update progress bar
                 move_count += 1
@@ -1284,7 +1325,9 @@ class ChessAnnotatorApp:
 
         # 3. Handle the callback if present
         if self.call_back is not None:
-            self.call_back()
+            param = self.last_filepath
+            self.store_pgn_file(param)
+            self.call_back(param)
 
     def save_preferences_class(self):
         # 1. Collect data
@@ -1369,7 +1412,10 @@ class ChessAnnotatorApp:
     def store_meta_data(self):
         if not self.game is None:
             for tag, entry in self.meta_entries.items():
-                self.game.headers[tag] = entry.get()
+                try:
+                    self.game.headers[tag] = entry.get()
+                except:
+                    pass
 
     def _update_game_navigation_state(self):
         """
@@ -1540,10 +1586,42 @@ class ChessAnnotatorApp:
                         # Add extra newlines between games for readability
                         f.write("\n\n")
                     self.is_dirty = False
+                self.last_filepath = filepath
 
                 messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).", parent=self.master)
 
             except Exception as e:
+                messagebox.showerror("Saving Error", f"Could not save the database: {e}", parent=self.master)
+    def store_pgn_file(self, filepath):
+        """
+        Saves all games in self.all_games to a PGN file, preserving order.
+        """
+        print("0")
+        # Check if the list exists and is not empty
+        if not hasattr(self, 'all_games') or not self.all_games:
+            messagebox.showwarning("Save Failed", "No games in the database to save.", parent=self.master)
+            return
+        print("1")
+
+        try:
+                # Important: Ensure the current active game in the UI is updated
+                # in the self.all_games list before saving, if you made changes.
+                # 1. Update the game's headers with the modified meta-tags from the UI
+                self.store_meta_data()
+
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    # We use FileExporter for clean PGN formatting
+                    for game in self.all_games:
+                        # Export each game one by one
+                        exporter = chess.pgn.FileExporter(f)
+                        game.accept(exporter)
+                        # Add extra newlines between games for readability
+                        f.write("\n\n")
+                    self.is_dirty = False
+                self.last_filepath = filepath
+                print("saved all to:", filepath)
+
+        except Exception as e:
                 messagebox.showerror("Saving Error", f"Could not save the database: {e}", parent=self.master)
 
     def _load_game_from_content(self, pgn_content):
