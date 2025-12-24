@@ -176,56 +176,79 @@ class OpeningClassifier:
 
         return None
 
-
 class AnalysisManager:
     # --- CONFIGURATION PARAMETERS ---
-    # Adjust these to balance speed vs. quality
-    THREADS = 4  # Number of CPU cores Stockfish may use
-    MEMORY_HASH = 256  # Memory in MB for Stockfish's lookup table
-    DEPTH_LIMIT = 16  # How deep Stockfish looks (14=fast, 20=pro)
-    MULTIPV_COUNT = 4  # Number of top moves to calculate
-    PAWN_THRESHOLD = 0.5  # Min. improvement needed to add a variation
+    THREADS = 4
+    MEMORY_HASH = 256
+    DEPTH_LIMIT = 16
+    MULTIPV_COUNT = 4
+    PAWN_THRESHOLD = 0.5
 
-    # --------------------------------
-
-    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None):
+    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None):
+        """
+        Initialize the analysis manager.
+        :param db_info: Optional string info like "Game 3 of 10: Player A vs Player B"
+        """
         self.root = root
         self.game = pgn_game
         self.stockfish_path = stockfish_path
         self.on_finished_callback = on_finished_callback
+        self.db_info = db_info  # Information about database progress
 
+        self.is_cancelled = False  # Flag to stop the process
         self.progress_win = None
         self.progress_bar = None
         self.status_label = None
+        self.db_label = None
 
     def start(self):
+        """Creates the UI and starts the background analysis thread."""
         self._create_progress_window()
         analysis_thread = threading.Thread(target=self._run_analysis)
         analysis_thread.daemon = True
         analysis_thread.start()
 
     def _create_progress_window(self):
+        """Sets up the Toplevel window for progress tracking."""
         self.progress_win = tk.Toplevel(self.root)
-        self.progress_win.title("Analyzing Game")
-        self.progress_win.geometry("350x120")
+        self.progress_win.title("Stockfish Analysis")
+        self.progress_win.geometry("400x200")
         self.progress_win.transient(self.root)
         self.progress_win.grab_set()
 
-        self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=300)
+        # Database progress label
+        if self.db_info:
+            self.db_label = tk.Label(self.progress_win, text=self.db_info, font=("Arial", 10, "bold"), wraplength=350)
+            self.db_label.pack(pady=(10, 0))
+
+        # Current move status label
+        self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=350)
         self.status_label.pack(pady=10)
 
-        self.progress_bar = ttk.Progressbar(self.progress_win, length=280, mode='determinate')
+        # Progress bar
+        self.progress_bar = ttk.Progressbar(self.progress_win, length=300, mode='determinate')
         self.progress_bar.pack(pady=10)
 
-    def _run_analysis(self):
-        try:
-            # Initialize engine with performance settings
-            engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
-            engine.configure({
-                "Threads": self.THREADS,
-                "Hash": self.MEMORY_HASH
-            })
+        # Stop/Cancel button
+        self.stop_button = tk.Button(self.progress_win, text="Stop Analysis", command=self._cancel_analysis,
+                                     bg="#ffcccc")
+        self.stop_button.pack(pady=10)
 
+    def _cancel_analysis(self):
+        """Triggered by the Stop button to halt analysis."""
+        if messagebox.askyesno("Cancel", "Do you want to stop the analysis?", parent=self.progress_win):
+            self.is_cancelled = True
+            self.status_label.config(text="Stopping engine...")
+
+    def _run_analysis(self):
+        """Background thread logic for engine communication."""
+        engine = None
+        try:
+            # Initialize engine and set UCI parameters
+            engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
+            engine.configure({"Threads": self.THREADS, "Hash": self.MEMORY_HASH})
+
+            # Calculate total moves for progress bar scaling
             total_moves = sum(1 for _ in self.game.mainline_moves())
             self.root.after(0, lambda: self.progress_bar.config(max=total_moves))
 
@@ -233,77 +256,80 @@ class AnalysisManager:
             move_count = 0
 
             while not node.is_end():
+                # Check if user requested a stop
+                if self.is_cancelled:
+                    break
+
                 main_variation = node.variation(0)
                 played_move = main_variation.move
                 board = node.board()
 
-                # Update UI
+                # Update UI text on the main thread
                 move_text = f"Analyzing move {board.fullmove_number}: {played_move}"
                 self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
 
-                # 1. Run Multi-PV analysis (Top 4 moves)
-                analysis = engine.analyse(
-                    board,
-                    chess.engine.Limit(depth=self.DEPTH_LIMIT),
-                    multipv=self.MULTIPV_COUNT
-                )
+                # Step 1: Run Multi-PV Analysis
+                analysis = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), multipv=self.MULTIPV_COUNT)
 
-                # 2. Extract the score of the played move from the analysis
+                # Step 2: Extract score of the move actually played
                 played_move_score = None
                 for entry in analysis:
                     if entry["pv"][0] == played_move:
                         played_move_score = entry["score"].relative.score(mate_score=10000)
                         break
 
-                # 3. If played move was NOT in top 4, do a quick separate scan for it
-                if played_move_score is None:
+                # Step 3: Supplemental scan if played move wasn't in top PVs
+                if played_move_score is None and not self.is_cancelled:
                     p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
                     played_move_score = p_info.get("score").relative.score(mate_score=10000)
 
-                # 4. Compare alternatives to the played move
-                best_move_entry = analysis[0]
-                best_move = best_move_entry["pv"][0]
-                best_score = best_move_entry["score"].relative.score(mate_score=10000)
+                # Step 4: Add variations if they are significantly better than the played move
+                if not self.is_cancelled:
+                    for entry in analysis:
+                        engine_move = entry["pv"][0]
+                        engine_score = entry["score"].relative.score(mate_score=10000)
 
-                # Only add variations for the top moves that are better than our move
-                for entry in analysis:
-                    engine_move = entry["pv"][0]
-                    engine_score = entry["score"].relative.score(mate_score=10000)
+                        if engine_move == played_move: continue
+                        if any(v.move == engine_move for v in node.variations): continue
 
-                    if engine_move == played_move:
-                        continue
+                        if engine_score > (played_move_score + (self.PAWN_THRESHOLD * 100)):
+                            new_var = node.add_variation(engine_move)
+                            diff = round((engine_score - played_move_score) / 100.0, 2)
+                            new_var.comment = f"Stockfish: +{diff}"
 
-                    # Check if already exists
-                    if any(v.move == engine_move for v in node.variations):
-                        continue
-
-                    # If this move is significantly better than what we played
-                    if engine_score > (played_move_score + (self.PAWN_THRESHOLD * 100)):
-                        new_var = node.add_variation(engine_move)
-                        diff = round((engine_score - played_move_score) / 100.0, 2)
-                        new_var.comment = f"Stockfish: +{diff}"
-
+                # Update progress bar
                 move_count += 1
                 self.root.after(0, lambda v=move_count: self.progress_bar.config(value=v))
                 node = main_variation
 
-            engine.quit()
-            self.root.after(0, self._on_complete)
-
         except Exception as e:
-            print(e)
+            print(f"Analysis error: {e}")
             traceback.print_exc()
             self.root.after(0, lambda err=e: self._on_error(err))
+        finally:
+            if engine:
+                engine.quit()
+
+            # Handle cleanup and routing based on completion status
+            if self.is_cancelled:
+                self.root.after(0, self._on_cancel_complete)
+            else:
+                self.root.after(0, self._on_complete)
 
     def _on_complete(self):
+        """Cleanup after successful game analysis."""
         if self.progress_win: self.progress_win.destroy()
-        messagebox.showinfo("Analysis Complete", "Game analyzed successfully!", parent=self.root)
         if self.on_finished_callback: self.on_finished_callback()
 
-    def _on_error(self, error):
+    def _on_cancel_complete(self):
+        """Cleanup and notification after user cancellation."""
         if self.progress_win: self.progress_win.destroy()
-        messagebox.showerror("Engine Error", f"Error: {error}", parent=self.root)
+        messagebox.showinfo("Cancelled", "The analysis process has been stopped.")
 
+    def _on_error(self, error):
+        """Unified error reporting for the analysis thread."""
+        if self.progress_win: self.progress_win.destroy()
+        messagebox.showerror("Engine Error", f"An error occurred: {error}", parent=self.root)
 class CommentManager:
     def __init__(self, label_widget, lines_per_page=5):
         self.display = label_widget
@@ -1126,6 +1152,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
         game_menu.add_command(label="Analyse Game...", command=self.handle_analyze_button)
+        game_menu.add_command(label="Analyse DB...", command=self.handle_analyze_db_button)
         game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
@@ -2322,12 +2349,69 @@ class ChessAnnotatorApp:
             #self.opening_name_label.config(text="Unknown Opening")
             pass
 
+    def handle_analyze_db_button(self):
+        """
+        Starts a sequential analysis of all games in the loaded database.
+        """
+        if not self.all_games:
+            messagebox.showwarning("Analysis", "No games loaded in the database to analyze.")
+            return
+
+        # Ask for confirmation as this might take a while
+        msg = f"Do you want to analyze all {len(self.all_games)} games? This may take some time."
+        if not messagebox.askyesno("Analyze Database", msg):
+            return
+
+        sf_path = self.ENGINE_PATH
+        self.classifier = OpeningClassifier("eco.json")
+
+        # We use an index to track which game we are currently analyzing
+        self.current_db_analysis_index = 0
+
+        def analyze_next_game():
+            """Helper function to analyze the next game in the list."""
+            if self.current_db_analysis_index < len(self.all_games):
+                # 1. Select the game
+                current_game = self.all_games[self.current_db_analysis_index]
+                # 2. Annotate opening (fast, so we do it on the main thread)
+                self.classifier.annotate_opening(current_game)
+
+                # Create a nice description for the popup
+                white = current_game.headers.get("White", "Unknown")
+                black = current_game.headers.get("Black", "Unknown")
+                game_desc = f"Game {self.current_db_analysis_index + 1} of {len(self.all_games)}\n{white} vs {black}"
+
+                self.analyzer = AnalysisManager(
+                    root=self.master,
+                    pgn_game=current_game,
+                    stockfish_path=self.ENGINE_PATH,
+                    on_finished_callback=go_to_next_game,
+                    db_info=game_desc  # Pass the game-info
+                )
+                self.analyzer.start()
+                self.is_dirty = True
+            else:
+                # Everything is finished!
+                self.update_state()
+                self._populate_move_listbox()
+                messagebox.showinfo("Analysis Complete", "All games in the database have been analyzed.")
+
+        def go_to_next_game():
+            """Callback that triggers the next game analysis."""
+            self.current_db_analysis_index += 1
+            # Use after(100) to give the UI a tiny bit of breathing room between games
+            self.master.after(100, analyze_next_game)
+
+        # Start the first game
+        analyze_next_game()
+
     def handle_analyze_button(self):
         # Path to your Stockfish executable
         sf_path = self.ENGINE_PATH  # Or your Windows/Mac path
 
         # Define what should happen when it's done (e.g., refresh your move list)
         def refresh_ui():
+            messagebox.showinfo("Analysis Complete", "Game analyzed successfully!", parent=self.master)
             self.update_state()
             self._populate_move_listbox()
             print("Analysis successfully integrated into the UI.")
