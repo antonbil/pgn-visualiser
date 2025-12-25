@@ -64,7 +64,7 @@ def _load_config():
         return {}
 
 
-def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, piece_set: str, square_size: int, board: str):
+def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, piece_set: str, square_size: int, board: str, engine_depth: int):
     """
     Saves the current configuration (default directory and last PGN path)
     to the configuration JSON file.
@@ -81,6 +81,7 @@ def _save_config(default_directory: str, last_pgn_path: str, engine_path: str, p
         "engine_path": engine_path.strip(),
         "piece_set": piece_set.strip(),
         "square_size":square_size,
+        "engine_depth": engine_depth,
         "board":board.strip()
     }
 
@@ -104,10 +105,11 @@ def get_settings():
         piece_set = config_data.get("piece_set", "staunty")
         engine_path = config_data.get("engine_path", "")
         square_size = config_data.get("square_size", 80)
+        engine_depth = config_data.get("engine_depth", 17)
         board1 = config_data.get("board", "red")
         print(f"Default PGN Directory: {default_pgn_dir}")
 
-        return default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1
+        return default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1, engine_depth
 
 
 # Functie om de zet-index uit de oorspronkelijke data te halen
@@ -398,10 +400,11 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard"):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard", engine_depth=17):
         image_manager = PieceImageManager(square_size, IMAGE_DIRECTORY, piece_set)
         self.current_movelistbox_info = None
         self.engine_path = engine_path
+        self.engine_depth = engine_depth
         self.piece_set = piece_set
         self.board = board
         self.all_moves_chess = None
@@ -632,6 +635,7 @@ class ChessEventViewer:
         size_changed = (new_square_size != self.square_size)
         self.square_size = new_square_size
         self.board = args[5]
+        self.engine_depth = int(args[6])
         self.theme_name = self.board
         self.set_theme()
         _save_config(*args)
@@ -724,7 +728,7 @@ class ChessEventViewer:
             string_var_value = ""
         app = ChessAnnotatorApp(new_window, string_var_value, self.engine_path, hide_file_load=True, image_manager=self.image_manager,
                                 square_size=85, current_game_index=self.current_game_index, piece_set=self.piece_set,
-                                board=self.board, swap_colours=self.swap_colours, call_back = self.annotator_callback)
+                                board=self.board, swap_colours=self.swap_colours, call_back = self.annotator_callback, engine_depth=self.engine_depth)
 
         new_window.focus_set()
 
@@ -1573,7 +1577,7 @@ class ChessEventViewer:
             result_label.configure(foreground="red")
 
     def on_closing(self):
-        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set, self.square_size, self.board)
+        _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set, self.square_size, self.board, self.engine_depth)
         exit()
 
     def show_settings_dialog(self):
@@ -1586,6 +1590,7 @@ class ChessEventViewer:
             "lastLoadedPgnPath": self.lastLoadedPgnPath,
             "engine_path": self.engine_path,
             "piece_set": self.piece_set,
+            "engine_depth":self.engine_depth,
             "square_size": self.square_size,
             "board": self.board
         }
@@ -2127,13 +2132,13 @@ if __name__ == "__main__":
         root.geometry("1200x900")
 
         IMAGE_DIRECTORY = "Images/piece"
-        default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1 = get_settings()
+        default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1, engine_depth = get_settings()
         SQUARE_SIZE = int(square_size) if square_size else 60  # Size of the squares in pixels
         # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
         # If this fails (e.g., FileNotFoundError), the program stops here.
 
 
-        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, None, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board1)
+        app = ChessEventViewer(root, PGN_WITH_EVENTS, SQUARE_SIZE, None, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board1, engine_depth)
         root.mainloop()
     except ImportError:
         error_msg = ("Error: The 'python-chess' library is not installed.\n"

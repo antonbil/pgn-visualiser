@@ -180,11 +180,11 @@ class AnalysisManager:
     # --- CONFIGURATION PARAMETERS ---
     THREADS = 4
     MEMORY_HASH = 256
-    DEPTH_LIMIT = 17
+
     MULTIPV_COUNT = 4
     PAWN_THRESHOLD = 0.5
 
-    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None):
+    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None, depth_limit=17):
         """
         Initialize the analysis manager.
         :param db_info: Optional string info like "Game 3 of 10: Player A vs Player B"
@@ -198,6 +198,7 @@ class AnalysisManager:
         self.is_cancelled = False  # Flag to stop the process
         self.progress_win = None
         self.progress_bar = None
+        self.depth_limit = depth_limit
         self.status_label = None
         self.db_label = None
 
@@ -261,7 +262,7 @@ class AnalysisManager:
 
             # Add Engine Name as the very first comment ---
             # Attach this to the root node (the position before the first move)
-            analysis_header = f"Analysis by {engine_name} (Depth {self.DEPTH_LIMIT})"
+            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit})"
             if self.game.comment:
                 # Append if there is already a comment (like an opening name)
                 self.game.comment = f"{analysis_header} | {self.game.comment}"
@@ -283,7 +284,7 @@ class AnalysisManager:
                 self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
 
                 # Step 1: Run Multi-PV Analysis
-                analysis = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), multipv=self.MULTIPV_COUNT)
+                analysis = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), multipv=self.MULTIPV_COUNT)
 
                 # Step 2: Extract score of the move actually played
                 played_move_score = None
@@ -292,13 +293,13 @@ class AnalysisManager:
                         played_move_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
                         break
                 if played_move_score is None and not self.is_cancelled:
-                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
+                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), root_moves=[played_move])
                     played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
 
 
                 # Step 3: Supplemental scan if played move wasn't in top PVs
                 if played_move_score is None and not self.is_cancelled:
-                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.DEPTH_LIMIT), root_moves=[played_move])
+                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), root_moves=[played_move])
                     played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
 
                 # --- IMPROVEMENT 1: Annotate the mainline move ---
@@ -660,7 +661,8 @@ class SettingsDialog(tk.Toplevel):
             self.engine_path_var.get(),
             self.piece_set_var.get(),
             self.square_size_var.get(),
-            self.board_var.get()  # Sends the selected name (e.g., "Red")
+            self.board_var.get(),
+            self.engine_depth_var.get()# Sends the selected name (e.g., "Red")
         )
 
         self.result = True
@@ -1003,7 +1005,7 @@ class ChessAnnotatorApp:
         # The engine will analyze up to this many best moves (MPV)
         self.ENGINE_MULTI_PV = 3
         # The analysis depth in ply
-        self.ENGINE_DEPTH = 18
+        self.ENGINE_DEPTH = self.engine_depth
 
         # Sample PGN (contains two games with variation added to the first game)
         self.sample_pgn = """
@@ -1501,6 +1503,7 @@ class ChessAnnotatorApp:
             "lastLoadedPgnPath": self.last_filepath,
             "engine_path": self.ENGINE_PATH,
             "piece_set": self.piece_set,
+            "engine_depth": self.engine_depth,
             "square_size": self.square_size,
             "board": self.theme_name
         }
@@ -1521,6 +1524,7 @@ class ChessAnnotatorApp:
         self.square_size = new_square_size
         self.theme_name = args[5]
         self.set_theme()
+        self.engine_depth = int(args[6])
         self.save_preferences_class()
         if piece_set_changed:
             self.force_restart()
@@ -2522,6 +2526,7 @@ class ChessAnnotatorApp:
                     pgn_game=current_game,
                     stockfish_path=self.ENGINE_PATH,
                     on_finished_callback=go_to_next_game,
+                    depth_limit=self.engine_depth,
                     db_info=game_desc  # Pass the game-info
                 )
                 self.analyzer.start()
@@ -2560,7 +2565,8 @@ class ChessAnnotatorApp:
             root=self.master,
             pgn_game=self.game,
             stockfish_path=sf_path,
-            on_finished_callback=refresh_ui
+            on_finished_callback=refresh_ui,
+            depth_limit=self.engine_depth
         )
         self.analyzer.start()
         self.is_dirty = True
