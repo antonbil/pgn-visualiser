@@ -1624,12 +1624,21 @@ class ChessAnnotatorApp:
         if not hasattr(self, 'all_games') or not self.all_games:
             messagebox.showwarning("Save Failed", "No games in the database to save.", parent=self.master)
             return
+        # Extract directory and filename from last_filepath
+        initial_dir = None
+        initial_file = None
 
+        if hasattr(self, 'last_filepath') and self.last_filepath:
+            # Split the path into directory and file name
+            initial_dir = os.path.dirname(self.last_filepath)
+            initial_file = os.path.basename(self.last_filepath)
         # Ask the user where to save the file
         filepath = filedialog.asksaveasfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
-            title="Save PGN Database"
+            title="Save PGN Database",
+            initialdir=initial_dir,  # Pre-select the last used folder
+            initialfile=initial_file # Pre-fill the last used filename
         )
 
         if filepath:
