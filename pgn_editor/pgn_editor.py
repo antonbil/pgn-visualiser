@@ -255,6 +255,19 @@ class AnalysisManager:
             node = self.game
             move_count = 0
 
+            # Get engine name for metadata (e.g., "Stockfish 16.1")
+            engine_name = engine.id.get("name", "Unknown Engine")
+            engine.configure({"Threads": self.THREADS, "Hash": self.MEMORY_HASH})
+
+            # Add Engine Name as the very first comment ---
+            # Attach this to the root node (the position before the first move)
+            analysis_header = f"Analysis by {engine_name} (Depth {self.DEPTH_LIMIT})"
+            if self.game.comment:
+                # Append if there is already a comment (like an opening name)
+                self.game.comment = f"{analysis_header} | {self.game.comment}"
+            else:
+                self.game.comment = analysis_header
+
             while not node.is_end():
                 # Check if user requested a stop
                 if self.is_cancelled:
@@ -263,6 +276,7 @@ class AnalysisManager:
                 main_variation = node.variation(0)
                 played_move = main_variation.move
                 board = node.board()
+                current_move_num = board.fullmove_number
 
                 # Update UI text on the main thread
                 move_text = f"Analyzing move {board.fullmove_number}: {played_move}"
@@ -297,6 +311,21 @@ class AnalysisManager:
                 turn = board.turn  # chess.WHITE or chess.BLACK
                 # Step 4: Add variations if they are significantly better than the played move
                 if not self.is_cancelled:
+                    # Determine threshold: high in opening (1.5), standard otherwise (0.5)
+                    # Opening moves require a bigger blunder to be flagged as a variation.
+                    opening_threshold = 3 * self.PAWN_THRESHOLD
+                    best_engine_entry = analysis[0]
+                    best_engine_score = best_engine_entry["score"].pov(chess.WHITE).score(mate_score=10000)
+                    # Check if the played move caused a drop in evaluation (from White's perspective)
+                    # We look at the difference between the best possible move and what was played.
+                    eval_drop = abs(best_engine_score - played_move_score)
+                    if eval_drop > 80:  # If the move drops more than 0.80, it's suspicious
+                        opening_threshold = 1.1 * self.PAWN_THRESHOLD  # Lower the threshold to show the better alternative
+                    active_threshold = opening_threshold if current_move_num <= 8 else self.PAWN_THRESHOLD
+
+                    # The first entry in 'analysis' is always the best engine move (highest/lowest PV)
+                    # We need the absolute best score to compare others against
+                    best_engine_score = analysis[0]["score"].pov(chess.WHITE).score(mate_score=10000)
                     for entry in analysis:
                         engine_move = entry["pv"][0]
                         if engine_move == played_move: continue
@@ -312,14 +341,20 @@ class AnalysisManager:
 
                         # Calculate improvement based on whose turn it is
                         # White wants higher score, Black wants lower score
-                        is_better = False
-                        diff = engine_score - played_move_score
-                        if turn == chess.WHITE and diff > (self.PAWN_THRESHOLD * 100):
-                            is_better = True
-                        elif turn == chess.BLACK and diff < -(self.PAWN_THRESHOLD * 100):
-                            is_better = True
+                        # Condition A: Is this move significantly better than what was played?
+                        is_significant_improvement = False
+                        diff_from_played = engine_score - played_move_score
+                        if turn == chess.WHITE and diff_from_played > (active_threshold * 100):
+                            is_significant_improvement = True
+                        elif turn == chess.BLACK and diff_from_played < -(active_threshold * 100):
+                            is_significant_improvement = True
 
-                        if is_better and not any(v.move == engine_move for v in node.variations):
+                        # Condition B: Is this move close to the best possible engine move? (within 0.50)
+                        # Use absolute difference because both scores are now pov(chess.WHITE)
+                        diff_from_best = abs(engine_score - best_engine_score)
+                        is_near_best = diff_from_best <= 50  # 0.50 pawn units = 50 centipawns
+
+                        if is_significant_improvement and is_near_best and not any(v.move == engine_move for v in node.variations):
                             # Start a new variation branch
                             var_node = node.add_variation(engine_move)
 
@@ -335,8 +370,7 @@ class AnalysisManager:
                                 temp_board.push(next_move)
 
                             # Add a comment to the start of the variation
-                            eval_diff = round(abs(diff) / 100.0, 2)
-                            var_node.comment = f"{round(engine_score / 100.0, 2)} (+{eval_diff} gain)"
+                            var_node.comment = f"{round(engine_score / 100.0, 2)}"
 
                 # Update progress bar
                 move_count += 1
