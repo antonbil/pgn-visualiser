@@ -258,7 +258,6 @@ class AnalysisManager:
 
             # Get engine name for metadata (e.g., "Stockfish 16.1")
             engine_name = engine.id.get("name", "Unknown Engine")
-            engine.configure({"Threads": self.THREADS, "Hash": self.MEMORY_HASH})
 
             # Add Engine Name as the very first comment ---
             # Attach this to the root node (the position before the first move)
@@ -284,7 +283,8 @@ class AnalysisManager:
                 self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
 
                 # Step 1: Run Multi-PV Analysis
-                analysis = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), multipv=self.MULTIPV_COUNT)
+                limit = chess.engine.Limit(depth=self.depth_limit, time=1.0)
+                analysis = engine.analyse(board, limit, multipv=self.MULTIPV_COUNT)
 
                 # Step 2: Extract score of the move actually played
                 played_move_score = None
@@ -302,10 +302,14 @@ class AnalysisManager:
                     p_info = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), root_moves=[played_move])
                     played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
 
-                # --- IMPROVEMENT 1: Annotate the mainline move ---
+                # Annotate the mainline move
                 score_val = round(played_move_score / 100.0, 2)
                 # Add or append the score to the existing comment
-                existing_comment = main_variation.comment
+                # Clean old numeric scores from the start of the comment
+                # This regex looks for a number (positive or negative) at the very
+                # beginning of the string, optionally followed by spaces.
+                # Example matches: "0.88", "-1.24", "+0.10"
+                existing_comment = re.sub(r'^[+-]?\d+\.\d+\s*', '', main_variation.comment).strip()
                 prefix = f" {score_val} "
                 main_variation.comment = f"{prefix}{existing_comment}".strip()
 
