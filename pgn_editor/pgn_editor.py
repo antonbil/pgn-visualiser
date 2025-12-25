@@ -549,6 +549,10 @@ class SettingsDialog(tk.Toplevel):
         # Gebruik IntVar voor numerieke waarde
         self.square_size_var = tk.IntVar(value=self.current_config.get("square_size", 80))
 
+        # Engine Depth (Standaard: 17)
+        # Gebruik IntVar voor numerieke waarde
+        self.engine_depth_var = tk.IntVar(value=self.current_config.get("engine_depth", 17))
+
         # Board Kleur (Standaard: red)
         self.board_var = tk.StringVar(value=self.current_config.get("board", "Standard"))
 
@@ -585,6 +589,11 @@ class SettingsDialog(tk.Toplevel):
         # Square Size
         ttk.Label(visual_frame, text="Square Size (px):").grid(row=0, column=2, sticky='w', pady=5)
         ttk.Entry(visual_frame, textvariable=self.square_size_var, width=10).grid(row=0, column=3, sticky='w', padx=5)
+
+        # Engine Depth
+        ttk.Label(visual_frame, text="Engine Depth:").grid(row=0, column=2, sticky='w', pady=5)
+        ttk.Entry(visual_frame, textvariable=self.engine_depth_var, width=10).grid(row=0, column=3, sticky='w', padx=5)
+
 
         # --- BOARD THEME ADJUSTMENT: Use Combobox ---
         ttk.Label(visual_frame, text="Board Theme:").grid(row=1, column=0, sticky='w', pady=5)
@@ -948,7 +957,7 @@ class GameChooserDialog(tk.Toplevel):
 COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None, engine_depth=17):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.last_filepath = pgn_game
         self.theme_name=board
@@ -964,6 +973,7 @@ class ChessAnnotatorApp:
         self.swap_colours = swap_colours
         self.call_back = call_back
         self.is_dirty = False
+        self.engine_depth = engine_depth
         master.title("PGN Chess Annotator")
         self.set_theme()
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -1385,6 +1395,7 @@ class ChessAnnotatorApp:
             "engine": self.ENGINE_PATH,
             "square_size": self.square_size + 5,
             "piece_set": self.piece_set,
+            "engine_depth": self.engine_depth,
             "board": self.theme_name
             # More items can be added here later, such as last used engine, etc.
         }
@@ -3409,6 +3420,7 @@ if __name__ == "__main__":
     engine_name_preferences = preferences.get("engine", "")
     square_size = preferences.get("square_size", 80)
     piece_set1 = preferences.get("piece_set", "staunty")
+    engine_depth = preferences.get("engine_depth", 17)
     board1 = preferences.get("board", "red")
 
     pgn_game = args.pgn_game if args.pgn_game else last_pgn_file
@@ -3421,7 +3433,7 @@ if __name__ == "__main__":
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
-    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board, engine_depth=engine_depth)
 
     root.mainloop()
 #example call
