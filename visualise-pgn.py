@@ -1635,7 +1635,6 @@ class ChessEventViewer:
         """
         Identifies ALL moves that caused a significant loss in advantage (> 50 cp).
         """
-        print("1a")
         pgn_io = io.StringIO(pgn_string)
         games = []
         while True:
@@ -1647,15 +1646,12 @@ class ChessEventViewer:
                 break
 
         self.num_games = len(self.game_descriptions)
-        print("1b")
         current_game_index = 0
         self.set_game_var_descriptions(current_game_index)
-        print("1c")
         if len(games) == 0:
             print("Error: Could not read chess game from PGN string.")
             return []
         else:
-            print("1d")
             game = games[0]
             if self.num_games == 1:
                 # hide the navigation-panel
@@ -1664,9 +1660,7 @@ class ChessEventViewer:
                 # show the navigation-panel
                 NAV_PACK_ARGS = {'side': tk.TOP, 'fill': tk.X, 'pady': 5}
                 self.nav_panel.pack(**NAV_PACK_ARGS)
-        print("1e")
         self.game = game
-        print("1f")
         return self.get_all_significant_events_game(game)
 
     def get_all_significant_events_game(self, game):
@@ -1686,7 +1680,6 @@ class ChessEventViewer:
 
         # Iterate over the main line
         for node in game.mainline():
-            print("move", node.move)
             if node.move is None:
                 continue
 
@@ -1738,7 +1731,7 @@ class ChessEventViewer:
                     'full_move_history': list(moves_made_so_far),
                     'move_index': len(moves_made_so_far) - 1  # Index of the move
                 })
-                print("event", 'score', event_score,'eval_before', eval_before_cp / 100.0,'eval_after', eval_after_cp / 100.0)
+                #print("event", 'score', event_score,'eval_before', eval_before_cp / 100.0,'eval_after', eval_after_cp / 100.0)
 
             # --- EXECUTE MOVE AND TRACK EVALUATION ---
             try:

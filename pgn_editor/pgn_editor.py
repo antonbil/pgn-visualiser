@@ -180,7 +180,7 @@ class AnalysisManager:
     # --- CONFIGURATION PARAMETERS ---
     THREADS = 4
     MEMORY_HASH = 256
-    DEPTH_LIMIT = 16
+    DEPTH_LIMIT = 17
     MULTIPV_COUNT = 4
     PAWN_THRESHOLD = 0.5
 
@@ -311,6 +311,9 @@ class AnalysisManager:
                 turn = board.turn  # chess.WHITE or chess.BLACK
                 # Step 4: Add variations if they are significantly better than the played move
                 if not self.is_cancelled:
+                    # clear any existing NAGs from the mainline move
+                    # This ensures that re-analyzing the game doesn't stack old symbols.
+                    main_variation.nags.clear()
                     # Determine threshold: high in opening (1.5), standard otherwise (0.5)
                     # Opening moves require a bigger blunder to be flagged as a variation.
                     opening_threshold = 3 * self.PAWN_THRESHOLD
@@ -322,6 +325,16 @@ class AnalysisManager:
                     if eval_drop > 80:  # If the move drops more than 0.80, it's suspicious
                         opening_threshold = 1.1 * self.PAWN_THRESHOLD  # Lower the threshold to show the better alternative
                     active_threshold = opening_threshold if current_move_num <= 8 else self.PAWN_THRESHOLD
+                    # 3. Apply the appropriate NAG based on the drop (in centipawns)
+                    # We use an adaptive multiplier for the opening as discussed before
+                    nag_multiplier = active_threshold
+
+                    if eval_drop >= (200 * nag_multiplier):
+                        main_variation.nags.add(chess.pgn.NAG_BLUNDER)  # Displays as ??
+                    elif eval_drop >= (100 * nag_multiplier):
+                        main_variation.nags.add(chess.pgn.NAG_MISTAKE)  # Displays as ?
+                    elif eval_drop >= (50 * nag_multiplier):
+                        main_variation.nags.add(chess.pgn.NAG_DUBIOUS_MOVE)  # Displays as ?!
 
                     # The first entry in 'analysis' is always the best engine move (highest/lowest PV)
                     # We need the absolute best score to compare others against
