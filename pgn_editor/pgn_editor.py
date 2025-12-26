@@ -241,48 +241,6 @@ class AnalysisManager:
             self.is_cancelled = True
             self.status_label.config(text="Stopping engine...")
 
-    def _calibrate_parameters(self):
-        """
-        Performs a fast pre-scan to find the optimal PAWN_THRESHOLD
-        aiming for a target number of variations (e.g., 10-15 per game).
-        """
-        engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
-        all_drops = []
-        node = self.game
-
-        # 1. Fast scan
-        while not node.is_end():
-            board = node.board()
-            # Very low depth just to see the 'trend'
-            info = engine.analyse(board, chess.engine.Limit(depth=10))
-            best_score = info["score"].pov(chess.WHITE).score(mate_score=10000)
-
-            # We also need the score of the move played (simple 1-move scan)
-            played_move = node.variation(0).move
-            p_info = engine.analyse(board, chess.engine.Limit(depth=10), root_moves=[played_move])
-            played_score = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
-
-            all_drops.append(abs(best_score - played_score))
-            node = node.variation(0)
-
-        engine.quit()
-
-        # 2. Statistical calculation
-        if not all_drops: return 0.50
-
-        all_drops.sort(reverse=True)
-
-        # Target: We want roughly 12 variations per game.
-        # We pick the drop-value at the 12th position as our threshold.
-        target_count = 12
-        if len(all_drops) > target_count:
-            # The threshold becomes the drop of the 12th 'worst' move
-            calculated_threshold = all_drops[target_count - 1] / 100.0
-        else:
-            calculated_threshold = all_drops[-1] / 100.0
-
-        # 3. Guardrails (Don't let it become too sensitive or too deaf)
-        return max(0.15, min(calculated_threshold, 1.20))
 
     def _run_analysis(self):
         """
@@ -315,9 +273,12 @@ class AnalysisManager:
                 info = engine.analyse(board, chess.engine.Limit(depth=10))
                 best_val = info["score"].pov(chess.WHITE).score(mate_score=10000)
 
-                played_move = node.variation(0).move
+                main_variation = node.variation(0)
+                played_move = main_variation.move
                 p_info = engine.analyse(board, chess.engine.Limit(depth=10), root_moves=[played_move])
                 played_val = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
+                played_score_str = self._format_score_simple(p_info["score"])
+                self.store_score_in_node(main_variation, played_score_str)
 
                 all_drops.append(abs(best_val - played_val))
                 node_indices.append(idx)
@@ -330,7 +291,7 @@ class AnalysisManager:
 
                 prev_score = played_val
 
-                node = node.variation(0)
+                node = main_variation
                 calib_count += 1
                 self.root.after(0, lambda v=calib_count: self.progress_bar.config(value=v))
                 idx += 1
@@ -416,9 +377,7 @@ class AnalysisManager:
                     played_score_val = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
                     played_score_str = self._format_score_simple(p_info["score"])
 
-                # Comment Clean & Update
-                clean_comment = re.sub(r'^[+-]?\d+\.\d+\s*', '', main_variation.comment).strip()
-                main_variation.comment = f"{played_score_str} {clean_comment}".strip()
+                self.store_score_in_node(main_variation, played_score_str)
 
                 # Logic for variations (using calibrated threshold)
                 eval_drop = abs(best_score_val - played_score_val)
@@ -446,6 +405,11 @@ class AnalysisManager:
         finally:
             if engine: engine.quit()
             self.root.after(0, self._on_cancel_complete if self.is_cancelled else self._on_complete)
+
+    def store_score_in_node(self, main_variation, played_score_str: str):
+        # Comment Clean & Update
+        clean_comment = re.sub(r'^[+-]?\d+\.\d+\s*', '', main_variation.comment).strip()
+        main_variation.comment = f"{played_score_str} {clean_comment}".strip()
 
     def _add_engine_variation(self, parent_node, engine_entry, board, played_score):
         """Helper to add an engine move sequence and comment."""
