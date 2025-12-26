@@ -167,10 +167,10 @@ class OpeningClassifier:
             if annotation not in existing_comment:
                 if existing_comment:
                     last_matched_node.comment = f"{existing_comment} ({annotation})"
-                    print("opening", annotation, "added to:", last_matched_node)
+                    #print("opening", annotation, "added to:", last_matched_node)
                 else:
                     last_matched_node.comment = annotation
-                    print("opening", annotation, "added to:", last_matched_node)
+                    #print("opening", annotation, "added to:", last_matched_node)
 
             return opening_info
 
@@ -241,156 +241,201 @@ class AnalysisManager:
             self.is_cancelled = True
             self.status_label.config(text="Stopping engine...")
 
+    def _calibrate_parameters(self):
+        """
+        Performs a fast pre-scan to find the optimal PAWN_THRESHOLD
+        aiming for a target number of variations (e.g., 10-15 per game).
+        """
+        engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
+        all_drops = []
+        node = self.game
+
+        # 1. Fast scan
+        while not node.is_end():
+            board = node.board()
+            # Very low depth just to see the 'trend'
+            info = engine.analyse(board, chess.engine.Limit(depth=10))
+            best_score = info["score"].pov(chess.WHITE).score(mate_score=10000)
+
+            # We also need the score of the move played (simple 1-move scan)
+            played_move = node.variation(0).move
+            p_info = engine.analyse(board, chess.engine.Limit(depth=10), root_moves=[played_move])
+            played_score = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
+
+            all_drops.append(abs(best_score - played_score))
+            node = node.variation(0)
+
+        engine.quit()
+
+        # 2. Statistical calculation
+        if not all_drops: return 0.50
+
+        all_drops.sort(reverse=True)
+
+        # Target: We want roughly 12 variations per game.
+        # We pick the drop-value at the 12th position as our threshold.
+        target_count = 12
+        if len(all_drops) > target_count:
+            # The threshold becomes the drop of the 12th 'worst' move
+            calculated_threshold = all_drops[target_count - 1] / 100.0
+        else:
+            calculated_threshold = all_drops[-1] / 100.0
+
+        # 3. Guardrails (Don't let it become too sensitive or too deaf)
+        return max(0.15, min(calculated_threshold, 1.20))
+
     def _run_analysis(self):
-        """Background thread logic for engine communication."""
+        """
+        Two-phase analysis:
+        1. Calibration (Fast scan to set optimal thresholds)
+        2. Production (Deep analysis using calibrated thresholds)
+        """
         engine = None
         try:
-            # Initialize engine and set UCI parameters
             engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
             engine.configure({"Threads": self.THREADS, "Hash": self.MEMORY_HASH})
 
-            # Calculate total moves for progress bar scaling
+            # --- PHASE 1: CALIBRATION ---
+            self.root.after(0,
+                            lambda: self.status_label.config(text="Phase 1: Calibrating thresholds for this game..."))
+            all_drops = []
+            node_indices = []
+            node = self.game
             total_moves = sum(1 for _ in self.game.mainline_moves())
-            self.root.after(0, lambda: self.progress_bar.config(max=total_moves))
 
+            self.root.after(0, lambda: self.progress_bar.config(max=total_moves, value=0))
+
+            calib_count = 0
+            prev_score = None
+            swing_indices = set()
+            idx = 0
+            while not node.is_end() and not self.is_cancelled:
+                board = node.board()
+                # Fast scan (low depth) to find the 'average' error margin of the players
+                info = engine.analyse(board, chess.engine.Limit(depth=10))
+                best_val = info["score"].pov(chess.WHITE).score(mate_score=10000)
+
+                played_move = node.variation(0).move
+                p_info = engine.analyse(board, chess.engine.Limit(depth=10), root_moves=[played_move])
+                played_val = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
+
+                all_drops.append(abs(best_val - played_val))
+                node_indices.append(idx)
+
+                if prev_score is not None:
+                    swing = abs(played_val - prev_score)
+                    # If the score changes more than 1.00 pawn, it is marked as critical
+                    if swing > 100:
+                        swing_indices.add(idx)
+
+                prev_score = played_val
+
+                node = node.variation(0)
+                calib_count += 1
+                self.root.after(0, lambda v=calib_count: self.progress_bar.config(value=v))
+                idx += 1
+
+            if self.is_cancelled: return
+
+            # Calculate optimal PAWN_THRESHOLD
+            # Target: roughly 20 variations per game
+            combined = sorted(zip(all_drops, node_indices), reverse=True, key=lambda x: x[0])
+            analysis_worthy_indices = {index for drop, index in combined[:35]}
+            # add swing-moments
+            analysis_worthy_indices = analysis_worthy_indices | swing_indices
+            all_drops.sort(reverse=True)
+
+            target_vbox = 20
+            if len(all_drops) >= target_vbox:
+                # Set threshold to the 20th biggest error
+                calibrated_threshold = all_drops[target_vbox - 1] / 100.0
+            elif all_drops:
+                calibrated_threshold = all_drops[-1] / 100.0
+            else:
+                calibrated_threshold = 0.50
+            calibrated_threshold = calibrated_threshold + 0.01
+            # Safety guardrails: not too sensitive, not too deaf
+            self.PAWN_THRESHOLD = max(0.20, min(calibrated_threshold, 1.00))
+
+            # --- PHASE 2: ACTUAL ANALYSIS ---
+            self.root.after(0, lambda: self.status_label.config(
+                text=f"Phase 2: Deep Analysis (Threshold: {self.PAWN_THRESHOLD:.2f})..."))
+            self.root.after(0, lambda: self.progress_bar.config(value=0))
+
+            # Reset node to start of game
             node = self.game
             move_count = 0
 
-            # Get engine name for metadata (e.g., "Stockfish 16.1")
-            engine_name = engine.id.get("name", "Unknown Engine")
+            # Metadata Header
+            engine_name = engine.id.get("name", "Stockfish")
+            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}, T={self.PAWN_THRESHOLD:.2f})"
+            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}, T={self.PAWN_THRESHOLD:.2f})"
 
-            # Add Engine Name as the very first comment ---
-            # Attach this to the root node (the position before the first move)
-            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit})"
+            # Remove any existing "Analysis by..." lines to prevent stacking
+            # This looks for any line starting with "Analysis by" until the first "|" or end of line
             if self.game.comment:
-                # Append if there is already a comment (like an opening name)
-                self.game.comment = f"{analysis_header} | {self.game.comment}"
+                # We filter out any previous analysis headers using a regex
+                cleaned_root_comment = re.sub(r'Analysis by .*?(\||\n|$)', '', self.game.comment).strip()
+
+                if cleaned_root_comment:
+                    self.game.comment = f"{analysis_header} | {cleaned_root_comment}"
+                else:
+                    self.game.comment = analysis_header
             else:
                 self.game.comment = analysis_header
-
             while not node.is_end():
-                # Check if user requested a stop
-                if self.is_cancelled:
-                    break
+                if self.is_cancelled: break
+                if not move_count in analysis_worthy_indices:
+                    node = node.variation(0)
+                    move_count += 1
+                    continue
+
 
                 main_variation = node.variation(0)
                 played_move = main_variation.move
                 board = node.board()
                 current_move_num = board.fullmove_number
 
-                # Update UI text on the main thread
-                move_text = f"Analyzing move {board.fullmove_number}: {played_move}"
-                self.root.after(0, lambda t=move_text: self.status_label.config(text=t))
+                self.root.after(0, lambda: self.status_label.config(
+                    text=f"Analyzing move {current_move_num}: {played_move}"))
 
-                # Step 1: Run Multi-PV Analysis
+                # Deep Multi-PV Analysis
                 limit = chess.engine.Limit(depth=self.depth_limit, time=1.0)
                 analysis = engine.analyse(board, limit, multipv=self.MULTIPV_COUNT)
 
-                # Step 2: Extract score of the move actually played
-                played_move_score = None
-                for entry in analysis:
-                    if entry["pv"][0] == played_move:
-                        played_move_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
-                        break
-                if played_move_score is None and not self.is_cancelled:
+                # Scores
+                best_entry = analysis[0]
+                best_score_val = best_entry["score"].pov(chess.WHITE).score(mate_score=10000)
+
+                played_entry = next((e for e in analysis if e["pv"][0] == played_move), None)
+                if played_entry:
+                    played_score_val = played_entry["score"].pov(chess.WHITE).score(mate_score=10000)
+                    played_score_str = self._format_score_simple(played_entry["score"])
+                else:
                     p_info = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), root_moves=[played_move])
-                    played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
+                    played_score_val = p_info["score"].pov(chess.WHITE).score(mate_score=10000)
+                    played_score_str = self._format_score_simple(p_info["score"])
 
+                # Comment Clean & Update
+                clean_comment = re.sub(r'^[+-]?\d+\.\d+\s*', '', main_variation.comment).strip()
+                main_variation.comment = f"{played_score_str} {clean_comment}".strip()
 
-                # Step 3: Supplemental scan if played move wasn't in top PVs
-                if played_move_score is None and not self.is_cancelled:
-                    p_info = engine.analyse(board, chess.engine.Limit(depth=self.depth_limit), root_moves=[played_move])
-                    played_move_score = p_info.get("score").pov(chess.WHITE).score(mate_score=10000)
+                # Logic for variations (using calibrated threshold)
+                eval_drop = abs(best_score_val - played_score_val)
 
-                # Annotate the mainline move
-                score_val = round(played_move_score / 100.0, 2)
-                # Add or append the score to the existing comment
-                # Clean old numeric scores from the start of the comment
-                # This regex looks for a number (positive or negative) at the very
-                # beginning of the string, optionally followed by spaces.
-                # Example matches: "0.88", "-1.24", "+0.10"
-                existing_comment = re.sub(r'^[+-]?\d+\.\d+\s*', '', main_variation.comment).strip()
-                prefix = f" {score_val} "
-                main_variation.comment = f"{prefix}{existing_comment}".strip()
+                # Add Variations
+                if best_entry["pv"][0] != played_move and eval_drop > (calibrated_threshold * 100):
+                    self._add_engine_variation(node, best_entry, board, played_score_val)
 
-                turn = board.turn  # chess.WHITE or chess.BLACK
-                # Step 4: Add variations if they are significantly better than the played move
-                if not self.is_cancelled:
-                    # clear any existing NAGs from the mainline move
-                    # This ensures that re-analyzing the game doesn't stack old symbols.
-                    main_variation.nags.clear()
-                    # Determine threshold: high in opening (1.5), standard otherwise (0.5)
-                    # Opening moves require a bigger blunder to be flagged as a variation.
-                    opening_threshold = 3 * self.PAWN_THRESHOLD
-                    best_engine_entry = analysis[0]
-                    best_engine_score = best_engine_entry["score"].pov(chess.WHITE).score(mate_score=10000)
-                    # Check if the played move caused a drop in evaluation (from White's perspective)
-                    # We look at the difference between the best possible move and what was played.
-                    eval_drop = abs(best_engine_score - played_move_score)
-                    if eval_drop > 80:  # If the move drops more than 0.80, it's suspicious
-                        opening_threshold = 1.1 * self.PAWN_THRESHOLD  # Lower the threshold to show the better alternative
-                    active_threshold = opening_threshold if current_move_num <= 8 else self.PAWN_THRESHOLD
-                    # 3. Apply the appropriate NAG based on the drop (in centipawns)
-                    # We use an adaptive multiplier for the opening as discussed before
-                    nag_multiplier = active_threshold
+                # NAGs
+                main_variation.nags.clear()
+                if eval_drop >= 200:
+                    main_variation.nags.add(chess.pgn.NAG_BLUNDER)
+                elif eval_drop >= 100:
+                    main_variation.nags.add(chess.pgn.NAG_MISTAKE)
+                elif eval_drop >= 50:
+                    main_variation.nags.add(chess.pgn.NAG_DUBIOUS_MOVE)
 
-                    if eval_drop >= (200 * nag_multiplier):
-                        main_variation.nags.add(chess.pgn.NAG_BLUNDER)  # Displays as ??
-                    elif eval_drop >= (100 * nag_multiplier):
-                        main_variation.nags.add(chess.pgn.NAG_MISTAKE)  # Displays as ?
-                    elif eval_drop >= (50 * nag_multiplier):
-                        main_variation.nags.add(chess.pgn.NAG_DUBIOUS_MOVE)  # Displays as ?!
-
-                    # The first entry in 'analysis' is always the best engine move (highest/lowest PV)
-                    # We need the absolute best score to compare others against
-                    best_engine_score = analysis[0]["score"].pov(chess.WHITE).score(mate_score=10000)
-                    for entry in analysis:
-                        engine_move = entry["pv"][0]
-                        if engine_move == played_move: continue
-                        if any(v.move == engine_move for v in node.variations): continue
-                        engine_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
-
-                        engine_line = entry["pv"]  # This is a list of chess.Move objects
-                        engine_move = engine_line[0]
-                        engine_score = entry["score"].pov(chess.WHITE).score(mate_score=10000)
-
-                        if engine_move == played_move:
-                            continue
-
-                        # Calculate improvement based on whose turn it is
-                        # White wants higher score, Black wants lower score
-                        # Condition A: Is this move significantly better than what was played?
-                        is_significant_improvement = False
-                        diff_from_played = engine_score - played_move_score
-                        if turn == chess.WHITE and diff_from_played > (active_threshold * 100):
-                            is_significant_improvement = True
-                        elif turn == chess.BLACK and diff_from_played < -(active_threshold * 100):
-                            is_significant_improvement = True
-
-                        # Condition B: Is this move close to the best possible engine move? (within 0.50)
-                        # Use absolute difference because both scores are now pov(chess.WHITE)
-                        diff_from_best = abs(engine_score - best_engine_score)
-                        is_near_best = diff_from_best <= 50  # 0.50 pawn units = 50 centipawns
-
-                        if is_significant_improvement and is_near_best and not any(v.move == engine_move for v in node.variations):
-                            # Start a new variation branch
-                            var_node = node.add_variation(engine_move)
-
-                            # --- MULTI-MOVE LOGIC ---
-                            # Follow the engine's suggested line (Principal Variation)
-                            # We add up to 4 subsequent moves to show the intent
-                            temp_board = board.copy()
-                            temp_board.push(engine_move)
-
-                            current_branch_node = var_node
-                            for next_move in engine_line[1:5]:  # Get moves 2 through 5
-                                current_branch_node = current_branch_node.add_variation(next_move)
-                                temp_board.push(next_move)
-
-                            # Add a comment to the start of the variation
-                            var_node.comment = f"{round(engine_score / 100.0, 2)}"
-
-                # Update progress bar
                 move_count += 1
                 self.root.after(0, lambda v=move_count: self.progress_bar.config(value=v))
                 node = main_variation
@@ -398,16 +443,41 @@ class AnalysisManager:
         except Exception as e:
             print(f"Analysis error: {e}")
             traceback.print_exc()
-            self.root.after(0, lambda err=e: self._on_error(err))
         finally:
-            if engine:
-                engine.quit()
+            if engine: engine.quit()
+            self.root.after(0, self._on_cancel_complete if self.is_cancelled else self._on_complete)
 
-            # Handle cleanup and routing based on completion status
-            if self.is_cancelled:
-                self.root.after(0, self._on_cancel_complete)
+    def _add_engine_variation(self, parent_node, engine_entry, board, played_score):
+        """Helper to add an engine move sequence and comment."""
+        engine_line = engine_entry["pv"]
+        engine_move = engine_line[0]
+        engine_score_obj = engine_entry["score"]
+        engine_score_val = engine_score_obj.pov(chess.WHITE).score(mate_score=10000)
+
+        var_node = parent_node.add_variation(engine_move)
+
+        temp_board = board.copy()
+        temp_board.push(engine_move)
+        current_branch = var_node
+
+        for next_move in engine_line[1:5]:
+            if next_move in temp_board.legal_moves:
+                current_branch = current_branch.add_variation(next_move)
+                temp_board.push(next_move)
             else:
-                self.root.after(0, self._on_complete)
+                break
+
+        diff = (engine_score_val - played_score) if board.turn == chess.WHITE else (played_score - engine_score_val)
+        score_str = self._format_score_simple(engine_score_obj)
+        var_node.comment = f"{score_str} (+{round(abs(diff) / 100.0, 2)})"
+
+    def _format_score_simple(self, score_obj):
+        """Helper to format score (e.g. 0.88 or #3)."""
+        pov_score = score_obj.pov(chess.WHITE)
+        if pov_score.is_mate():
+            m = pov_score.mate()
+            return f"#{m}" if m > 0 else f"#-{-m}"
+        return f"{round(pov_score.score(mate_score=10000) / 100.0, 2):.2f}"
 
     def _on_complete(self):
         """Cleanup after successful game analysis."""
@@ -1257,6 +1327,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
         game_menu.add_command(label="Analyse Game...", command=self.handle_analyze_button)
         game_menu.add_command(label="Analyse DB...", command=self.handle_analyze_db_button)
+        game_menu.add_command(label="Remove Analysis", command=self._clear_variations_func)
         game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
@@ -2559,6 +2630,49 @@ class ChessAnnotatorApp:
         # Start the first game
         analyze_next_game()
 
+    def _clear_variations_func(self):
+        """
+        Clears all side-variations from every move in the mainline,
+        keeping only the primary moves played.
+        """
+        # 1. Ask for confirmation
+        confirm = messagebox.askyesno(
+            "Clear Variations",
+            "Are you sure you want to remove all analysis variations? \n\nThis will only keep the main moves played in the game.",
+            parent=self.master
+        )
+
+        if not confirm:
+            return
+
+        try:
+            # 2. Start at the root of the game
+            node = self.game
+
+            # 3. Iterate through the mainline
+            while not node.is_end():
+                # The next move in the mainline is always the first variation (index 0)
+                main_variation = node.variation(0)
+
+                # We want to keep index 0, but delete all other indices
+                # By setting node.variations to only contain the mainline, we drop the rest
+                node.variations = [main_variation]
+
+                # Move to the next move in the mainline
+                node = main_variation
+
+            # 4. Optional: Clear the root comment/header if desired
+            # self.game.comment = ""
+
+            # 5. Update UI
+            self.is_dirty = True  # Mark as changed for saving
+            self.update_state()
+            self._populate_move_listbox()  # Ensure the move list/tree is refreshed
+
+            messagebox.showinfo("Success", "All variations have been cleared.", parent=self.master)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not clear variations: {e}", parent=self.master)
     def handle_analyze_button(self):
         # Path to your Stockfish executable
         sf_path = self.ENGINE_PATH  # Or your Windows/Mac path
