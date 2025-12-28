@@ -723,7 +723,7 @@ class ChessEventViewer:
         new_window.title("Update Game")
 
         try:
-            string_var_value = self.pgn_filepath.get()
+            string_var_value = self.lastLoadedPgnPath
         except:
             string_var_value = ""
         app = ChessAnnotatorApp(new_window, string_var_value, self.engine_path, hide_file_load=True, image_manager=self.image_manager,
