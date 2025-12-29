@@ -1420,7 +1420,7 @@ class ChessEventViewer:
             # Create the miniature instance (size 300px)
             if hasattr(self, 'mini_board') and self.mini_board:
                 self.mini_board.destroy()
-            self.mini_board = ChessMiniature(self.current_miniature_widget, size=300)
+            self.mini_board = ChessMiniature(self.current_miniature_widget, size=250)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
             board = start_node.parent.board()
