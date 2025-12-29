@@ -445,6 +445,10 @@ class ChessEventViewer:
         self.default_pgn_string = pgn_string
         self.lastLoadedPgnPath = lastLoadedPgnPath
 
+        self.comment_widgets = []
+        self.variation_widgets = []
+        self.move_display_widgets = []
+
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
@@ -571,62 +575,58 @@ class ChessEventViewer:
 
     def _setup_quick_toolbar(self, parent):
         """
-        Creates a compact row of icon-only buttons for common tasks.
+        Creates a compact row of icon-only buttons for common tasks using GRID.
         """
         toolbar_frame = tk.Frame(parent)
-        toolbar_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=2)
+        # Note: Do not pack toolbar_frame here.
+        # The calling function should use .grid(row=..., column=...) to place this frame.
 
-        # Styling for compact "Icon" buttons
         btn_style = {
-            "font": ("Segoe UI Symbol", 10),  # Good for symbols
+            "font": ("Segoe UI Symbol", 10),
             "width": 3,
             "height": 1,
             "relief": tk.FLAT,
             "bg": "#f0f0f0"
         }
 
-        # 1. Open File Button (Folder icon)
+        # 1. Open File Button
         self.open_btn = tk.Button(
             toolbar_frame,
-            text="\U0001F4C2",  # 📂 Folder emoji
+            text="\U0001F4C2",
             command=self.load_pgn_file,
             **btn_style
         )
-        self.open_btn.pack(side=tk.LEFT, padx=2)
+        self.open_btn.grid(row=0, column=0, padx=2)  # Use grid instead of pack
 
-        # self.save_btn = tk.Button(
-        #     toolbar_frame,
-        #     text="\U0001F4BE",  # 💾 Floppy Disk
-        #     command=self.save_pgn_file,
-        #     **btn_style
-        # )
-        # self.save_btn.pack(side=tk.LEFT, padx=2)
-
+        # 2. Choose Game Button
         self.choose_btn = tk.Button(
             toolbar_frame,
-            text="\u2630",  # ☰ Menu/List icon
+            text="\u2630",
             command=self._open_game_chooser,
             **btn_style
         )
-        self.choose_btn.pack(side=tk.LEFT, padx=2)
+        self.choose_btn.grid(row=0, column=1, padx=2)
 
-        # 2. Swap Colors Button (Vertical flip arrows)
+        # 3. Swap Colors Button
         self.swap_btn = tk.Button(
             toolbar_frame,
-            text="\u21C5",  # ⇅ Up/Down arrows
+            text="\u21C5",
             command=self.swap_colours_func,
             **btn_style
         )
-        self.swap_btn.pack(side=tk.LEFT, padx=2)
+        self.swap_btn.grid(row=0, column=2, padx=2)
 
+        # 4. Exit Button (placed at a higher column index to keep it right)
         self.exit_btn = tk.Button(
             toolbar_frame,
-            text="\u23FB",  # ⏻ Power symbol
+            text="\u23FB",
             command=self.master.destroy,
             fg="red",
             **btn_style
         )
-        self.exit_btn.pack(side=tk.RIGHT, padx=2)  # Place Exit on the far right
+        # Give the previous column weight so the exit button stays on the right
+        toolbar_frame.grid_columnconfigure(3, weight=1)
+        self.exit_btn.grid(row=0, column=4, padx=2)
 
         def on_enter(e):
             e.widget.config(bg="#dddddd")
@@ -1275,58 +1275,6 @@ class ChessEventViewer:
         # stretch="always" ensures the Notebook gets the extra space when resizing
         self.main_paned_window.add(left_container, stretch="always")
 
-        # 2. Right Side: The Move Information Column
-        self.move_info_side_panel = tk.LabelFrame(
-            self.main_paned_window,
-            text="Current Move Info",
-            padx=10,
-            pady=10,
-            width=250  # Initial width
-        )
-
-        # Add the side panel to the PanedWindow
-        # stretch="never" prevents the sidebar from growing automatically when the window expands
-        self.main_paned_window.add(self.move_info_side_panel, stretch="never")
-        min_left_width = (8 * self.square_size) + 300
-
-        # Apply the constraints
-        self.main_paned_window.paneconfig(left_container, minsize=min_left_width)
-        self.main_paned_window.paneconfig(self.move_info_side_panel, minsize=200)
-
-        # Populate the sidebar content
-        self._setup_move_info_content(self.move_info_side_panel)
-        self._setup_quick_toolbar(self.move_info_side_panel)
-
-    def _setup_move_info_content(self, parent):
-        """
-        Populates the move info panel with sections for Move, Comment, and Variations.
-        """
-        # 1. Display the Move itself (Large and bold)
-        self.move_val_frame = tk.LabelFrame(parent, text="Current Move", padx=5, pady=5)
-        self.move_val_frame.pack(fill=tk.X, pady=(0, 10))
-
-        self.current_move_label = tk.Label(self.move_val_frame, text="-", font=('Arial', 12, 'bold'))
-        self.current_move_label.pack(anchor='center')
-
-        # 2. Comment Section
-        self.comment_sect_frame = tk.LabelFrame(parent, text="Comment", padx=5, pady=5)
-        self.comment_sect_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-        # We use a Text widget so the user can scroll if the comment is very long
-        self.move_comment_text = tk.Text(self.comment_sect_frame, height=8, wrap=tk.WORD,
-                                         font=('Arial', 9), bg=parent.cget('bg'), relief=tk.FLAT)
-        self.move_comment_text.pack(fill=tk.BOTH, expand=True)
-        self.move_comment_text.config(state=tk.DISABLED)  # Read-only by default
-
-        # 3. Variations Section
-        self.vars_sect_frame = tk.LabelFrame(parent, text="Variations", padx=5, pady=5)
-        self.vars_sect_frame.pack(fill=tk.BOTH, expand=True)
-
-        self.variations_listbox = tk.Listbox(self.vars_sect_frame, font=('Arial', 9), height=6)
-        self.variations_listbox.pack(fill=tk.BOTH, expand=True)
-        # 2. Bind the selection event to a callback function
-        self.variations_listbox.bind("<<ListboxSelect>>", self._on_variation_selected)
-
     def _show_variation_preview(self, start_node):
         """
         Creates a popup window with a structured layout: move numbers,
@@ -1418,9 +1366,8 @@ class ChessEventViewer:
         :param last_move: The current pgn node (chess.pgn.ChildNode)
         """
         if last_move is None:
-            self.current_move_label.config(text="Start Position")
-            self._set_text_widget_content(self.move_comment_text, "")
-            self.variations_listbox.delete(0, tk.END)
+            self._set_text_widget_content(self.current_comment_widget, "")
+            self.current_comment_widget.delete(0, tk.END)
             return
 
         # 1. Update the Move Label (e.g., "12. Nf3")
@@ -1441,13 +1388,13 @@ class ChessEventViewer:
         move_san = prev_board.san(last_node.move)
         move_number = last_node.parent.board().fullmove_number
         turn = "..." if last_node.parent.board().turn == chess.BLACK else "."
-        self.current_move_label.config(text=f"{move_number}{turn} {move_san}")
+        self.current_move_display_widget.config(text=f"{move_number}{turn} {move_san}")
         # 2. Update Comment (English Translation Applied)
         comment = last_node.comment
-        self._set_text_widget_content(self.move_comment_text, comment if comment else "No comment.")
+        self._set_text_widget_content(self.current_comment_widget, comment if comment else "No comment.")
 
         # 3. Update Variations
-        self.variations_listbox.delete(0, tk.END)
+        self.current_variation_widget.delete(0, tk.END)
 
         # last_move.parent.variations contains all alternative moves at this point
         # We skip index 0 because that is usually the main line move itself
@@ -1457,9 +1404,9 @@ class ChessEventViewer:
                 if i == 0:
                     continue
                 prefix = "Main: " if i == 0 else f"Var {i}: "
-                self.variations_listbox.insert(tk.END, f"{prefix}{var}")
+                self.current_variation_widget.insert(tk.END, f"{prefix}{var}")
         else:
-            self.variations_listbox.insert(tk.END, "No variations defined.")
+            self.current_variation_widget.insert(tk.END, "No variations defined.")
 
     def _set_text_widget_content(self, widget, content):
         """Helper to update a read-only Text widget."""
@@ -1509,6 +1456,9 @@ class ChessEventViewer:
         self.current_move_index = number_
 
         self.current_board_canvas = self.board_canvases[self.current_tab]
+        self.current_comment_widget = self.comment_widgets[self.current_tab]
+        self.current_variation_widget = self.variation_widgets[self.current_tab]
+        self.current_move_display_widget = self.move_display_widgets[self.current_tab]
         self.display_diagram_move(self.current_move_index)
 
     def _create_meta_info_widgets(self, parent_frame):
@@ -2030,18 +1980,72 @@ class ChessEventViewer:
         # Bind the left mouse button click to our handler
         board_canvas.bind("<Button-1>", self._on_board_click)
 
-        # --- COLUMN 1: PGN SNIPPET & DESCRIPTION (Right) ---
-        pgn_block = tk.LabelFrame(tab_frame, text="Relevant Moves",
+        # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
+        # Container for all move-related information
+        pgn_block = tk.LabelFrame(tab_frame, text="Game Analysis",
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-        # ESSENTIAL: Ensures the column containing the Text widget expands
+        # Allow the column to expand horizontally
         pgn_block.grid_columnconfigure(0, weight=1)
 
-        # ** Configure ROW 0 (the only remaining row) to expand **
-        pgn_block.grid_rowconfigure(0, weight=1)
+        # ROW 0: The Move List (Main visual area)
+        pgn_block.grid_rowconfigure(0, weight=2)
+        # ROW 1: The Details Container (Sub-widgets)
+        pgn_block.grid_rowconfigure(1, weight=2)
 
+        # 1. Initialize the Move List at the top
         self._create_move_list_widget(pgn_block)
+
+        # 2. Details Container: Holds Move Display, Variations, and Comments
+        details_container = tk.Frame(pgn_block)
+        details_container.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        details_container.columnconfigure(0, weight=1)
+
+        # Grid weights: Variations get the most vertical space
+        details_container.grid_rowconfigure(1, weight=1)
+
+        # --- A. MOVE DISPLAY ---
+        # Shows the current move text in a prominent way
+        move_frame = tk.LabelFrame(details_container, text="Move", padx=5, pady=2)
+        move_frame.grid(row=0, column=0, sticky='ew', pady=2)
+
+        move_label = tk.Label(move_frame, text=event_data.get('move_text', '-'),
+                              font=("Helvetica", 12, "bold"), fg="blue")
+        move_label.pack(anchor="w")
+        self.move_display_widgets.append(move_label)  # Store reference for updates
+
+        # --- B. VARIATIONS ---
+        # Displays alternative engine lines or sub-variations
+        vars_frame = tk.LabelFrame(details_container, text="Variations", padx=5, pady=2)
+        vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
+
+        # Use a monospaced font (Consolas) for better chess notation readability
+        vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
+        vars_text.pack(fill=tk.BOTH, expand=True)
+
+        # Insert data if available and lock the widget
+        if 'variations' in event_data:
+            vars_text.insert(tk.END, event_data['variations'])
+        #vars_text.config(state=tk.DISABLED)
+        self.variation_widgets.append(vars_text)  # Store reference for updates
+        vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
+
+        # --- C. COMMENTS ---
+        # Displays textual analysis and human-readable explanation
+        comm_frame = tk.LabelFrame(details_container, text="Comments", padx=5, pady=2)
+        comm_frame.grid(row=2, column=0, sticky='ew', pady=2)
+
+        comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
+        comm_text.pack(fill=tk.BOTH, expand=True)
+
+        # Insert data if available and lock the widget
+        if 'comment' in event_data:
+            comm_text.insert(tk.END, event_data['comment'])
+        comm_text.config(state=tk.DISABLED)
+        self.comment_widgets.append(comm_text)  # Store reference for updates
+
+        self._setup_quick_toolbar(details_container).grid(row=3, column=0, sticky='ew', pady=2)
 
         # 2. Add the frame to the Notebook
         self._update_move_listbox_content(self.current_game_moves)
