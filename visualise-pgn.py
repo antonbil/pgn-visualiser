@@ -1994,8 +1994,8 @@ class ChessEventViewer:
         board_canvas.bind("<Button-1>", self._on_board_click)
 
         # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
-        pgn_block = tk.LabelFrame(tab_frame, text="Game Analysis",
-                                  padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
+        pgn_block = tk.Frame(tab_frame,
+                                  padx=10, pady=10, bd=2, relief=tk.GROOVE)
         pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
         # Configure two equal columns
@@ -2059,7 +2059,7 @@ class ChessEventViewer:
         # --- D. SHORTCUTS/TOOLBAR ---
         # Because Row 0 has weight and Row 1 does not, this will stick to the bottom
         toolbar = self._setup_quick_toolbar(bottom_container)
-        toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 0))
+        toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 10))
 
         # 2. Add the frame to the Notebook
         self._update_move_listbox_content(self.current_game_moves)
