@@ -1420,7 +1420,7 @@ class ChessEventViewer:
             # Create the miniature instance (size 300px)
             if hasattr(self, 'mini_board') and self.mini_board:
                 self.mini_board.destroy()
-            self.mini_board = ChessMiniature(self.current_miniature_widget, size=150)
+            self.mini_board = ChessMiniature(self.current_miniature_widget, size=200)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
             board = start_node.parent.board()
@@ -2076,18 +2076,18 @@ class ChessEventViewer:
         board_canvas.bind("<Button-1>", self._on_board_click)
         try:
             # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
-            # Create the main container for the right side of the tab
             pgn_block = tk.Frame(tab_frame, padx=10, pady=10, bd=2, relief=tk.GROOVE)
             pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-            # Force two equal columns using the 'uniform' parameter
+            # 1. Force columns: Both columns get equal weight,
+            # but column 1 (Miniature side) gets a minimum width of 200
             pgn_block.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
-            pgn_block.grid_columnconfigure(1, weight=1, uniform="analysis_layout")
+            pgn_block.grid_columnconfigure(1, weight=1, uniform="analysis_layout", minsize=200)
 
-            # Row weights: Row 0 and 1 take the space, Row 2 (toolbar) stays compact
-            pgn_block.grid_rowconfigure(0, weight=3)  # Moves and Variations
-            pgn_block.grid_rowconfigure(1, weight=2)  # Comments and Miniature
-            pgn_block.grid_rowconfigure(2, weight=0)  # Toolbar
+            # 2. Force rows: Row 1 (Miniature row) gets a minimum height of 200
+            pgn_block.grid_rowconfigure(0, weight=3)
+            pgn_block.grid_rowconfigure(1, weight=2, minsize=200)  # Row for Comments / Miniature
+            pgn_block.grid_rowconfigure(2, weight=0)
 
             # 1. TOP LEFT: The Move List
             # Ensure this widget is placed in (row=0, column=0)
@@ -2139,8 +2139,14 @@ class ChessEventViewer:
             self.comment_widgets.append(comm_text)
 
             # --- 4. BOTTOM RIGHT: Miniature Frame ---
+            # Now we don't strictly need grid_propagate(False) because the parent enforces the size
             miniature_frame = tk.LabelFrame(pgn_block, text="Position Preview", padx=5, pady=2)
             miniature_frame.grid(row=1, column=1, sticky='nsew', padx=(10, 0), pady=2)
+
+            # If you want to BE ABSOLUTELY SURE it doesn't shrink, keep these two:
+            miniature_frame.config(width=200, height=200)
+            miniature_frame.grid_propagate(False)
+
             self.miniature_widgets.append(miniature_frame)
 
             # Placeholder label for the miniature board
