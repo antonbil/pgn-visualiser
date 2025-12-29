@@ -378,7 +378,7 @@ class PieceImageManager:
                     try:
                         if ext == '.svg':
                             # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
-                            print(f"Loading SVG: {image_path}")
+                            #print(f"Loading SVG: {image_path}")
                             # Hieronder moet u de cairosvg import en logica toevoegen
                             # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
 
@@ -1981,71 +1981,72 @@ class ChessEventViewer:
         board_canvas.bind("<Button-1>", self._on_board_click)
 
         # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
-        # Container for all move-related information
         pgn_block = tk.LabelFrame(tab_frame, text="Game Analysis",
                                   padx=10, pady=10, font=("Helvetica", 12, "bold"), bd=2, relief=tk.GROOVE)
         pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-        # Allow the column to expand horizontally
+        # Configure two equal columns
         pgn_block.grid_columnconfigure(0, weight=1)
+        pgn_block.grid_columnconfigure(1, weight=1)
 
-        # ROW 0: The Move List (Main visual area)
-        pgn_block.grid_rowconfigure(0, weight=2)
-        # ROW 1: The Details Container (Sub-widgets)
-        pgn_block.grid_rowconfigure(1, weight=2)
+        # Ensure the top section (row 0) takes most of the vertical space
+        pgn_block.grid_rowconfigure(0, weight=3)
+        # Row 1 will contain our bottom elements
+        pgn_block.grid_rowconfigure(1, weight=1)
 
-        # 1. Initialize the Move List at the top
+        # 1. Top Left: The Move List (Ensure this uses grid internally)
         self._create_move_list_widget(pgn_block)
 
-        # 2. Details Container: Holds Move Display, Variations, and Comments
-        details_container = tk.Frame(pgn_block)
-        details_container.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
-        details_container.columnconfigure(0, weight=1)
-
-        # Grid weights: Variations get the most vertical space
-        details_container.grid_rowconfigure(1, weight=1)
+        # 2. Top Right: Move Display and Variations
+        top_right_container = tk.Frame(pgn_block)
+        top_right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        top_right_container.columnconfigure(0, weight=1)
+        top_right_container.grid_rowconfigure(1, weight=1)  # Variations expand vertically
 
         # --- A. MOVE DISPLAY ---
-        # Shows the current move text in a prominent way
-        move_frame = tk.LabelFrame(details_container, text="Move", padx=5, pady=2)
+        move_frame = tk.LabelFrame(top_right_container, text="Move", padx=5, pady=2)
         move_frame.grid(row=0, column=0, sticky='ew', pady=2)
 
         move_label = tk.Label(move_frame, text=event_data.get('move_text', '-'),
                               font=("Helvetica", 12, "bold"), fg="blue")
         move_label.pack(anchor="w")
-        self.move_display_widgets.append(move_label)  # Store reference for updates
+        self.move_display_widgets.append(move_label)
 
         # --- B. VARIATIONS ---
-        # Displays alternative engine lines or sub-variations
-        vars_frame = tk.LabelFrame(details_container, text="Variations", padx=5, pady=2)
+        vars_frame = tk.LabelFrame(top_right_container, text="Variations", padx=5, pady=2)
         vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
-        # Use a monospaced font (Consolas) for better chess notation readability
         vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
         vars_text.pack(fill=tk.BOTH, expand=True)
-
-        # Insert data if available and lock the widget
         if 'variations' in event_data:
             vars_text.insert(tk.END, event_data['variations'])
-        #vars_text.config(state=tk.DISABLED)
-        self.variation_widgets.append(vars_text)  # Store reference for updates
-        vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
+        self.variation_widgets.append(vars_text)
+
+        # 3. Bottom Container: Full width (columnspan=2)
+        # Using sticky='nsew' here is crucial to allow children to push to the bottom
+        bottom_container = tk.Frame(pgn_block)
+        bottom_container.grid(row=1, column=0, columnspan=2, sticky='nsew', pady=(10, 0))
+        bottom_container.columnconfigure(0, weight=1)
+
+        # IMPORTANT: Row 0 (Comments) gets weight so it pushes Row 1 (Toolbar) down
+        bottom_container.grid_rowconfigure(0, weight=1)
+        bottom_container.grid_rowconfigure(1, weight=0)
 
         # --- C. COMMENTS ---
-        # Displays textual analysis and human-readable explanation
-        comm_frame = tk.LabelFrame(details_container, text="Comments", padx=5, pady=2)
-        comm_frame.grid(row=2, column=0, sticky='ew', pady=2)
+        comm_frame = tk.LabelFrame(bottom_container, text="Comments", padx=5, pady=2)
+        comm_frame.grid(row=0, column=0, sticky='nsew', pady=2)  # Changed sticky to nsew
 
         comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
         comm_text.pack(fill=tk.BOTH, expand=True)
-
-        # Insert data if available and lock the widget
         if 'comment' in event_data:
             comm_text.insert(tk.END, event_data['comment'])
         comm_text.config(state=tk.DISABLED)
-        self.comment_widgets.append(comm_text)  # Store reference for updates
+        self.comment_widgets.append(comm_text)
 
-        self._setup_quick_toolbar(details_container).grid(row=3, column=0, sticky='ew', pady=2)
+        # --- D. SHORTCUTS/TOOLBAR ---
+        # Because Row 0 has weight and Row 1 does not, this will stick to the bottom
+        toolbar = self._setup_quick_toolbar(bottom_container)
+        toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 0))
 
         # 2. Add the frame to the Notebook
         self._update_move_listbox_content(self.current_game_moves)
