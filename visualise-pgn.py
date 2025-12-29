@@ -241,77 +241,84 @@ def select_key_positions(all_events):
     """
     if not all_events:
         return []
-    print("len events", len(all_events))
-    # 1. PRE-FILTER: Skip first 2 moves (half-moves 0-3)
-    initial_filtered = [e for e in all_events if e['move_index'] >= 4]
-    if not initial_filtered:
+
+        # 1. PRE-FILTER: Skip the first 2 full moves (half-moves 0-3)
+    all_events = [e for e in all_events if e['move_index'] >= 4]
+    if not all_events:
         return []
 
-    # 2. PRE-MERGE: Group events that are within 2 half-moves of each other
-    # We keep the one with the highest 'score' within each cluster.
-    merged_candidates = []
-    if initial_filtered:
-        move_num = 0
-        for i in range(1, len(initial_filtered)):
-            if initial_filtered[i]['move_index'] > move_num:
-                move_num = initial_filtered[i]['move_index']
-        total_half_moves = move_num * 2
-        part_size = total_half_moves // 3
-        ranges = [(0, part_size), (part_size, 2 * part_size), (2 * part_size, total_half_moves)]
-        initial_filtered.sort(key=lambda x: x['score'])
-        initial_filtered = initial_filtered[:part_size//2]+initial_filtered[part_size:2 * part_size][:part_size//2]+initial_filtered[2 * part_size: total_half_moves][:part_size//2]
-        #initial_filtered = initial_filtered[:20]
-        # Sort by move_index to ensure we process chronologically
-        initial_filtered.sort(key=lambda x: x['move_index'])
-        prev = None
-        for i in range(1, len(initial_filtered)):
-            curr = initial_filtered[i]
-            if prev:
-                if curr['move_index'] - prev['move_index'] > 2:
-                    merged_candidates.append(prev)
-            prev = curr
-        if prev:
-            merged_candidates.append(prev)
-        if len(merged_candidates) < 6:
-            merged_candidates = [e for e in all_events if e['move_index'] >= 4]
-
-    # 3. SELECTION FROM MERGED CANDIDATES
-    total_half_moves = all_events[-1]['full_move_history'][-1]['full_move_index'] + 1
-    selected_indices = set()
-    selected_events = []
-
+    # Determine total length and define the three game phases
+    total_half_moves = all_events[-1]['move_index'] + 1
     part_size = total_half_moves // 3
     ranges = [(0, part_size), (part_size, 2 * part_size), (2 * part_size, total_half_moves)]
 
-    # A. Biggest event per part
+    merged_candidates = []
+
+    # 2. CREATE REGIONAL ISLANDS
+    for start, end in ranges:
+        # Identify all events within the current phase
+        part_events = [e for e in all_events if start <= e['move_index'] < end]
+        if not part_events:
+            continue
+
+        # Sort by impact (score) to identify the most significant moments
+        part_events.sort(key=lambda x: x['score'], reverse=True)
+
+        # DYNAMIC FALLBACK: Ensure we keep enough moves even in "perfect" games.
+        # We take at least 5 moves, but up to 10 to create the necessary 'gaps'.
+        min_to_keep = max(5, min(10, len(part_events)))
+        interesting_in_part = part_events[:min_to_keep]
+
+        # Sort chronologically to prepare for the clustering logic
+        interesting_in_part.sort(key=lambda x: x['move_index'])
+
+        # 3. CLUSTER THE ISLANDS (within this specific phase)
+        # Groups moves that are part of the same sequence (diff <= 2)
+        if interesting_in_part:
+            current_cluster = [interesting_in_part[0]]
+            for i in range(1, len(interesting_in_part)):
+                curr = interesting_in_part[i]
+                # Check if move belongs to current sequence
+                if curr['move_index'] - current_cluster[-1]['move_index'] <= 2:
+                    current_cluster.append(curr)
+                else:
+                    # Sequence broken: store the most significant move of the cluster
+                    merged_candidates.append(max(current_cluster, key=lambda x: x['score']))
+                    current_cluster = [curr]
+            # Add the final cluster of the phase
+            merged_candidates.append(max(current_cluster, key=lambda x: x['score']))
+
+    if len(merged_candidates) < 6:
+        merged_candidates = all_events
+    # 4. FINAL SELECTION PROCESS
+    selected_events = []
+    selected_indices = set()
+
+    # A. Select the single best representative for each of the 3 parts
     for part_num, (start, end) in enumerate(ranges):
-        best_in_part = None
-        max_val = -1
-        for event in merged_candidates:
-            idx = event['move_index']
-            if start <= idx < end and event['score'] > max_val:
-                max_val = event['score']
-                best_in_part = event
+        part_candidates = [e for e in merged_candidates if start <= e['move_index'] < end]
+        if part_candidates:
+            best = max(part_candidates, key=lambda x: x['score'])
+            ev_copy = best.copy()
+            ev_copy['source'] = f"Part {part_num + 1}"
+            selected_events.append(ev_copy)
+            selected_indices.add(ev_copy['move_index'])
 
-        if best_in_part:
-            best_in_part['source'] = f"Part {part_num + 1}"
-            selected_events.append(best_in_part)
-            selected_indices.add(best_in_part['move_index'])
-
-    # B. Global Top 3 (excluding already selected part-winners)
+    # B. Select the Top 3 global highlights from the remaining candidates
     remaining = sorted(
         [e for e in merged_candidates if e['move_index'] not in selected_indices],
         key=lambda x: x['score'],
         reverse=True
     )
 
-    for i in range(min(6-len(selected_events), len(remaining))):
-        remaining[i]['source'] = f"Top {i + 1}"
-        selected_events.append(remaining[i])
+    for i in range(min(3, len(remaining))):
+        ev_copy = remaining[i].copy()
+        ev_copy['source'] = f"Top {i + 1} (Global)"
+        selected_events.append(ev_copy)
+        selected_indices.add(ev_copy['move_index'])
 
-    # 4. FINAL CHRONOLOGICAL SORT
+    # Sort the final 6 key positions chronologically for the user
     selected_events.sort(key=lambda x: x['move_index'])
-
     return selected_events
 
 # ----------------------------------------------------------------------
@@ -1432,7 +1439,6 @@ class ChessEventViewer:
         self.last_node = last_node
         prev_board = last_node.parent.board()
         move_san = prev_board.san(last_node.move)
-        print("last node", str(last_node)[:8])
         move_number = last_node.parent.board().fullmove_number
         turn = "..." if last_node.parent.board().turn == chess.BLACK else "."
         self.current_move_label.config(text=f"{move_number}{turn} {move_san}")
@@ -1468,6 +1474,8 @@ class ChessEventViewer:
         """
 
         # 1. Retrieve the widget ID of the newly selected tab
+        # if self.notebook.index(self.notebook.select()) == self.current_tab:
+        #     return
         selected_tab_id = self.notebook.select()
 
         # 2. Translate the widget ID to the zero-based index
