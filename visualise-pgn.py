@@ -414,6 +414,50 @@ class PieceImageManager:
             print(f"Chess-set '{self.set_identifier}' successfully loaded.")
         else:
             print(f"Error: No chess-pieces loaded. Check if files exist: *K{self.set_identifier}.(png/svg)")
+
+
+class ChessMiniature(tk.Canvas):
+    """
+    A miniature chess board widget.
+    """
+
+    def __init__(self, master, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
+        # Initialize the Canvas with a fixed size and a background color we can see
+        super().__init__(master, width=size, height=size, highlightthickness=0, **kwargs)
+
+        self.size = size
+        self.square_size = size // 8
+        self.color_light = color_light
+        self.color_dark = color_dark
+
+    def draw_board(self, board):
+        """ Renders the board. """
+        self.delete("all")  # Clear previous drawings
+
+        # 1. Draw Squares
+        for square in chess.SQUARES:
+            rank = chess.square_rank(square)
+            file = chess.square_file(square)
+
+            x1 = file * self.square_size
+            y1 = (7 - rank) * self.square_size
+            x2 = x1 + self.square_size
+            y2 = y1 + self.square_size
+
+            color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
+            self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+
+        # 2. Draw Pieces (Simple text for testing)
+        for square, piece in board.piece_map().items():
+            rank = chess.square_rank(square)
+            file = chess.square_file(square)
+            x = (file * self.square_size) + (self.square_size // 2)
+            y = ((7 - rank) * self.square_size) + (self.square_size // 2)
+
+            self.create_text(x, y, text=piece.unicode_symbol(),
+                             font=("Arial", int(self.square_size * 0.7)),
+                             fill="black" if piece.color == chess.BLACK else "white")
+
 IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
@@ -448,6 +492,7 @@ class ChessEventViewer:
         self.comment_widgets = []
         self.variation_widgets = []
         self.move_display_widgets = []
+        self.miniature_widgets = []
 
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
@@ -1284,63 +1329,73 @@ class ChessEventViewer:
 
     def _show_variation_preview(self, start_node):
         """
-        Creates a popup window with a structured layout: move numbers,
-        White/Black moves, and comments aligned in columns.
+        Updated variation preview with a side-by-side layout:
+        Textual moves on the left and a Miniature board on the right.
         """
         preview_win = tk.Toplevel(self.master)
         preview_win.title("Variation Detail View")
-        preview_win.geometry("600x450")
+        preview_win.geometry("850x500")  # Wider to accommodate the board
 
-        # Use a Text widget with tabs for column alignment
-        # Tab 1: 40px (Move number), Tab 2: 120px (White), Tab 3: 200px (Black/Comments)
+        # Main container frame
+        content_box = tk.Frame(preview_win, padx=10, pady=10)
+        content_box.pack(fill=tk.BOTH, expand=True)
+
+        # LEFT: Text Area
+        text_frame = tk.LabelFrame(content_box, text="Analysis Steps", padx=5, pady=5)
+        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         text_area = tk.Text(
-            preview_win, wrap=tk.WORD, padx=15, pady=15,
-            font=("Consolas", 10),  # Monospaced font works best for alignment
+            text_frame, wrap=tk.WORD, width=40,
+            font=("Consolas", 10),
             tabs=("40p", "120p", "200p")
         )
         text_area.pack(fill=tk.BOTH, expand=True)
 
-        # Styling tags
+        # RIGHT: Miniature Board Area
+        board_frame = tk.LabelFrame(content_box, text="Final Position", padx=10, pady=10)
+        board_frame.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Create the miniature instance (size 300px)
+        mini_board = ChessMiniature(board_frame, size=300)
+        mini_board.pack(pady=10)
+
+        # ... (Styling tags: move_num, move, comment stay the same) ...
         text_area.tag_configure("move_num", foreground="gray")
         text_area.tag_configure("move", font=("Consolas", 10, "bold"))
         text_area.tag_configure("comment", foreground="#008000", font=("Consolas", 9, "italic"))
 
-        # To track move numbers and turns, we need a board object
         board = start_node.parent.board()
         current_node = start_node
 
         while current_node is not None:
+            # ... (Insertion logic for text_area remains the same) ...
             move_num = board.fullmove_number
-            is_white = board.turn  # True if White's turn
+            is_white = board.turn
 
-            # If it's White's turn, we start a new line with the move number
             if is_white:
                 text_area.insert(tk.END, f"{move_num}.\t", "move_num")
             elif current_node == start_node:
-                # Special case: if the variation starts with a Black move
                 text_area.insert(tk.END, f"{move_num}...\t\t", "move_num")
 
-            # Insert the move
-            move_san = current_node.san()
-            text_area.insert(tk.END, f"{move_san}\t", "move")
-
-            # Add comment if exists
+            text_area.insert(tk.END, f"{current_node.san()}\t", "move")
             if current_node.comment:
                 text_area.insert(tk.END, f"({current_node.comment})\t", "comment")
 
-            # If we just finished a Black move (or it's the end), start a new line
             if not is_white or not current_node.variations:
                 text_area.insert(tk.END, "\n")
 
-            # Advance board and node
             board.push(current_node.move)
+
+            # Advance node
             if current_node.variations:
                 current_node = current_node.variation(0)
             else:
+                # We reached the end of the variation, draw the final position!
+                mini_board.draw_board(board)
                 current_node = None
 
         text_area.config(state=tk.DISABLED)
-        tk.Button(preview_win, text="Close", command=preview_win.destroy).pack(pady=5)
+        tk.Button(preview_win, text="Close", command=preview_win.destroy).pack(pady=10)
 
     def _on_variation_selected(self, event):
         """
@@ -1360,7 +1415,31 @@ class ChessEventViewer:
         if len(all_variations) > 1:
             # Match the listbox index to the variation object
             selected_variation = all_variations[index + 1]
-            self._show_variation_preview(selected_variation)
+            start_node = selected_variation
+            #self._show_variation_preview(selected_variation)
+            # Create the miniature instance (size 300px)
+            if hasattr(self, 'mini_board') and self.mini_board:
+                self.mini_board.destroy()
+            self.mini_board = ChessMiniature(self.current_miniature_widget, size=150)
+            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+
+            board = start_node.parent.board()
+            current_node = start_node
+
+            while current_node is not None:
+                # ... (Insertion logic for text_area remains the same) ...
+                move_num = board.fullmove_number
+                is_white = board.turn
+
+                board.push(current_node.move)
+
+                # Advance node
+                if current_node.variations:
+                    current_node = current_node.variation(0)
+                else:
+                    # We reached the end of the variation, draw the final position!
+                    self.mini_board.draw_board(board)
+                    current_node = None
 
         # --- YOUR LOGIC HERE ---
         # Example: If you want to jump to this variation:
@@ -1464,6 +1543,7 @@ class ChessEventViewer:
 
         self.current_board_canvas = self.board_canvases[self.current_tab]
         self.current_comment_widget = self.comment_widgets[self.current_tab]
+        self.current_miniature_widget = self.miniature_widgets[self.current_tab]
         self.current_variation_widget = self.variation_widgets[self.current_tab]
         self.current_move_display_widget = self.move_display_widgets[self.current_tab]
         self.display_diagram_move(self.current_move_index)
@@ -1919,7 +1999,9 @@ class ChessEventViewer:
 
         # --- 1. Create the container Frame for the tab content ---
         tab_frame = ttk.Frame(self.notebook, padding="15 10 15 10")
-        tab_frame.columnconfigure(1, weight=1)  # Ensure the PGN column expands
+        #tab_frame.columnconfigure(1, weight=1)  # Ensure the PGN column expands
+        tab_frame.grid_rowconfigure(0, weight=1)
+        tab_frame.grid_columnconfigure(1, weight=1)  # The column for pgn_block
 
         # Extract the PGN snippet text
         pgn_snippet_text = event_data['move_history']
@@ -1992,79 +2074,93 @@ class ChessEventViewer:
             print(f"Highlighting skipped: {e}")
         # Bind the left mouse button click to our handler
         board_canvas.bind("<Button-1>", self._on_board_click)
+        try:
+            # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
+            # Create the main container for the right side of the tab
+            pgn_block = tk.Frame(tab_frame, padx=10, pady=10, bd=2, relief=tk.GROOVE)
+            pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-        # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
-        pgn_block = tk.Frame(tab_frame,
-                                  padx=10, pady=10, bd=2, relief=tk.GROOVE)
-        pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
+            # Force two equal columns using the 'uniform' parameter
+            pgn_block.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
+            pgn_block.grid_columnconfigure(1, weight=1, uniform="analysis_layout")
 
-        # Configure two equal columns
-        pgn_block.grid_columnconfigure(0, weight=1)
-        pgn_block.grid_columnconfigure(1, weight=1)
+            # Row weights: Row 0 and 1 take the space, Row 2 (toolbar) stays compact
+            pgn_block.grid_rowconfigure(0, weight=3)  # Moves and Variations
+            pgn_block.grid_rowconfigure(1, weight=2)  # Comments and Miniature
+            pgn_block.grid_rowconfigure(2, weight=0)  # Toolbar
 
-        # Ensure the top section (row 0) takes most of the vertical space
-        pgn_block.grid_rowconfigure(0, weight=3)
-        # Row 1 will contain our bottom elements
-        pgn_block.grid_rowconfigure(1, weight=1)
+            # 1. TOP LEFT: The Move List
+            # Ensure this widget is placed in (row=0, column=0)
+            self._create_move_list_widget(pgn_block)
 
-        # 1. Top Left: The Move List (Ensure this uses grid internally)
-        self._create_move_list_widget(pgn_block)
+            # 2. TOP RIGHT: Move Display and Variations Container
+            top_right_container = tk.Frame(pgn_block)
+            top_right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+            top_right_container.columnconfigure(0, weight=1)
+            top_right_container.grid_rowconfigure(1, weight=1)  # Variations expand vertically
 
-        # 2. Top Right: Move Display and Variations
-        top_right_container = tk.Frame(pgn_block)
-        top_right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
-        top_right_container.columnconfigure(0, weight=1)
-        top_right_container.grid_rowconfigure(1, weight=1)  # Variations expand vertically
+            # --- A. MOVE DISPLAY ---
+            move_frame = tk.LabelFrame(top_right_container, text="Move", padx=5, pady=2)
+            move_frame.grid(row=0, column=0, sticky='ew', pady=2)
 
-        # --- A. MOVE DISPLAY ---
-        move_frame = tk.LabelFrame(top_right_container, text="Move", padx=5, pady=2)
-        move_frame.grid(row=0, column=0, sticky='ew', pady=2)
+            move_label = tk.Label(
+                move_frame,
+                text=event_data.get('move_text', '-'),
+                font=("Helvetica", 12, "bold"),
+                fg="blue"
+            )
+            move_label.pack(anchor="w")
+            self.move_display_widgets.append(move_label)
 
-        move_label = tk.Label(move_frame, text=event_data.get('move_text', '-'),
-                              font=("Helvetica", 12, "bold"), fg="blue")
-        move_label.pack(anchor="w")
-        self.move_display_widgets.append(move_label)
+            # --- B. VARIATIONS ---
+            vars_frame = tk.LabelFrame(top_right_container, text="Variations", padx=5, pady=2)
+            vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
-        # --- B. VARIATIONS ---
-        vars_frame = tk.LabelFrame(top_right_container, text="Variations", padx=5, pady=2)
-        vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
+            vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
+            vars_text.pack(fill=tk.BOTH, expand=True)
 
-        vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
-        vars_text.pack(fill=tk.BOTH, expand=True)
-        if 'variations' in event_data:
-            vars_text.insert(tk.END, event_data['variations'])
-        self.variation_widgets.append(vars_text)
+            if 'variations' in event_data:
+                vars_text.insert(tk.END, event_data['variations'])
 
-        # 3. Bottom Container: Full width (columnspan=2)
-        # Using sticky='nsew' here is crucial to allow children to push to the bottom
-        bottom_container = tk.Frame(pgn_block)
-        bottom_container.grid(row=1, column=0, columnspan=2, sticky='nsew', pady=(10, 0))
-        bottom_container.columnconfigure(0, weight=1)
+            self.variation_widgets.append(vars_text)
+            vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
 
-        # IMPORTANT: Row 0 (Comments) gets weight so it pushes Row 1 (Toolbar) down
-        bottom_container.grid_rowconfigure(0, weight=1)
-        bottom_container.grid_rowconfigure(1, weight=0)
+            # 3. BOTTOM LEFT: Comments (Now placed under the Move List)
+            comm_frame = tk.LabelFrame(pgn_block, text="Comments", padx=5, pady=2)
+            comm_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
-        # --- C. COMMENTS ---
-        comm_frame = tk.LabelFrame(bottom_container, text="Comments", padx=5, pady=2)
-        comm_frame.grid(row=0, column=0, sticky='nsew', pady=2)  # Changed sticky to nsew
+            comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
+            comm_text.pack(fill=tk.BOTH, expand=True)
 
-        comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
-        comm_text.pack(fill=tk.BOTH, expand=True)
-        if 'comment' in event_data:
-            comm_text.insert(tk.END, event_data['comment'])
-        comm_text.config(state=tk.DISABLED)
-        self.comment_widgets.append(comm_text)
+            if 'comment' in event_data:
+                comm_text.insert(tk.END, event_data['comment'])
 
-        # --- D. SHORTCUTS/TOOLBAR ---
-        # Because Row 0 has weight and Row 1 does not, this will stick to the bottom
-        toolbar = self._setup_quick_toolbar(bottom_container)
-        toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 10))
+            comm_text.config(state=tk.DISABLED)  # Lock the text after insertion
+            self.comment_widgets.append(comm_text)
 
-        # 2. Add the frame to the Notebook
-        self._update_move_listbox_content(self.current_game_moves)
-        tab_title = f"{index}. {event_data['move_text']}"  # Short title for the tab
-        self.notebook.add(tab_frame, text=tab_title)
+            # --- 4. BOTTOM RIGHT: Miniature Frame ---
+            miniature_frame = tk.LabelFrame(pgn_block, text="Position Preview", padx=5, pady=2)
+            miniature_frame.grid(row=1, column=1, sticky='nsew', padx=(10, 0), pady=2)
+            self.miniature_widgets.append(miniature_frame)
+
+            # Placeholder label for the miniature board
+            #mini_placeholder = tk.Label(self.miniature_frame, text="[Mini Board Placeholder]", fg="gray")
+            #mini_placeholder.pack(expand=True)
+
+            # 5. FULL WIDTH BOTTOM: Shortcuts/Toolbar
+            # Span across both column 0 and 1
+            toolbar = self._setup_quick_toolbar(pgn_block)
+            toolbar.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(5, 10))
+            pgn_block.grid_rowconfigure(0, weight=1)  # Row for Move List / Variations
+            pgn_block.grid_rowconfigure(1, weight=1)  # Row for Comments / Miniature
+            pgn_block.grid_rowconfigure(2, weight=0)  # Row for Toolbar (fixed height)
+
+            # 2. Add the frame to the Notebook
+            self._update_move_listbox_content(self.current_game_moves)
+            tab_title = f"{index}. {event_data['move_text']}"  # Short title for the tab
+            self.notebook.add(tab_frame, text=tab_title)
+        except Exception as e:
+            print("error in creation notebook",e)
 
     def _on_board_click(self, event):
         """
