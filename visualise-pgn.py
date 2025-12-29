@@ -235,65 +235,81 @@ def _format_pgn_history(move_list):
 
 def select_key_positions(all_events):
     """
-    Selects the events based on the new logic:
-    1. Biggest event from each of the 3 equal parts of the game.
-    2. Top 3 of the remaining event (globally).
+    1. Filter out moves 1 & 2.
+    2. Merge consecutive/related events in the full list first.
+    3. Select the best events from the merged candidates.
     """
     if not all_events:
         return []
+    print("len events", len(all_events))
+    # 1. PRE-FILTER: Skip first 2 moves (half-moves 0-3)
+    initial_filtered = [e for e in all_events if e['move_index'] >= 4]
+    if not initial_filtered:
+        return []
 
-    # Determine the total number of half-moves (including the last move in the event list)
+    # 2. PRE-MERGE: Group events that are within 2 half-moves of each other
+    # We keep the one with the highest 'score' within each cluster.
+    merged_candidates = []
+    if initial_filtered:
+        move_num = 0
+        for i in range(1, len(initial_filtered)):
+            if initial_filtered[i]['move_index'] > move_num:
+                move_num = initial_filtered[i]['move_index']
+        total_half_moves = move_num * 2
+        part_size = total_half_moves // 3
+        ranges = [(0, part_size), (part_size, 2 * part_size), (2 * part_size, total_half_moves)]
+        initial_filtered.sort(key=lambda x: x['score'])
+        initial_filtered = initial_filtered[:part_size//2]+initial_filtered[part_size:2 * part_size][:part_size//2]+initial_filtered[2 * part_size: total_half_moves][:part_size//2]
+        #initial_filtered = initial_filtered[:20]
+        # Sort by move_index to ensure we process chronologically
+        initial_filtered.sort(key=lambda x: x['move_index'])
+        prev = None
+        for i in range(1, len(initial_filtered)):
+            curr = initial_filtered[i]
+            if prev:
+                if curr['move_index'] - prev['move_index'] > 2:
+                    merged_candidates.append(prev)
+            prev = curr
+        if prev:
+            merged_candidates.append(prev)
+        if len(merged_candidates) < 6:
+            merged_candidates = [e for e in all_events if e['move_index'] >= 4]
+
+    # 3. SELECTION FROM MERGED CANDIDATES
     total_half_moves = all_events[-1]['full_move_history'][-1]['full_move_index'] + 1
-
-    # Use a set to prevent selecting the same event twice
     selected_indices = set()
     selected_events = []
 
-    # 1. Divide the game into 3 (almost) equal parts
     part_size = total_half_moves // 3
+    ranges = [(0, part_size), (part_size, 2 * part_size), (2 * part_size, total_half_moves)]
 
-    # Determine the ranges based on the 0-based move index
-    ranges = [
-        (0, part_size),  # Part 1 (Opening/Early Middlegame)
-        (part_size, 2 * part_size),  # Part 2 (Middlegame)
-        (2 * part_size, total_half_moves)  # Part 3 (Late Middlegame/Endgame)
-    ]
-
-    print(f"Total half-moves: {total_half_moves}. Part size: {part_size}.")
-
-    # Select the biggest event in each part
-    for part_num, (start_index, end_index) in enumerate(ranges):
+    # A. Biggest event per part
+    for part_num, (start, end) in enumerate(ranges):
         best_in_part = None
-        max_score = -1
-
-        for event in all_events:
-            move_idx = event['move_index']
-
-            # Check if the move falls within the current range
-            if start_index <= move_idx < end_index:
-                if event['score'] > max_score and move_idx not in selected_indices:
-                    max_score = event['score']
-                    best_in_part = event
+        max_val = -1
+        for event in merged_candidates:
+            idx = event['move_index']
+            if start <= idx < end and event['score'] > max_val:
+                max_val = event['score']
+                best_in_part = event
 
         if best_in_part:
-            best_in_part['source'] = f"Biggest Event in Part {part_num + 1}"
+            best_in_part['source'] = f"Part {part_num + 1}"
             selected_events.append(best_in_part)
             selected_indices.add(best_in_part['move_index'])
 
-    # 2. Select the top 3 of the remaining events
-    remaining_events = sorted(
-        [b for b in all_events if b['move_index'] not in selected_indices],
+    # B. Global Top 3 (excluding already selected part-winners)
+    remaining = sorted(
+        [e for e in merged_candidates if e['move_index'] not in selected_indices],
         key=lambda x: x['score'],
         reverse=True
     )
 
-    # Add the top 3 to the selection
-    for i in range(min(3, len(remaining_events))):
-        remaining_events[i]['source'] = f"Global Top {i + 1} (Remaining)"
-        selected_events.append(remaining_events[i])
-        selected_indices.add(remaining_events[i]['move_index'])
+    for i in range(min(6-len(selected_events), len(remaining))):
+        remaining[i]['source'] = f"Top {i + 1}"
+        selected_events.append(remaining[i])
 
-    # Sort the selected events chronologically for display
+    # 4. FINAL CHRONOLOGICAL SORT
     selected_events.sort(key=lambda x: x['move_index'])
 
     return selected_events
@@ -2129,7 +2145,7 @@ if __name__ == "__main__":
     try:
         root = tk.Tk()
         # Set the initial size to 1200x800
-        root.geometry("1200x900")
+        root.geometry("1200x1020")
 
         IMAGE_DIRECTORY = "Images/piece"
         default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1, engine_depth = get_settings()
