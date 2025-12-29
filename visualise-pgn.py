@@ -521,14 +521,21 @@ class ChessEventViewer:
         self.move_nav_panel.pack(side=tk.LEFT,  padx=5)  # Fill=tk.Y om verticaal op te vullen
 
         # --- TOP LEVEL FILE READER WIDGET ---
+        # 1. Create the main container frame
         file_reader_frame = tk.Frame(self.navigation_container, padx=10, pady=5, bd=1, relief=tk.RIDGE)
         file_reader_frame.pack(fill="x", padx=10, pady=10)
 
+        # 2. Configure the grid: one column that fills the available width
+        file_reader_frame.grid_columnconfigure(0, weight=1)
 
+        # 3. Create the widgets and assign them to specific rows
+        # Row 0: File Reader (Top)
+        self._create_file_reader_widget(file_reader_frame, row=0)
 
-        self._create_file_reader_widget(file_reader_frame)
+        # Row 1: Navigation Buttons/Sliders (Bottom)
+        self._create_navigation_widgets(file_reader_frame, row=1)
+
         self._create_meta_info_widgets(self.meta_info_frame)
-        self._create_navigation_widgets(self.nav_panel)
         self._create_move_navigation_widgets(self.move_nav_panel)
 
         # --- TABBED INTERFACE FOR EVENTS ---
@@ -1170,43 +1177,43 @@ class ChessEventViewer:
         except ValueError:
             print(f"Error: Description '{selected_description}' niet gevonden.")
 
-    def _create_navigation_widgets(self, parent_frame):
+    def _create_navigation_widgets(self, parent_frame, row=1):
         """
-        CREATES the navigation panel (Game Counter, Dropdown, and Prev/Next buttons).
-        Aangepast: Label en knoppen zijn horizontaal gegroepeerd en gecentreerd.
+        Creates the navigation panel (Game Counter and Move Navigation).
+        The main container is placed in the specified grid row.
         """
         button_font = ('Arial', 10, 'bold')
 
-        # 2. Container for Horizontal Grouping (Label + Buttons)
-        # Use this frame to place the counter and the navigation buttons side-by-side
-        game_nav_group = tk.Frame(parent_frame)
-        # Fixed padding on the right to separate from Move Navigation
+        # Main container for this specific row
+        # We use .grid() to place it in the specific row of parent_frame
+        navigation_row_container = tk.Frame(parent_frame)
+        navigation_row_container.grid(row=row, column=0, sticky='ew', pady=5)
+
+        # Optional: Center the content within the row
+        # To center, we use a middle frame that takes up the space
+        center_align_frame = tk.Frame(navigation_row_container)
+        center_align_frame.pack(expand=True)
+
+        # --- 1. GAME NAVIGATION GROUP (Left) ---
+        game_nav_group = tk.Frame(center_align_frame)
         game_nav_group.pack(side=tk.LEFT, padx=(0, 20))
 
-        # 2. Group: MOVE NAVIGATION (<| / < / > / |>)
-        # This group follows directly in the parent_frame
-        move_nav_group = tk.Frame(parent_frame)
-        move_nav_group.pack(side=tk.LEFT)
-
-        # --- 1. Populating Game Navigation (Left) ---
-
-        # 1a. Game Number (Game X of Y)
+        # Game Number Label (e.g., "Game 1 of 10")
         tk.Label(
             game_nav_group,
             textvariable=self.game_counter_var,
             font=button_font
-        ).pack(side=tk.LEFT, padx=(5, 5))  # Reduced padding
+        ).pack(side=tk.LEFT, padx=(5, 5))
 
-        # 1b. Previous/Next Game Buttons
-        # No extra frame (button_frame) needed, buttons directly in the group
+        # Prev/Next Game Buttons
         tk.Button(
             game_nav_group,
             text="<<",
             command=self._prev_game,
             font=button_font,
-            width=5,  # Slightly wider for readability
-            relief=tk.RAISED, bd=1  # Harmonized style
-        ).pack(side=tk.LEFT, padx=(5, 1))  # Reduced space between buttons
+            width=5,
+            relief=tk.RAISED, bd=1
+        ).pack(side=tk.LEFT, padx=(5, 1))
 
         tk.Button(
             game_nav_group,
@@ -1214,28 +1221,28 @@ class ChessEventViewer:
             command=self._next_game,
             font=button_font,
             width=5,
-            relief=tk.RAISED, bd=1  # Harmonized style
+            relief=tk.RAISED, bd=1
         ).pack(side=tk.LEFT, padx=(1, 5))
 
-        # --- 2. Populating Move Navigation (Right) ---
-        # Place the buttons directly in the move_nav_group
+        # --- 2. MOVE NAVIGATION GROUP (Right) ---
+        move_nav_group = tk.Frame(center_align_frame)
+        move_nav_group.pack(side=tk.LEFT)
 
-        # Go to first move
+        # First move button
         tk.Button(move_nav_group, text="|<", command=self._go_to_first_move,
                   width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=(5, 1))
 
-        # Go to previous move
+        # Previous move button
         tk.Button(move_nav_group, text="<", command=self._go_to_previous_move,
                   width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=1)
 
-        # Go to next move
+        # Next move button
         tk.Button(move_nav_group, text=">", command=self._go_to_next_move,
                   width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=1)
 
-        # Go to last move
+        # Last move button
         tk.Button(move_nav_group, text=">|", command=self._go_to_last_move,
                   width=4, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, padx=(1, 5))
-
     def set_game_var_descriptions(self, current_game_index: int):
         # Updates the index, the selected Combobox variable, and the game counter text.
         if len(self.game_descriptions)-1 < current_game_index or current_game_index < 0:
@@ -1808,16 +1815,22 @@ class ChessEventViewer:
             self.pgn_filepath.set(error_message)
             self._clear_content_frame()
 
-    def _create_file_reader_widget(self, file_reader_frame):
+    def _create_file_reader_widget(self, file_reader_frame, row=0):
         """
         Creates the UI elements for selecting and displaying the PGN file path.
-        This is placed at the top of the window.
+        Uses grid to occupy the top row of the parent frame.
         """
+        # Main container for this specific row to avoid mixing pack and grid in parent
+        row_container = tk.Frame(file_reader_frame)
+        row_container.grid(row=row, column=0, sticky='ew', pady=(0, 10))
 
+        # Configure the container to allow the path label to expand
+        row_container.columnconfigure(0, weight=1)
 
         # 1. Label/Entry for File Path Display
+        # We use pack inside this specific container
         path_label = tk.Label(
-            file_reader_frame,
+            row_container,
             textvariable=self.pgn_filepath,
             anchor="w",
             relief=tk.SUNKEN,
@@ -1828,13 +1841,13 @@ class ChessEventViewer:
 
         # 2. Button to open the file dialog
         select_button = tk.Button(
-            file_reader_frame,
+            row_container,
             text="Select PGN File",
             command=self._select_pgn_file
         )
         select_button.pack(side="right")
 
-        print("File Reader Widget initialized.")
+        print(f"File Reader Widget initialized on row {row}.")
 
     def _select_pgn_file(self):
         """
