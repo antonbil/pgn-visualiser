@@ -1131,7 +1131,7 @@ class ChessEventViewer:
 
             # We use our new .get() method on the custom widget
             for i in range(listbox_index, -1, -1):
-                line_content = self.touch_move_list.get(i).strip()
+                line_content = self.current_movelistbox.get(i).strip()
 
                 # Check for move number (e.g., "1." or "12.")
                 move_match = re.match(r'^(\d+)\.', line_content)
