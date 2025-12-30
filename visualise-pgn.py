@@ -417,41 +417,48 @@ class PieceImageManager:
         return self.mini_cache[cache_key]
 
 
+import tkinter as tk
+import chess
+
+
 class ChessMiniature(tk.Canvas):
     """
-    A miniature chess board that toggles between the start and end of a variation
-     when clicked.
+    A miniature chess board that:
+    1. Toggles between start/end of a variation on a short tap.
+    2. Shows a large 'Zoom' popup on a long press (hold).
     """
 
     def __init__(self, master, image_manager, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
         super().__init__(master, width=size, height=size, highlightthickness=0, **kwargs)
 
         self.size = size
-        self.square_size = size // 8
         self.color_light = color_light
         self.color_dark = color_dark
         self.image_manager = image_manager
 
-        # --- Functional attributes ---
-        self.stored_node = None  # The specific node that was requested
-        self.end_board = None  # Cached board of the final position
-        self.start_board = None  # Cached board of the initial move
-        self.showing_end = True  # Toggle state
+        # --- State Management ---
+        self.start_board = None
+        self.end_board = None
+        self.showing_end = True
 
-        # Bind the click event to the canvas
-        self.bind("<Button-1>", self._on_click)
+        # --- Long Press & Zoom Logic ---
+        self.long_press_ms = 500  # Threshold for long press
+        self.after_id = None  # ID of the pending timer
+        self.is_long_press = False  # Flag to distinguish tap from hold
+        self.zoom_window = None  # Reference to the popup window
+
+        # Bind touch/mouse events
+        self.bind("<Button-1>", self._on_button_down)
+        self.bind("<ButtonRelease-1>", self._on_button_up)
 
     def draw_from_node(self, node):
         """
-        Processes a node and renders the final position of its variation.
-        Stores the start and end states for toggling.
+        Calculates the start and end of a variation and renders the end position.
         """
-        self.stored_node = node
-
-        # 1. Store the board exactly as it is at this specific node (Start)
+        # Store initial state at this node
         self.start_board = node.board()
 
-        # 2. Follow the main line to find the final position (End)
+        # Traverse to the end of the main variation
         temp_board = node.board()
         current = node
         while current.variations:
@@ -460,55 +467,96 @@ class ChessMiniature(tk.Canvas):
 
         self.end_board = temp_board
         self.showing_end = True
+        self.draw_board()
 
-        # Draw the final position by default
-        self.draw_board(self.end_board)
+    def _on_button_down(self, event):
+        """ Starts the timer when the user touches the board. """
+        self.is_long_press = False
+        # Schedule the zoom popup after 500ms
+        self.after_id = self.after(self.long_press_ms, self._show_zoom)
 
-    def _on_click(self, event):
+    def _on_button_up(self, event):
+        """ Handles the end of the touch/click. """
+        # Cancel the timer if the finger is lifted before 500ms
+        if self.after_id:
+            self.after_cancel(self.after_id)
+            self.after_id = None
+
+        if not self.is_long_press:
+            # Short tap: toggle position
+            self._toggle_position()
+        else:
+            # End of long press: close the popup
+            self._close_zoom()
+
+    def _toggle_position(self):
+        """ Switches between the start and end board positions. """
+        if self.start_board and self.end_board:
+            self.showing_end = not self.showing_end
+            self.draw_board()
+
+    def _show_zoom(self):
+        """ Triggers the long-press state and opens a large preview. """
+        self.is_long_press = True
+
+        # Create a borderless popup window
+        self.zoom_window = tk.Toplevel(self)
+        self.zoom_window.overrideredirect(True)  # Remove title bar
+
+        # Calculate position: center above the miniature
+        x = self.winfo_rootx() - 50
+        y = self.winfo_rooty() - 320
+        self.zoom_window.geometry(f"+{x}+{y}")
+
+        # Create large canvas in popup
+        zoom_size = 600
+        zoom_canvas = tk.Canvas(self.zoom_window, width=zoom_size, height=zoom_size, bg="white")
+        zoom_canvas.pack()
+
+        # Draw the current state on the large canvas
+        current_board = self.end_board if self.showing_end else self.start_board
+        self._render_board_to_canvas(zoom_canvas, current_board, zoom_size)
+
+    def _close_zoom(self):
+        """ Destroys the zoom popup. """
+        if self.zoom_window:
+            self.zoom_window.destroy()
+            self.zoom_window = None
+
+    def draw_board(self):
+        """ Renders the current position on the main miniature canvas. """
+        board = self.end_board if self.showing_end else self.start_board
+        if board:
+            self._render_board_to_canvas(self, board, self.size)
+
+    def _render_board_to_canvas(self, target_canvas, board, board_size):
         """
-        Internal event handler that toggles the view on click.
+        Generic rendering method used for both miniature and zoom popup.
         """
-        if self.start_board is None or self.end_board is None:
-            return
-
-        # Toggle the state
-        self.showing_end = not self.showing_end
-
-        # Pick the correct board and redraw
-        target_board = self.end_board if self.showing_end else self.start_board
-        self.draw_board(target_board)
-
-        # Visual feedback: optionally update the border or color
-        # to show it's "interactive"
-        print(f"Toggled miniature to: {'End' if self.showing_end else 'Start'}")
-
-    def draw_board(self, board):
-        """
-        Standard rendering logic for squares and pieces.
-        """
-        self.delete("all")
+        target_canvas.delete("all")
+        sq_size = board_size // 8
 
         # 1. Draw Squares
         for square in chess.SQUARES:
             rank = chess.square_rank(square)
             file = chess.square_file(square)
-            x1, y1 = file * self.square_size, (7 - rank) * self.square_size
-            x2, y2 = x1 + self.square_size, y1 + self.square_size
+            x1, y1 = file * sq_size, (7 - rank) * sq_size
 
             color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
-            self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
+            target_canvas.create_rectangle(x1, y1, x1 + sq_size, y1 + sq_size, fill=color, outline="")
 
         # 2. Draw Pieces
         for square, piece in board.piece_map().items():
             rank, file = chess.square_rank(square), chess.square_file(square)
-            cx = (file * self.square_size) + (self.square_size // 2)
-            cy = ((7 - rank) * self.square_size) + (self.square_size // 2)
+            cx = (file * sq_size) + (sq_size // 2)
+            cy = ((7 - rank) * sq_size) + (sq_size // 2)
 
-            img = self.image_manager.get_miniature_image(piece.symbol(), self.square_size)
+            # Get image from manager (resized by the manager)
+            img = self.image_manager.get_miniature_image(piece.symbol(), sq_size)
             if img:
-                self.create_image(cx, cy, image=img, tags="piece")
+                target_canvas.create_image(cx, cy, image=img)
 
-        self.update_idletasks()
+        target_canvas.update_idletasks()
 
 
 class TouchMoveList(tk.Frame):
