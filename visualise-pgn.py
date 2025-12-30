@@ -2444,105 +2444,103 @@ class ChessEventViewer:
             pgn_block = tk.Frame(tab_frame, padx=10, pady=10, bd=2, relief=tk.GROOVE)
             pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
-            # Configure pgn_block to hold the PanedWindow and the Toolbar
-            pgn_block.grid_rowconfigure(0, weight=1)  # The PanedWindow gets all expanding space
-            pgn_block.grid_rowconfigure(1, weight=0)  # Toolbar stays at the bottom
+            # Configure pgn_block: Row 0 is content (expand), Row 1 is Toolbar (fixed)
+            pgn_block.grid_rowconfigure(0, weight=1)
+            pgn_block.grid_rowconfigure(1, weight=0)
             pgn_block.grid_columnconfigure(0, weight=1)
 
-            # 1. CREATE THE PANEDWINDOW (The Vertical Slider)
-            # sashrelief=tk.RAISED make the slider visible
-            main_pane = tk.PanedWindow(pgn_block, orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
-            main_pane.grid(row=0, column=0, sticky="nsew")
+            # 1. CREATE THE MAIN HORIZONTAL SPLITTER (Left vs Right Column)
+            column_pane = tk.PanedWindow(pgn_block, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=4)
+            column_pane.grid(row=0, column=0, sticky="nsew")
 
-            # 2. CREATE CONTAINERS FOR TOP AND BOTTOM
-            # These will be added to the PanedWindow
-            top_row_frame = tk.Frame(main_pane)
-            bottom_row_frame = tk.Frame(main_pane)
+            # Create the two main column containers
+            left_column = tk.Frame(column_pane)
+            right_column = tk.Frame(column_pane)
 
-            # Add them to the pane with an initial height
-            main_pane.add(top_row_frame, height=300)
-            main_pane.add(bottom_row_frame, height=300, minsize=300, stretch="never")
+            column_pane.add(left_column, stretch="always")
+            column_pane.add(right_column, width=320, stretch="never")  # Keep right side stable
 
-            # --- CONFIGURE TOP ROW GRID ---
-            top_row_frame.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
-            top_row_frame.grid_columnconfigure(1, weight=1, uniform="analysis_layout")
-            top_row_frame.grid_rowconfigure(0, weight=1)
+            # ---------------------------------------------------------
+            # --- LEFT COLUMN: MOVES & COMMENTS (Vertical Split) ---
+            # ---------------------------------------------------------
+            left_pane = tk.PanedWindow(left_column, orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
+            left_pane.pack(fill=tk.BOTH, expand=True)
 
-            # 1. TOP LEFT: The Move List
-            # Pass 'top_row_frame' as the parent
-            self._create_move_list_widget(top_row_frame)
+            # Container for Moves (Top Left)
+            moves_container = tk.Frame(left_pane)
+            # Container for Comments (Bottom Left)
+            comments_container = tk.Frame(left_pane)
 
-            # 2. TOP RIGHT: Move Display and Variations Container
-            top_right_container = tk.Frame(top_row_frame)
-            top_right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
-            top_right_container.columnconfigure(0, weight=1)
-            top_right_container.grid_rowconfigure(1, weight=1)
+            left_pane.add(moves_container, height=350, minsize=150)
+            left_pane.add(comments_container, height=150, minsize=100)
 
-            # --- A. MOVE DISPLAY ---
-            move_frame = tk.LabelFrame(top_right_container, text="Move", padx=5, pady=2)
+            # --- 1. MOVES (Inside moves_container) ---
+            # Assuming _create_move_list_widget uses grid or pack on its parent
+            self._create_move_list_widget(moves_container)
+            # Make sure the internal grid of moves_container is configured
+            moves_container.grid_rowconfigure(0, weight=1)
+            moves_container.grid_columnconfigure(0, weight=1)
+
+            # --- 2. COMMENTS (Inside comments_container) ---
+            comm_frame = tk.LabelFrame(comments_container, text="Comments", padx=5, pady=2)
+            comm_frame.pack(fill=tk.BOTH, expand=True, pady=2)
+
+            comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
+            comm_text.pack(fill=tk.BOTH, expand=True)
+            if 'comment' in event_data:
+                comm_text.insert(tk.END, event_data['comment'])
+            comm_text.config(state=tk.DISABLED)
+            self.comment_widgets.append(comm_text)
+
+            # ---------------------------------------------------------
+            # --- RIGHT COLUMN: INFO, VARIATIONS & MINIATURE ---
+            # ---------------------------------------------------------
+            # We use grid here to stack them vertically
+            right_column.grid_columnconfigure(0, weight=1)
+            right_column.grid_rowconfigure(2, weight=0)  # Miniature is fixed
+
+            # --- 3. MOVE DISPLAY ---
+            move_frame = tk.LabelFrame(right_column, text="Move", padx=5, pady=2)
             move_frame.grid(row=0, column=0, sticky='ew', pady=2)
 
-            move_label = tk.Label(
-                move_frame,
-                text=event_data.get('move_text', '-'),
-                font=("Helvetica", 12, "bold"),
-                fg="blue"
-            )
+            move_label = tk.Label(move_frame, text=event_data.get('move_text', '-'),
+                                  font=("Helvetica", 12, "bold"), fg="blue")
             move_label.pack(anchor="w")
             self.move_display_widgets.append(move_label)
 
-            # --- B. VARIATIONS ---
-            vars_frame = tk.LabelFrame(top_right_container, text="Variations", padx=5, pady=2)
+            # --- 4. VARIATIONS ---
+            vars_frame = tk.LabelFrame(right_column, text="Variations", padx=5, pady=2)
             vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
             vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
             vars_text.pack(fill=tk.BOTH, expand=True)
-
             if 'variations' in event_data:
                 vars_text.insert(tk.END, event_data['variations'])
-
             self.variation_widgets.append(vars_text)
             vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
 
-            # --- CONFIGURE BOTTOM ROW GRID ---
-            bottom_row_frame.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
-            bottom_row_frame.grid_columnconfigure(1, weight=1, uniform="analysis_layout", minsize=200)
-            bottom_row_frame.grid_rowconfigure(0, weight=1)
+            # --- 5. MINIATURE (Bottom Right) ---
+            miniature_frame = tk.LabelFrame(right_column, text="Position Preview", padx=5, pady=2)
+            miniature_frame.grid(row=2, column=0, sticky='nsew', pady=(10, 0))
 
-            # 3. BOTTOM LEFT: Comments
-            comm_frame = tk.LabelFrame(bottom_row_frame, text="Comments", padx=5, pady=2)
-            comm_frame.grid(row=0, column=0, sticky='nsew', pady=2)
-
-            comm_text = tk.Text(comm_frame, height=4, wrap=tk.WORD, font=("Segoe UI", 10))
-            comm_text.pack(fill=tk.BOTH, expand=True)
-
-            if 'comment' in event_data:
-                comm_text.insert(tk.END, event_data['comment'])
-
-            comm_text.config(state=tk.DISABLED)
-            self.comment_widgets.append(comm_text)
-
-            # --- 4. BOTTOM RIGHT: Miniature Frame ---
-            # Now using bottom_row_frame as parent
-            miniature_frame = tk.LabelFrame(bottom_row_frame, text="Position Preview", padx=5, pady=2)
-            miniature_frame.grid(row=0, column=1, sticky='nsew', padx=(10, 0), pady=2)
-
-            # Keep the fixed size for the miniature container
-            miniature_frame.config(width=200, height=200)
+            # Fixed size constraints as requested
+            miniature_frame.config(width=300, height=350)
             miniature_frame.grid_propagate(False)
-            last_variation = event_data['last_variation']
-            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=250,
-                                                 color_light=self.color_light, color_dark=self.color_dark)
+
+            last_variation = event_data.get('last_variation')
+            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=280,
+                                             color_light=self.color_light, color_dark=self.color_dark)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
             self.miniboards.append(self.mini_board)
-            if not last_variation is None:
+
+            if last_variation is not None:
                 self.mini_board.draw_from_node(last_variation)
                 miniature_frame.config(text=get_full_move_text(last_variation))
-
             self.miniature_widgets.append(miniature_frame)
 
-            # 5. FULL WIDTH BOTTOM: Shortcuts/Toolbar
-            # Toolbar stays in pgn_block, below the PanedWindow
+            # ---------------------------------------------------------
+            # --- TOOLBAR (Bottom, Full Width) ---
+            # ---------------------------------------------------------
             toolbar = self._setup_quick_toolbar(pgn_block)
             toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 10))
 
