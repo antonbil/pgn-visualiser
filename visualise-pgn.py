@@ -560,7 +560,7 @@ class ChessMiniature(tk.Canvas):
             if img:
                 target_canvas.create_image(cx, cy, image=img)
 
-        target_canvas.update_idletasks()
+        #target_canvas.update_idletasks()
 
 
 class TouchMoveList(tk.Frame):
@@ -604,25 +604,37 @@ class TouchMoveList(tk.Frame):
         self._populate()
 
     def _populate(self):
-        """Creates large, padded labels for each move pair."""
+        """
+        Optimized version: Drawing text directly on canvas instead of using Labels.
+        This significantly boosts performance on desktop systems.
+        """
+        self.canvas.delete("all")
+        y_offset = 10
+        row_height = 35  # Fixed height for easier math
+
         for i, move in enumerate(self.move_pairs):
-            lbl = tk.Label(
-                self.inner_frame,
+            # Create text directly on the canvas
+            item_id = self.canvas.create_text(
+                10, y_offset,
                 text=f"  {move}",
-                font=("Consolas", 12),
-                anchor="w",
-                bg="white",
-                height=2,  # Extra vertical height for touch
-                padx=10
+                anchor="nw",
+                font=("Consolas", 11),
+                tags=(f"move_{i}", "move_item")
             )
-            lbl.pack(fill=tk.X, expand=True)
 
-            # Bind events to each label so they don't block scrolling
-            lbl.bind("<Button-1>", self._on_drag_start)
-            lbl.bind("<B1-Motion>", self._on_drag_motion)
-            lbl.bind("<ButtonRelease-1>", lambda e, idx=i: self._on_label_tap(idx))
+            # Draw a transparent rectangle behind the text to act as a hit-zone
+            # This is much faster for the engine than managing Label widgets
+            rect_id = self.canvas.create_rectangle(
+                0, y_offset - 5,
+                500, y_offset + row_height - 5,
+                fill="", outline="",
+                tags=(f"move_{i}", "move_item")
+            )
 
-            self.labels.append(lbl)
+            y_offset += row_height
+
+        # Update scroll region once at the end
+        self.canvas.configure(scrollregion=(0, 0, 500, y_offset))
 
     def _on_label_tap(self, index):
         """ Only triggers selection if the user didn't scroll. """
@@ -748,7 +760,7 @@ class TouchMoveList(tk.Frame):
         Calculates the position of the label and scrolls the canvas to it.
         """
         if 0 <= index < len(self.labels):
-            self.update_idletasks()  # Ensure coordinates are current
+            #self.update_idletasks()  # Ensure coordinates are current
 
             # Get the total height of the scrollable area
             bbox = self.canvas.bbox("all")
