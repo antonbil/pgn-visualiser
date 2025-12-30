@@ -327,21 +327,21 @@ def select_key_positions(all_events):
 # ----------------------------------------------------------------------
 class PieceImageManager:
     """
-    Beheert het laden en cachen van schaakstukafbeeldingen.
-    Ondersteunt nu het kiezen van een specifieke set (bijv. set '2' voor bK2.svg).
+    Manages loading and caching of chess piece images.
+    Now supports original image storage to allow dynamic resizing for miniatures.
     """
 
     def __init__(self, square_size, image_dir_path, set_identifier="staunty"):
-        """
-        :param set_identifier: De ID van de gewenste set ('1', '2', '3', etc.).
-                               Dit wordt gebruikt om de juiste bestandsnaam te kiezen.
-        """
         self.square_size = square_size
         self.image_dir_path = image_dir_path
-        self.set_identifier = str(set_identifier) # Zorg ervoor dat het een string is
-        self.images = {} # Dictionary om de ImageTk.PhotoImage objecten vast te houden
+        self.set_identifier = str(set_identifier)
 
-        # We gebruiken de basisprefixen (wK, bQ)
+        # New: Store the raw PIL images separately
+        self.pil_images = {}
+        # Caches for PhotoImages
+        self.images = {}  # Main board cache
+        self.mini_cache = {}  # Miniature board cache
+
         self.piece_map = {
             'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
             'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP',
@@ -351,113 +351,130 @@ class PieceImageManager:
 
     def _load_images(self):
         """
-        Laadt en wijzigt de afmetingen van de afbeeldingen van de GESELECTEERDE SET.
-        Zoekt eerst naar een SVG, dan naar een PNG, met de set-identifier eraan vast.
+        Loads the images and stores them as PIL objects first.
         """
-        # Wis oude afbeeldingen om Garbage Collector problemen te voorkomen bij herladen
+        self.pil_images = {}
         self.images = {}
-
-        print(f"Loading chess-pieces '{self.set_identifier}' from: {self.image_dir_path}")
+        self.mini_cache = {}
 
         for symbol, base_prefix in self.piece_map.items():
-
-            # De dynamische prefix: bijv. 'wK2' of 'bN3'
             filename_prefix = f"{base_prefix}"
-
-            # Lijst van te proberen bestandsformaten, in volgorde van voorkeur
-            # Zoals u in uw map heeft: wK2.svg, wK3.svg, of wK1.png
             extensions = ['.svg', '.png']
-
             img = None
-            image_path = None
 
             for ext in extensions:
                 image_path = os.path.join(self.image_dir_path, self.set_identifier, f"{filename_prefix}{ext}")
-
                 if os.path.exists(image_path):
                     try:
                         if ext == '.svg':
-                            # Voor SVG's hebben we Cairosvg nodig (vereist installatie)
-                            #print(f"Loading SVG: {image_path}")
-                            # Hieronder moet u de cairosvg import en logica toevoegen
-                            # Omdat cairosvg extern is, houden we hier de generieke PNG/fallback logica aan
-
-                            # Tenzij u de cairosvg logica al heeft toegevoegd:
                             png_bytes = cairosvg.svg2png(url=image_path)
                             img = Image.open(BytesIO(png_bytes))
-
-                            # Fallback: We laten de SVG-laadlogica weg uit dit voorbeeld
-                            # om afhankelijkheden te minimaliseren, tenzij u het expliciet vraagt.
-                            # We gaan verder met het proberen van PNG.
-                            # continue # Skip SVG load for simplicity if cairosvg not set up
-
                         elif ext == '.png':
-                            # Laad de PNG (werkt altijd met Pillow)
                             img = Image.open(image_path)
-                            break # Bestand gevonden, stop de lus
-
+                        if img: break
                     except Exception as e:
-                        print(f"Error with loading from {image_path}: {e}")
-                        img = None # Bij fout, probeer volgende extensie
+                        print(f"Error loading {image_path}: {e}")
 
-            # Controleer of we een afbeelding hebben geladen
             if img:
-                # 2. Afmetingen aanpassen
-                img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
+                # 1. Store the original PIL image (crucial for resizing later)
+                self.pil_images[symbol] = img
 
-                # 3. Converteren naar Tkinter-formaat en opslaan
-                self.images[symbol] = ImageTk.PhotoImage(img)
+                # 2. Create the standard size PhotoImage for the main board
+                standard_img = img.resize((self.square_size, self.square_size), Image.Resampling.LANCZOS)
+                self.images[symbol] = ImageTk.PhotoImage(standard_img)
+
+    def get_miniature_image(self, symbol, size):
+        """
+        Returns a scaled PhotoImage for the miniature board.
+        Caches the result to avoid repeated resizing.
+        """
+        cache_key = f"{symbol}_{size}"
+        if cache_key not in self.mini_cache:
+            if symbol in self.pil_images:
+                # Scale the stored original PIL image
+                orig_pil = self.pil_images[symbol]
+                scaled_pil = orig_pil.resize((size, size), Image.Resampling.LANCZOS)
+                self.mini_cache[cache_key] = ImageTk.PhotoImage(scaled_pil)
             else:
-                print(f"Warning: No image found for set {self.set_identifier} and piece {symbol}. Leave empty.")
+                return None
 
-        if self.images:
-            print(f"Chess-set '{self.set_identifier}' successfully loaded.")
-        else:
-            print(f"Error: No chess-pieces loaded. Check if files exist: *K{self.set_identifier}.(png/svg)")
-
+        return self.mini_cache[cache_key]
 
 class ChessMiniature(tk.Canvas):
     """
-    A miniature chess board widget.
+    A miniature chess board widget that uses images from an image manager.
     """
 
-    def __init__(self, master, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
-        # Initialize the Canvas with a fixed size and a background color we can see
+    def __init__(self, master, image_manager, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
         super().__init__(master, width=size, height=size, highlightthickness=0, **kwargs)
 
         self.size = size
         self.square_size = size // 8
         self.color_light = color_light
         self.color_dark = color_dark
+        self.image_manager = image_manager
+
+        # Cache for resized images to prevent lag during redraws
+        self._resized_image_cache = {}
+
+    def _get_scaled_piece(self, symbol):
+        """
+        Retrieves the piece image and scales it to fit the miniature square.
+        """
+        if symbol in self._resized_image_cache:
+            return self._resized_image_cache[symbol]
+
+        original_img = self.image_manager.images.get(symbol)
+        if original_img:
+            # We need the underlying PIL image to resize it
+            # Note: This assumes image_manager stores PIL objects or you have access to them
+            # If image_manager only has PhotoImage, you'll need to use the manager to get a scaled version
+            import PIL.ImageTk
+            import PIL.Image
+
+            # If your image_manager stores the path or the PIL Image:
+            # piece_pil = self.image_manager.get_pil_image(symbol)
+
+            # Assuming we need to resize:
+            # scaled_pil = piece_pil.resize((self.square_size, self.square_size), PIL.Image.Resampling.LANCZOS)
+            # self._resized_image_cache[symbol] = PIL.ImageTk.PhotoImage(scaled_pil)
+            # return self._resized_image_cache[symbol]
+            pass
+
+        return None
 
     def draw_board(self, board):
-        """ Renders the board. """
-        self.delete("all")  # Clear previous drawings
+        """ Renders the board and pieces using images. """
+        self.delete("all")
 
         # 1. Draw Squares
         for square in chess.SQUARES:
             rank = chess.square_rank(square)
             file = chess.square_file(square)
-
             x1 = file * self.square_size
             y1 = (7 - rank) * self.square_size
             x2 = x1 + self.square_size
             y2 = y1 + self.square_size
-
             color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
             self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
 
-        # 2. Draw Pieces (Simple text for testing)
+        # 2. Draw Pieces using the same logic as your draw_pieces function
         for square, piece in board.piece_map().items():
             rank = chess.square_rank(square)
             file = chess.square_file(square)
-            x = (file * self.square_size) + (self.square_size // 2)
-            y = ((7 - rank) * self.square_size) + (self.square_size // 2)
 
-            self.create_text(x, y, text=piece.unicode_symbol(),
-                             font=("Arial", int(self.square_size * 0.7)),
-                             fill="black" if piece.color == chess.BLACK else "white")
+            center_x = (file * self.square_size) + (self.square_size // 2)
+            center_y = ((7 - rank) * self.square_size) + (self.square_size // 2)
 
+            symbol = piece.symbol()
+
+            # IMPORTANT: For miniature, we usually need a separate PhotoImage
+            # because Tkinter PhotoImages cannot be dynamically scaled easily
+            # without keeping a reference to the scaled version.
+            piece_img = self.image_manager.get_miniature_image(symbol, self.square_size)
+
+            if piece_img:
+                self.create_image(center_x, center_y, image=piece_img, tags="piece")
 IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
@@ -1420,7 +1437,7 @@ class ChessEventViewer:
             # Create the miniature instance (size 300px)
             if hasattr(self, 'mini_board') and self.mini_board:
                 self.mini_board.destroy()
-            self.mini_board = ChessMiniature(self.current_miniature_widget, size=250)
+            self.mini_board = ChessMiniature(self.current_miniature_widget, self.image_manager, size=250, color_light=self.color_light, color_dark=self.color_dark)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
             board = start_node.parent.board()
@@ -2096,7 +2113,7 @@ class ChessEventViewer:
 
             # Add them to the pane with an initial height
             main_pane.add(top_row_frame, height=300)
-            main_pane.add(bottom_row_frame, height=250, minsize=200)
+            main_pane.add(bottom_row_frame, height=290, minsize=290, stretch="never")
 
             # --- CONFIGURE TOP ROW GRID ---
             top_row_frame.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
@@ -2177,6 +2194,7 @@ class ChessEventViewer:
             self._update_move_listbox_content(self.current_game_moves)
             tab_title = f"{index}. {event_data['move_text']}"
             self.notebook.add(tab_frame, text=tab_title)
+
         except Exception as e:
             print("error in creation notebook",e)
 
