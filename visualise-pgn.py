@@ -2216,7 +2216,7 @@ class ChessEventViewer:
 
             # --- TAB FINALIZATION ---
             self._update_move_listbox_content(self.current_game_moves)
-            tab_title = f"{index}. {event_data['move_text']}"
+            tab_title = f"{event_data['move_text']}"
             self.notebook.add(tab_frame, text=tab_title)
 
         except Exception as e:
