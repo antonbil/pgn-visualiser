@@ -445,7 +445,7 @@ class ChessMiniature(tk.Canvas):
         self.long_press_ms = 500  # Threshold for long press
         self.after_id = None  # ID of the pending timer
         self.is_long_press = False  # Flag to distinguish tap from hold
-        self.zoom_window = None  # Reference to the popup window
+        self.zoom_win = None  # Reference to the popup window
 
         # Bind touch/mouse events
         self.bind("<Button-1>", self._on_button_down)
@@ -470,24 +470,38 @@ class ChessMiniature(tk.Canvas):
         self.draw_board()
 
     def _on_button_down(self, event):
-        """ Starts the timer when the user touches the board. """
+        """
+        Starts the timer when the user touches the board.
+        Resets the long_press flag.
+        """
         self.is_long_press = False
         # Schedule the zoom popup after 500ms
-        self.after_id = self.after(self.long_press_ms, self._show_zoom)
+        self.after_id = self.after(self.long_press_ms, self._trigger_long_press)
+
+    def _trigger_long_press(self):
+        """
+        Called after 500ms of holding.
+        Sets the flag and opens the window.
+        """
+        self.is_long_press = True
+        self._show_zoom()
 
     def _on_button_up(self, event):
-        """ Handles the end of the touch/click. """
-        # Cancel the timer if the finger is lifted before 500ms
+        """
+        Handles the end of the touch/click.
+        Only toggles if it was NOT a long press.
+        """
+        # Cancel the timer if the finger is lifted before it expires
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
 
+        # IMPORTANT: Only toggle if the long-press event was never triggered
         if not self.is_long_press:
-            # Short tap: toggle position
             self._toggle_position()
-        else:
-            # End of long press: close the popup
-            self._close_zoom()
+
+        # Reset the flag for the next interaction
+        self.is_long_press = False
 
     def _toggle_position(self):
         """ Switches between the start and end board positions. """
@@ -497,13 +511,16 @@ class ChessMiniature(tk.Canvas):
 
     def _show_zoom(self):
         """ Opens a separate persistent window with a close button. """
+        # Ensure we don't open multiple windows
+        if self.zoom_win is not None and self.zoom_win.winfo_exists():
+            return
         # 1. Setup the Toplevel window
-        zoom_win = tk.Toplevel(self)
-        zoom_win.title("Variation Preview")
-        zoom_win.attributes("-topmost", True) # Keep on top
+        self.zoom_win = tk.Toplevel(self)
+        self.zoom_win.title("Variation Preview")
+        self.zoom_win.attributes("-topmost", True) # Keep on top
 
         # 2. Main Container
-        main_frame = tk.Frame(zoom_win, padx=10, pady=10)
+        main_frame = tk.Frame(self.zoom_win, padx=10, pady=10)
         main_frame.pack()
 
         # 3. Large Canvas
@@ -512,7 +529,7 @@ class ChessMiniature(tk.Canvas):
         zoom_canvas.pack(pady=(0, 10))
 
         # 4. Close Button
-        close_btn = tk.Button(main_frame, text="Close Preview", command=zoom_win.destroy,
+        close_btn = tk.Button(main_frame, text="Close Preview", command=self.zoom_win.destroy,
                               font=("Arial", 10, "bold"), bg="#f44336", fg="white",
                               padx=20, pady=5)
         close_btn.pack(fill=tk.X)
