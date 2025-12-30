@@ -169,6 +169,22 @@ def get_cp_from_comment(comment):
         return None
 
 
+def get_full_move_text(node):
+    """
+    Returns the full move description: e.g., '11.Be3' or '16...c5'
+    """
+    parent_board = node.parent.board()
+    move_number = parent_board.fullmove_number
+
+    is_white = parent_board.turn == chess.WHITE
+
+    san_move = node.san()
+
+    if is_white:
+        return f"{move_number}.{san_move}"
+    else:
+        return f"{move_number}...{san_move}"
+
 def _format_pgn_history(move_list):
     """
     Formats a list of move data into a multi-line PGN snippet for display,
@@ -417,6 +433,23 @@ class ChessMiniature(tk.Canvas):
         # Cache for resized images to prevent lag during redraws
         self._resized_image_cache = {}
 
+    def draw_from_node(self, node):
+        """
+        Follows the main line from a given node to its end
+        and renders the resulting final position.
+        """
+        # 1. Reconstruct the board state at this node
+        board = node.board()
+
+        # 2. Follow the first variation (main line) until the end
+        current_node = node
+        while current_node.variations:
+            current_node = current_node.variation(0)
+            board.push(current_node.move)
+
+        # 3. Render the final state
+        self.draw_board(board)
+
     def _get_scaled_piece(self, symbol):
         """
         Retrieves the piece image and scales it to fit the miniature square.
@@ -510,6 +543,7 @@ class ChessEventViewer:
         self.variation_widgets = []
         self.move_display_widgets = []
         self.miniature_widgets = []
+        self.miniboards = []
 
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
@@ -1433,30 +1467,9 @@ class ChessEventViewer:
             # Match the listbox index to the variation object
             selected_variation = all_variations[index + 1]
             start_node = selected_variation
-            #self._show_variation_preview(selected_variation)
-            # Create the miniature instance (size 300px)
-            if hasattr(self, 'mini_board') and self.mini_board:
-                self.mini_board.destroy()
-            self.mini_board = ChessMiniature(self.current_miniature_widget, self.image_manager, size=250, color_light=self.color_light, color_dark=self.color_dark)
-            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
 
-            board = start_node.parent.board()
-            current_node = start_node
-
-            while current_node is not None:
-                # ... (Insertion logic for text_area remains the same) ...
-                move_num = board.fullmove_number
-                is_white = board.turn
-
-                board.push(current_node.move)
-
-                # Advance node
-                if current_node.variations:
-                    current_node = current_node.variation(0)
-                else:
-                    # We reached the end of the variation, draw the final position!
-                    self.mini_board.draw_board(board)
-                    current_node = None
+            self.current_miniboard.draw_from_node(start_node)
+            self.current_miniature_widget.config(text=get_full_move_text(start_node))
 
         # --- YOUR LOGIC HERE ---
         # Example: If you want to jump to this variation:
@@ -1561,6 +1574,7 @@ class ChessEventViewer:
         self.current_board_canvas = self.board_canvases[self.current_tab]
         self.current_comment_widget = self.comment_widgets[self.current_tab]
         self.current_miniature_widget = self.miniature_widgets[self.current_tab]
+        self.current_miniboard = self.miniboards[self.current_tab]
         self.current_variation_widget = self.variation_widgets[self.current_tab]
         self.current_move_display_widget = self.move_display_widgets[self.current_tab]
         self.display_diagram_move(self.current_move_index)
@@ -2182,6 +2196,14 @@ class ChessEventViewer:
             # Keep the fixed size for the miniature container
             miniature_frame.config(width=200, height=200)
             miniature_frame.grid_propagate(False)
+            last_variation = event_data['last_variation']
+            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=250,
+                                                 color_light=self.color_light, color_dark=self.color_dark)
+            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+            self.miniboards.append(self.mini_board)
+            if not last_variation is None:
+                self.mini_board.draw_from_node(last_variation)
+                miniature_frame.config(text=get_full_move_text(last_variation))
 
             self.miniature_widgets.append(miniature_frame)
 
@@ -2270,6 +2292,14 @@ class ChessEventViewer:
             pgn_snippet = _format_pgn_history(moves_to_display)
             self.current_game_moves = pgn_snippet
 
+            #variation
+            last_variation = None
+            for i, move in enumerate(moves_to_display):
+                # --- 3. Add Variations (these are stored separately) ---
+                if move.get('variations'):
+                    if len(move["variations"]) > 1:
+                        last_variation = move["variations"][1]
+
             # 2. PREPARE DATA FOR THE TAB
             tab_data = {
                 # Data directly needed for the _add_event_tab
@@ -2280,6 +2310,7 @@ class ChessEventViewer:
                 "eval_after": event.get('eval_after', 0.0),
                 "event_type": event.get('event_type', 'Event'),
                 "move_history": pgn_snippet,
+                "last_variation": last_variation
             }
 
             # 3. CALL THE TAB CREATOR (Replaces the draw_event_diagram call)
