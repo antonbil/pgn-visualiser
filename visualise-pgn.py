@@ -2495,11 +2495,16 @@ class ChessEventViewer:
             # ---------------------------------------------------------
             # --- RIGHT COLUMN: INFO, VARIATIONS & MINIATURE ---
             # ---------------------------------------------------------
-            # We use grid here to stack them vertically
             right_column.grid_columnconfigure(0, weight=1)
-            right_column.grid_rowconfigure(2, weight=0)  # Miniature is fixed
 
-            # --- 3. MOVE DISPLAY ---
+            # Row 0: Move Info (Auto height)
+            # Row 1: Variations (Will shrink if space is tight)
+            # Row 2: Miniature (Priority row)
+            right_column.grid_rowconfigure(0, weight=0)
+            right_column.grid_rowconfigure(1, weight=1)
+            right_column.grid_rowconfigure(2, weight=0)  # We control height via minsize/frame config
+
+            # --- 3. MOVE DISPLAY (Row 0) ---
             move_frame = tk.LabelFrame(right_column, text="Move", padx=5, pady=2)
             move_frame.grid(row=0, column=0, sticky='ew', pady=2)
 
@@ -2508,27 +2513,33 @@ class ChessEventViewer:
             move_label.pack(anchor="w")
             self.move_display_widgets.append(move_label)
 
-            # --- 4. VARIATIONS ---
+            # --- 4. VARIATIONS (Row 1) ---
             vars_frame = tk.LabelFrame(right_column, text="Variations", padx=5, pady=2)
             vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
-            vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
+            # Set a smaller height for the listbox so it doesn't push the miniature out
+            vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=4)
             vars_text.pack(fill=tk.BOTH, expand=True)
+
             if 'variations' in event_data:
                 vars_text.insert(tk.END, event_data['variations'])
             self.variation_widgets.append(vars_text)
             vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
 
-            # --- 5. MINIATURE (Bottom Right) ---
+            # --- 5. MINIATURE (Row 2) ---
             miniature_frame = tk.LabelFrame(right_column, text="Position Preview", padx=5, pady=2)
+            # Use sticky='s' or 'nsew' to ensure it sits at the bottom or fills its space
             miniature_frame.grid(row=2, column=0, sticky='nsew', pady=(10, 0))
 
-            # Fixed size constraints as requested
+            # FORCE THE SIZE:
+            # We set height to 350 to ensure room for the label, the board (300), and the close button
             miniature_frame.config(width=300, height=350)
-            miniature_frame.grid_propagate(False)
+            miniature_frame.grid_propagate(False)  # Prevents children from shrinking the frame
 
             last_variation = event_data.get('last_variation')
-            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=280,
+
+            # We increase the board size to 300px here
+            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=300,
                                              color_light=self.color_light, color_dark=self.color_dark)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
             self.miniboards.append(self.mini_board)
@@ -2537,7 +2548,6 @@ class ChessEventViewer:
                 self.mini_board.draw_from_node(last_variation)
                 miniature_frame.config(text=get_full_move_text(last_variation))
             self.miniature_widgets.append(miniature_frame)
-
             # ---------------------------------------------------------
             # --- TOOLBAR (Bottom, Full Width) ---
             # ---------------------------------------------------------
