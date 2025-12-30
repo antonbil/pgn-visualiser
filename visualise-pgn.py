@@ -1412,7 +1412,6 @@ class ChessEventViewer:
         """
         if self.current_movelistbox_info is not None:
             return self.current_movelistbox_info
-
         # Initialization
         min_move_number = float('inf')
         max_move_number = float('-inf')
@@ -1871,7 +1870,8 @@ class ChessEventViewer:
 
         # 3. Update the status variable
         self.current_tab = new_index
-
+        new_tab = self.current_tab
+        self.set_tab_variables(new_tab)
         # 4. Update the UI and log the change
         print(f"Tab changed. New index: {self.current_tab}")
         try:
@@ -1895,8 +1895,7 @@ class ChessEventViewer:
         if number_ >= len(self.all_moves_chess):
             number_ = self.all_moves_chess
         self.current_move_index = number_
-        new_tab = self.current_tab
-        self.set_tab_variables(new_tab)
+
         self.display_diagram_move(self.current_move_index)
 
     def set_tab_variables(self, new_tab):
@@ -2190,11 +2189,11 @@ class ChessEventViewer:
         except Exception as e:
             traceback.print_exc()
             print(e)
-        self.is_loading_game = False  # Unblock logic
+        #self.is_loading_game = False  # Unblock logic
 
         # Manually trigger the logic once for the final state
-        self.current_tab = -1
-        self._on_tab_change(0)
+        #self.current_tab = -1
+        #self._on_tab_change(0)
 
     def do_new_analysis_game(self, game):
         self._clear_content_frame()
@@ -2548,7 +2547,7 @@ class ChessEventViewer:
             toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 10))
 
             # --- TAB FINALIZATION ---
-            self._update_move_listbox_content(self.current_game_moves)
+            self._update_move_listbox_content(pgn_snippet_text)
             tab_title = f"{event_data['move_text']}"
             self.notebook.add(tab_frame, text=tab_title)
 
@@ -2582,7 +2581,6 @@ class ChessEventViewer:
         """
         # 1. Clear the Listbox entirely
         self.move_listbox.delete(0, tk.END)
-
         # 2. Populate with new moves and rebuild the map (implicit step)
         for move_index, move_pair in enumerate(moves):
             # Splits the string on every newline character
@@ -2614,28 +2612,21 @@ class ChessEventViewer:
 
         last_move_index = -1
 
+        # Process all event data into snippets first (this is fast)
+        processed_events = []
+        last_move_index = -1
+
         for i, event in enumerate(events):
-            # This is the move index that caused the event
             current_move_index = event['move_index']
-
-            # Select the moves that are NEW since the last displayed event
             moves_to_display = event['full_move_history'][last_move_index + 1: current_move_index + 1]
-
-            # Format the PGN for display
             pgn_snippet = _format_pgn_history(moves_to_display)
-            self.current_game_moves = pgn_snippet
 
-            #variation
             last_variation = None
-            for i, move in enumerate(moves_to_display):
-                # --- 3. Add Variations (these are stored separately) ---
-                if move.get('variations'):
-                    if len(move["variations"]) > 1:
-                        last_variation = move["variations"][1]
+            for move in moves_to_display:
+                if move.get('variations') and len(move["variations"]) > 1:
+                    last_variation = move["variations"][1]
 
-            # 2. PREPARE DATA FOR THE TAB
             tab_data = {
-                # Data directly needed for the _add_event_tab
                 "fen": event['fen'],
                 "move_text": event.get('move_text', '...'),
                 "score": event.get('score', 0),
@@ -2645,17 +2636,46 @@ class ChessEventViewer:
                 "move_history": pgn_snippet,
                 "last_variation": last_variation
             }
-
-            # 3. CALL THE TAB CREATOR (Replaces the draw_event_diagram call)
-            self._add_event_tab(i + 1, tab_data)
-
-            # Update the counter for the next iteration
+            processed_events.append(tab_data)
             last_move_index = current_move_index
 
-        # Select the first tab
-        if self.notebook.tabs():
-            self.notebook.select(self.notebook.tabs()[0])
+        # 2. CREATE THE FIRST TAB IMMEDIATELY
+        if processed_events:
+            self.is_loading_game = False
+            self.current_tab = -1
+            self._add_event_tab(1, processed_events[0])
+            self.master.update_idletasks()
+            if self.notebook.tabs():
+                self.notebook.select(self.notebook.tabs()[0])
 
+            # Force the UI to draw the first tab now
+            self.master.update_idletasks()
+
+
+        # 3. SCHEDULE THE REST IN THE BACKGROUND
+        # Start the background process after a small delay (100ms)
+        if len(processed_events) > 1:
+            self.master.after(100, lambda: self._add_remaining_tabs_sequentially(processed_events, 1))
+
+    def _add_remaining_tabs_sequentially(self, all_events, start_index):
+        """
+        Adds tabs one by one in the background to prevent UI freezing.
+        """
+        # Guard: stop if the user closed the window or cleared the notebook
+        if not self.notebook.winfo_exists():
+            return
+
+        # Temporarily block tab-change events while adding background tabs
+        self.is_loading_game = True
+
+        # Add one tab
+        self._add_event_tab(start_index + 1, all_events[start_index])
+
+        self.is_loading_game = False
+
+        # Schedule the next one if available
+        if start_index + 1 < len(all_events):
+            self.master.after(10, lambda: self._add_remaining_tabs_sequentially(all_events, start_index + 1))
     def swap_colours_func(self):
         self.swap_colours = not self.swap_colours
         self.display_diagram_move(self.current_move_index)
