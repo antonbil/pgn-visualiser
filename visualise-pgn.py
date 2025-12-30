@@ -1845,12 +1845,25 @@ class ChessEventViewer:
 
     def _on_tab_change(self, event):
         """
-        This function is called when the user clicks on a different tab.
+        Handles tab switching logic. Includes a guard to prevent redundant
+        execution during game loading or when the same tab is re-selected.
         """
+        # Guard 1: Skip processing if we are currently loading a new game
+        if getattr(self, 'is_loading_game', False):
+            return
 
         # 1. Retrieve the widget ID of the newly selected tab
-        # if self.notebook.index(self.notebook.select()) == self.current_tab:
-        #     return
+        selected_tab_id = self.notebook.select()
+        if not selected_tab_id:
+            return
+
+        # 2. Translate the widget ID to the zero-based index
+        new_index = self.notebook.index(selected_tab_id)
+
+        # Guard 2: Skip if the index hasn't actually changed
+        # This prevents the "7 times index 0" issue
+        if hasattr(self, 'current_tab') and new_index == self.current_tab:
+            return
         selected_tab_id = self.notebook.select()
 
         # 2. Translate the widget ID to the zero-based index
@@ -2161,6 +2174,7 @@ class ChessEventViewer:
 
 
     def do_new_analysis(self, pgn_string):
+        self.is_loading_game = True  # Block tab-change logic
         self._clear_content_frame()
         # Perform the advanced analysis
         print("Starting full PGN analysis...")
@@ -2176,6 +2190,11 @@ class ChessEventViewer:
         except Exception as e:
             traceback.print_exc()
             print(e)
+        self.is_loading_game = False  # Unblock logic
+
+        # Manually trigger the logic once for the final state
+        self.current_tab = -1
+        self._on_tab_change(0)
 
     def do_new_analysis_game(self, game):
         self._clear_content_frame()
