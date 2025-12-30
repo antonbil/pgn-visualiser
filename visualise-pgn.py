@@ -604,37 +604,25 @@ class TouchMoveList(tk.Frame):
         self._populate()
 
     def _populate(self):
-        """
-        Optimized version: Drawing text directly on canvas instead of using Labels.
-        This significantly boosts performance on desktop systems.
-        """
-        self.canvas.delete("all")
-        y_offset = 10
-        row_height = 35  # Fixed height for easier math
-
+        """Creates large, padded labels for each move pair."""
         for i, move in enumerate(self.move_pairs):
-            # Create text directly on the canvas
-            item_id = self.canvas.create_text(
-                10, y_offset,
+            lbl = tk.Label(
+                self.inner_frame,
                 text=f"  {move}",
-                anchor="nw",
-                font=("Consolas", 11),
-                tags=(f"move_{i}", "move_item")
+                font=("Consolas", 12),
+                anchor="w",
+                bg="white",
+                height=2,  # Extra vertical height for touch
+                padx=10
             )
+            lbl.pack(fill=tk.X, expand=True)
 
-            # Draw a transparent rectangle behind the text to act as a hit-zone
-            # This is much faster for the engine than managing Label widgets
-            rect_id = self.canvas.create_rectangle(
-                0, y_offset - 5,
-                500, y_offset + row_height - 5,
-                fill="", outline="",
-                tags=(f"move_{i}", "move_item")
-            )
+            # Bind events to each label so they don't block scrolling
+            lbl.bind("<Button-1>", self._on_drag_start)
+            lbl.bind("<B1-Motion>", self._on_drag_motion)
+            lbl.bind("<ButtonRelease-1>", lambda e, idx=i: self._on_label_tap(idx))
 
-            y_offset += row_height
-
-        # Update scroll region once at the end
-        self.canvas.configure(scrollregion=(0, 0, 500, y_offset))
+            self.labels.append(lbl)
 
     def _on_label_tap(self, index):
         """ Only triggers selection if the user didn't scroll. """
