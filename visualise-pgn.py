@@ -2495,17 +2495,26 @@ class ChessEventViewer:
             # ---------------------------------------------------------
             # --- RIGHT COLUMN: INFO, VARIATIONS & MINIATURE ---
             # ---------------------------------------------------------
-            right_column.grid_columnconfigure(0, weight=1)
+            # Create a vertical PanedWindow inside the right column
+            right_pane = tk.PanedWindow(right_column, orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
+            right_pane.pack(fill=tk.BOTH, expand=True)
 
-            # Row 0: Move Info (Auto height)
-            # Row 1: Variations (Will shrink if space is tight)
-            # Row 2: Miniature (Priority row)
-            right_column.grid_rowconfigure(0, weight=0)
-            right_column.grid_rowconfigure(1, weight=1)
-            right_column.grid_rowconfigure(2, weight=0)  # We control height via minsize/frame config
+            # Container for the Top part (Move Info + Variations)
+            right_top_container = tk.Frame(right_pane)
+            # Container for the Bottom part (Miniature)
+            right_bottom_container = tk.Frame(right_pane)
 
-            # --- 3. MOVE DISPLAY (Row 0) ---
-            move_frame = tk.LabelFrame(right_column, text="Move", padx=5, pady=2)
+            # Add them to the pane
+            # We give the miniature container a fixed initial height of 350
+            right_pane.add(right_top_container, stretch="always")
+            right_pane.add(right_bottom_container, height=350, minsize=300, stretch="never")
+
+            # --- 1. TOP PART: MOVE & VARIATIONS ---
+            right_top_container.grid_columnconfigure(0, weight=1)
+            right_top_container.grid_rowconfigure(1, weight=1)
+
+            # Move Display
+            move_frame = tk.LabelFrame(right_top_container, text="Move", padx=5, pady=2)
             move_frame.grid(row=0, column=0, sticky='ew', pady=2)
 
             move_label = tk.Label(move_frame, text=event_data.get('move_text', '-'),
@@ -2513,33 +2522,26 @@ class ChessEventViewer:
             move_label.pack(anchor="w")
             self.move_display_widgets.append(move_label)
 
-            # --- 4. VARIATIONS (Row 1) ---
-            vars_frame = tk.LabelFrame(right_column, text="Variations", padx=5, pady=2)
+            # Variations
+            vars_frame = tk.LabelFrame(right_top_container, text="Variations", padx=5, pady=2)
             vars_frame.grid(row=1, column=0, sticky='nsew', pady=2)
 
-            # Set a smaller height for the listbox so it doesn't push the miniature out
-            vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=4)
+            vars_text = tk.Listbox(vars_frame, font=('Arial', 9), height=6)
             vars_text.pack(fill=tk.BOTH, expand=True)
-
             if 'variations' in event_data:
                 vars_text.insert(tk.END, event_data['variations'])
             self.variation_widgets.append(vars_text)
             vars_text.bind("<<ListboxSelect>>", self._on_variation_selected)
 
-            # --- 5. MINIATURE (Row 2) ---
-            miniature_frame = tk.LabelFrame(right_column, text="Position Preview", padx=5, pady=2)
-            # Use sticky='s' or 'nsew' to ensure it sits at the bottom or fills its space
-            miniature_frame.grid(row=2, column=0, sticky='nsew', pady=(10, 0))
+            # --- 2. BOTTOM PART: MINIATURE ---
+            miniature_frame = tk.LabelFrame(right_bottom_container, text="Position Preview", padx=5, pady=2)
+            miniature_frame.pack(fill=tk.BOTH, expand=True)
 
-            # FORCE THE SIZE:
-            # We set height to 350 to ensure room for the label, the board (300), and the close button
-            miniature_frame.config(width=300, height=350)
-            miniature_frame.grid_propagate(False)  # Prevents children from shrinking the frame
+            # Fixed size constraints inside the frame
+            miniature_frame.grid_propagate(False)
 
             last_variation = event_data.get('last_variation')
-
-            # We increase the board size to 300px here
-            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=300,
+            self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=280,
                                              color_light=self.color_light, color_dark=self.color_dark)
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
             self.miniboards.append(self.mini_board)
