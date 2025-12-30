@@ -416,9 +416,11 @@ class PieceImageManager:
 
         return self.mini_cache[cache_key]
 
+
 class ChessMiniature(tk.Canvas):
     """
-    A miniature chess board widget that uses images from an image manager.
+    A miniature chess board that toggles between the start and end of a variation
+     when clicked.
     """
 
     def __init__(self, master, image_manager, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
@@ -430,84 +432,84 @@ class ChessMiniature(tk.Canvas):
         self.color_dark = color_dark
         self.image_manager = image_manager
 
-        # Cache for resized images to prevent lag during redraws
-        self._resized_image_cache = {}
+        # --- Functional attributes ---
+        self.stored_node = None  # The specific node that was requested
+        self.end_board = None  # Cached board of the final position
+        self.start_board = None  # Cached board of the initial move
+        self.showing_end = True  # Toggle state
+
+        # Bind the click event to the canvas
+        self.bind("<Button-1>", self._on_click)
 
     def draw_from_node(self, node):
         """
-        Follows the main line from a given node to its end
-        and renders the resulting final position.
+        Processes a node and renders the final position of its variation.
+        Stores the start and end states for toggling.
         """
-        # 1. Reconstruct the board state at this node
-        board = node.board()
+        self.stored_node = node
 
-        # 2. Follow the first variation (main line) until the end
-        current_node = node
-        while current_node.variations:
-            current_node = current_node.variation(0)
-            board.push(current_node.move)
+        # 1. Store the board exactly as it is at this specific node (Start)
+        self.start_board = node.board()
 
-        # 3. Render the final state
-        self.draw_board(board)
+        # 2. Follow the main line to find the final position (End)
+        temp_board = node.board()
+        current = node
+        while current.variations:
+            current = current.variation(0)
+            temp_board.push(current.move)
 
-    def _get_scaled_piece(self, symbol):
+        self.end_board = temp_board
+        self.showing_end = True
+
+        # Draw the final position by default
+        self.draw_board(self.end_board)
+
+    def _on_click(self, event):
         """
-        Retrieves the piece image and scales it to fit the miniature square.
+        Internal event handler that toggles the view on click.
         """
-        if symbol in self._resized_image_cache:
-            return self._resized_image_cache[symbol]
+        if self.start_board is None or self.end_board is None:
+            return
 
-        original_img = self.image_manager.images.get(symbol)
-        if original_img:
-            # We need the underlying PIL image to resize it
-            # Note: This assumes image_manager stores PIL objects or you have access to them
-            # If image_manager only has PhotoImage, you'll need to use the manager to get a scaled version
-            import PIL.ImageTk
-            import PIL.Image
+        # Toggle the state
+        self.showing_end = not self.showing_end
 
-            # If your image_manager stores the path or the PIL Image:
-            # piece_pil = self.image_manager.get_pil_image(symbol)
+        # Pick the correct board and redraw
+        target_board = self.end_board if self.showing_end else self.start_board
+        self.draw_board(target_board)
 
-            # Assuming we need to resize:
-            # scaled_pil = piece_pil.resize((self.square_size, self.square_size), PIL.Image.Resampling.LANCZOS)
-            # self._resized_image_cache[symbol] = PIL.ImageTk.PhotoImage(scaled_pil)
-            # return self._resized_image_cache[symbol]
-            pass
-
-        return None
+        # Visual feedback: optionally update the border or color
+        # to show it's "interactive"
+        print(f"Toggled miniature to: {'End' if self.showing_end else 'Start'}")
 
     def draw_board(self, board):
-        """ Renders the board and pieces using images. """
+        """
+        Standard rendering logic for squares and pieces.
+        """
         self.delete("all")
 
         # 1. Draw Squares
         for square in chess.SQUARES:
             rank = chess.square_rank(square)
             file = chess.square_file(square)
-            x1 = file * self.square_size
-            y1 = (7 - rank) * self.square_size
-            x2 = x1 + self.square_size
-            y2 = y1 + self.square_size
+            x1, y1 = file * self.square_size, (7 - rank) * self.square_size
+            x2, y2 = x1 + self.square_size, y1 + self.square_size
+
             color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
             self.create_rectangle(x1, y1, x2, y2, fill=color, outline="")
 
-        # 2. Draw Pieces using the same logic as your draw_pieces function
+        # 2. Draw Pieces
         for square, piece in board.piece_map().items():
-            rank = chess.square_rank(square)
-            file = chess.square_file(square)
+            rank, file = chess.square_rank(square), chess.square_file(square)
+            cx = (file * self.square_size) + (self.square_size // 2)
+            cy = ((7 - rank) * self.square_size) + (self.square_size // 2)
 
-            center_x = (file * self.square_size) + (self.square_size // 2)
-            center_y = ((7 - rank) * self.square_size) + (self.square_size // 2)
+            img = self.image_manager.get_miniature_image(piece.symbol(), self.square_size)
+            if img:
+                self.create_image(cx, cy, image=img, tags="piece")
 
-            symbol = piece.symbol()
+        self.update_idletasks()
 
-            # IMPORTANT: For miniature, we usually need a separate PhotoImage
-            # because Tkinter PhotoImages cannot be dynamically scaled easily
-            # without keeping a reference to the scaled version.
-            piece_img = self.image_manager.get_miniature_image(symbol, self.square_size)
-
-            if piece_img:
-                self.create_image(center_x, center_y, image=piece_img, tags="piece")
 IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
@@ -2127,7 +2129,7 @@ class ChessEventViewer:
 
             # Add them to the pane with an initial height
             main_pane.add(top_row_frame, height=300)
-            main_pane.add(bottom_row_frame, height=290, minsize=290, stretch="never")
+            main_pane.add(bottom_row_frame, height=300, minsize=300, stretch="never")
 
             # --- CONFIGURE TOP ROW GRID ---
             top_row_frame.grid_columnconfigure(0, weight=1, uniform="analysis_layout")
