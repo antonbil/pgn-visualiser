@@ -496,24 +496,28 @@ class ChessMiniature(tk.Canvas):
             self.draw_board()
 
     def _show_zoom(self):
-        """ Triggers the long-press state and opens a large preview. """
-        self.is_long_press = True
+        """ Opens a separate persistent window with a close button. """
+        # 1. Setup the Toplevel window
+        zoom_win = tk.Toplevel(self)
+        zoom_win.title("Variation Preview")
+        zoom_win.attributes("-topmost", True) # Keep on top
 
-        # Create a borderless popup window
-        self.zoom_window = tk.Toplevel(self)
-        self.zoom_window.overrideredirect(True)  # Remove title bar
+        # 2. Main Container
+        main_frame = tk.Frame(zoom_win, padx=10, pady=10)
+        main_frame.pack()
 
-        # Calculate position: center above the miniature
-        x = self.winfo_rootx() - 50
-        y = self.winfo_rooty() - 320
-        self.zoom_window.geometry(f"+{x}+{y}")
+        # 3. Large Canvas
+        zoom_size = 650
+        zoom_canvas = tk.Canvas(main_frame, width=zoom_size, height=zoom_size, highlightthickness=1)
+        zoom_canvas.pack(pady=(0, 10))
 
-        # Create large canvas in popup
-        zoom_size = 600
-        zoom_canvas = tk.Canvas(self.zoom_window, width=zoom_size, height=zoom_size, bg="white")
-        zoom_canvas.pack()
+        # 4. Close Button
+        close_btn = tk.Button(main_frame, text="Close Preview", command=zoom_win.destroy,
+                              font=("Arial", 10, "bold"), bg="#f44336", fg="white",
+                              padx=20, pady=5)
+        close_btn.pack(fill=tk.X)
 
-        # Draw the current state on the large canvas
+        # 5. Render board
         current_board = self.end_board if self.showing_end else self.start_board
         self._render_board_to_canvas(zoom_canvas, current_board, zoom_size)
 
