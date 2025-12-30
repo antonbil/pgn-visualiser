@@ -510,6 +510,209 @@ class ChessMiniature(tk.Canvas):
 
         self.update_idletasks()
 
+
+class TouchMoveList(tk.Frame):
+    """
+    A touch-friendly replacement for tk.Listbox.
+    Uses a Canvas and Frame to allow for large padding and swipe scrolling.
+    """
+
+    def __init__(self, parent, move_pairs, select_callback, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.move_pairs = move_pairs
+        self.select_callback = select_callback
+        self.labels = []
+
+        # --- UI Setup ---
+        # 1. Viewport (Canvas)
+        self.canvas = tk.Canvas(self, highlightthickness=0, bg="white")
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 2. Scrollbar (Wide for touch)
+        self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # 3. Inner Container
+        self.inner_frame = tk.Frame(self.canvas, bg="white")
+        self.canvas.create_window((0, 0), window=self.inner_frame, anchor="nw", tags="window")
+
+        # --- Bindings ---
+        self.inner_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # Touch dragging bindings
+        self.canvas.bind("<Button-1>", self._on_drag_start)
+        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self.drag_start_y = 0
+        self.drag_start_x = 0
+        self.scrolled_too_far = False
+
+        self._populate()
+
+    def _populate(self):
+        """Creates large, padded labels for each move pair."""
+        for i, move in enumerate(self.move_pairs):
+            lbl = tk.Label(
+                self.inner_frame,
+                text=f"  {move}",
+                font=("Consolas", 12),
+                anchor="w",
+                bg="white",
+                height=2,  # Extra vertical height for touch
+                padx=10
+            )
+            lbl.pack(fill=tk.X, expand=True)
+
+            # Bind events to each label so they don't block scrolling
+            lbl.bind("<Button-1>", self._on_drag_start)
+            lbl.bind("<B1-Motion>", self._on_drag_motion)
+            lbl.bind("<ButtonRelease-1>", lambda e, idx=i: self._on_label_tap(idx))
+
+            self.labels.append(lbl)
+
+    def _on_label_tap(self, index):
+        """ Only triggers selection if the user didn't scroll. """
+        if self.scrolled_too_far:
+            # User was scrolling, ignore this tap
+            return
+
+        self.selected_index = index
+        for i, lbl in enumerate(self.labels):
+            lbl.config(bg="#cfe2f3" if i == index else "white")
+
+        if self.select_callback:
+            self.select_callback(index)
+
+    # --- Scrolling Logic ---
+    def _on_frame_configure(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        # Match inner frame width to canvas width
+        self.canvas.itemconfig("window", width=event.width)
+
+    def _on_drag_start(self, event):
+        """ Record start position and reset scroll flag. """
+        self.drag_start_x = event.x_root
+        self.drag_start_y = event.y_root
+        self.scrolled_too_far = False
+        self.canvas.scan_mark(event.x, event.y)
+
+    def _on_drag_motion(self, event):
+        """ Track movement distance. """
+        delta_x = abs(event.x_root - self.drag_start_x)
+        delta_y = abs(event.y_root - self.drag_start_y)
+
+        # If moved more than 5 pixels, consider it a scroll, not a tap
+        if delta_x > 5 or delta_y > 5:
+            self.scrolled_too_far = True
+
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def insert(self, index, move_text):
+        """
+        Mimics the Listbox insert method to maintain compatibility
+        with existing code.
+        """
+        i = len(self.labels)
+        lbl = tk.Label(
+            self.inner_frame,
+            text=f"  {move_text}",
+            font=("Consolas", 12),
+            anchor="w",
+            bg="white",
+            height=1,
+            padx=10
+        )
+        lbl.pack(fill=tk.X, expand=True, pady=2)
+
+        # Re-apply the bindings to the new label
+        lbl.bind("<Button-1>", self._on_drag_start)
+        lbl.bind("<B1-Motion>", self._on_drag_motion)
+        lbl.bind("<ButtonRelease-1>", lambda e, idx=i: self._on_label_tap(idx))
+
+        self.labels.append(lbl)
+
+    def delete(self, first, last=None):
+        """
+        Mimics Listbox.delete(0, tk.END).
+        Currently supports '0' to 'tk.END' to clear the whole list.
+        """
+        # If we want to clear everything
+        if first == 0 and (last == tk.END or last is None):
+            for lbl in self.labels:
+                lbl.destroy()
+            self.labels = []
+            self.selected_index = None
+            # Reset scroll region
+            self.canvas.configure(scrollregion=(0, 0, 0, 0))
+
+    def get(self, index):
+        """ Mimics Listbox.get(index) by returning the text of the label. """
+        if 0 <= index < len(self.labels):
+            return self.labels[index].cget("text")
+        return ""
+
+    def selection_clear(self, first, last=None):
+        """ Mimics Listbox.selection_clear(). """
+        for lbl in self.labels:
+            lbl.config(bg="white")
+        self.selected_index = None
+
+    def size(self):
+        """ Returns the number of items in the list. """
+        return len(self.labels)
+
+    def selection_set(self, index):
+        """
+        Mimics Listbox.selection_set(index).
+        Highlights the label at the given index.
+        """
+        if 0 <= index < len(self.labels):
+            self.selected_index = index
+            # Reset all labels to white, highlight the target one
+            for i, lbl in enumerate(self.labels):
+                if i == index:
+                    lbl.config(bg="#cfe2f3")  # Soft blue highlight
+                else:
+                    lbl.config(bg="white")
+
+            # Optional: automatically scroll to the selection
+            self.see(index)
+
+    def selection_clear(self, first, last=None):
+        """
+        Mimics Listbox.selection_clear(0, tk.END).
+        """
+        for lbl in self.labels:
+            lbl.config(bg="white")
+        self.selected_index = None
+
+    def see(self, index):
+        """
+        Mimics Listbox.see(index).
+        Calculates the position of the label and scrolls the canvas to it.
+        """
+        if 0 <= index < len(self.labels):
+            self.update_idletasks()  # Ensure coordinates are current
+
+            # Get the total height of the scrollable area
+            bbox = self.canvas.bbox("all")
+            if not bbox: return
+            total_height = bbox[3] - bbox[1]
+
+            # Get the vertical position of the specific label
+            target_lbl = self.labels[index]
+            y_pos = target_lbl.winfo_y()
+
+            # Calculate the relative position (0.0 to 1.0)
+            relative_pos = y_pos / total_height
+
+            # Scroll the canvas
+            self.canvas.yview_moveto(relative_pos)
+
 IMAGE_DIRECTORY = "pgn_entry/Images/60"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
@@ -639,6 +842,7 @@ class ChessEventViewer:
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
+        self.set_tab_variables(0)
 
     def set_theme(self):
         self.selected_theme = next(
@@ -916,6 +1120,38 @@ class ChessEventViewer:
             except Exception as e:
                 messagebox.showerror("Saving Error", f"Could not save the file: {e}")
 
+    def _on_move_tapped(self, listbox_index):
+        """
+        Simplified replacement for _move_selected.
+        Receives the index directly from TouchMoveList.
+        """
+        try:
+            # 1. Search upwards to find the move line (using your existing logic)
+            target_move_number = None
+
+            # We use our new .get() method on the custom widget
+            for i in range(listbox_index, -1, -1):
+                line_content = self.touch_move_list.get(i).strip()
+
+                # Check for move number (e.g., "1." or "12.")
+                move_match = re.match(r'^(\d+)\.', line_content)
+
+                if move_match:
+                    target_move_number = int(move_match.group(1))
+                    break
+
+            # 2. Process results
+            if target_move_number is not None:
+                # Calculate move index (assuming 2 moves per full move number)
+                # This matches your original logic: (target - 1) * 2
+                real_move_index = (target_move_number - 1) * 2
+                self.display_diagram_move(real_move_index)
+            else:
+                print("No valid move found for this selection.")
+
+        except Exception as e:
+            print(f"Error processing move selection: {e}")
+
     def _move_selected(self, event):
         """
         Determines the move and move number based on the Listbox content,
@@ -1102,104 +1338,109 @@ class ChessEventViewer:
 
     def get_info_current_listbox(self):
         """
-        Analyzes the move Listbox and returns information about
-        the move numbers and their corresponding Listbox row indices.
-
-        Returns a dict:
-        - 'min_move_number': The lowest move number found (int).
-        - 'max_move_number': The highest move number found (int).
-        - 'move_index_map': A list of tuples (move_number, listbox_index).
+        Analyzes the custom TouchMoveList and returns information about
+        the move numbers and their corresponding row indices.
         """
-        if not self.current_movelistbox_info is None:
+        if self.current_movelistbox_info is not None:
             return self.current_movelistbox_info
+
         # Initialization
         min_move_number = float('inf')
         max_move_number = float('-inf')
         move_index_map = []  # List of (move_number, listbox_index) pairs
-
-        # Regex to match a move number followed by a period at the start of a line (e.g., "1." or "12.")
-        move_pattern = re.compile(r'^(\d+)\.')
-
         moves_added = []
-
         last_index = 0
 
-        # Iterate over all rows in the Listbox
+        # Regex to match a move number (e.g., "1." or "12.")
+        move_pattern = re.compile(r'^(\d+)\.')
+
+        # Iterate over all rows in the TouchMoveList
+        # Note: self.current_movelistbox now refers to your TouchMoveList instance
         for i in range(self.current_movelistbox.size()):
-            # Get the content of the row and strip whitespace
+            # Get content using the .get(i) method we added to the custom class
             line_content = self.current_movelistbox.get(i).strip()
-            if line_content.startswith(' '):
+
+            if not line_content:
                 continue
 
             # Check for a move number pattern
             match = move_pattern.match(line_content)
 
-
             if match:
-                # Process the found move number
                 move_number = int(match.group(1))
 
-                # Add to the mapping
-                if not move_number in moves_added:
+                # Add to the mapping if not already processed
+                if move_number not in moves_added:
                     move_index_map.append((move_number, i))
                     moves_added.append(move_number)
 
-                # Update min and max
+                # Update min and max trackers
                 if move_number < min_move_number:
                     min_move_number = move_number
                 if move_number > max_move_number:
                     max_move_number = move_number
-                # get index of move
-                splits = line_content.split(" ")
-                last_index = (move_number - 1) * 2
-                if len(splits) == 3:
-                    last_index = last_index + 1
 
-        # Check if any moves were found and reset min/max if the list was empty
+                # Calculate the ply index (0-based index for the chess engine)
+                splits = line_content.split()  # Using split() handles multiple spaces
+                last_index = (move_number - 1) * 2
+
+                # If the line contains 3 parts (e.g., "1. e4 e5"), it ends on Black's move (+1)
+                # If it contains only 2 parts (e.g., "1. e4"), it ends on White's move (+0)
+                if len(splits) == 3:
+                    last_index += 1
+
+        # Reset defaults if no moves were found
         if not move_index_map:
             min_move_number = 0
             max_move_number = 0
 
-        # Return the collected information
+        # Cache the results in the instance variable
         self.current_movelistbox_info = {
             'min_move_number': min_move_number,
             'max_move_number': max_move_number,
             'move_index_map': move_index_map,
             'last_index': last_index
         }
+
         if self.current_move_index is None:
             self.current_move_index = last_index
+
         return self.current_movelistbox_info
+
     # --- WIDGET: MOVE LIST (Listbox) ---
     def _create_move_list_widget(self, parent_frame):
         """
-        Creates the Listbox for displaying the moves (PGN).
+        Replaces the standard Listbox with the new touch-friendly TouchMoveList.
+        """
+        # 1. Initialize our new custom widget
+        # Pass 'self._move_selected' as the callback
+        self.touch_move_list = TouchMoveList(
+            parent_frame,
+            self.current_game_moves,
+            self._on_move_tapped
+            #self._move_selected_wrapper  # see wrapper below
+        )
+        self.move_listboxes.append(self.touch_move_list)
+
+        # 2. Place it in the grid (replacing the old listbox and scrollbar code)
+        self.touch_move_list.grid(row=0, column=0, columnspan=2, sticky='nsew')
+
+        # Store a reference if needed for other methods
+        self.move_listbox = self.touch_move_list
+
+    def _move_selected_wrapper(self, index):
+        """
+        A small helper because Listbox selection events usually pass an 'event' object,
+        but our new class passes an 'index'.
         """
 
-        # 1. Listbox for a structured, clickable list of moves
-        self.move_listbox = tk.Listbox(
-            parent_frame,
-            selectmode=tk.SINGLE,
-            font=("Consolas", 10),
-            relief=tk.FLAT
-        )
-        self.move_listboxes.append(self.move_listbox)
-        self.move_listbox.grid(row=0, column=0, sticky='nsew')
+        # Create a dummy class to mimic the event object your existing logic expects
+        class MockEvent:
+            def __init__(self, widget): self.widget = widget
 
-        # 2. Scrollbar
-        move_list_scrollbar = ttk.Scrollbar(parent_frame, command=self.move_listbox.yview)
-        move_list_scrollbar.grid(row=0, column=1, sticky='ns')
-        parent_frame.grid_columnconfigure(1, minsize=TOUCH_WIDTH)
-        #move_list_scrollbar = tk.Scrollbar(parent_frame, command=self.move_listbox.yview)
-        #move_list_scrollbar.grid(row=0, column=1, sticky='ns')
-        self.move_listbox.config(yscrollcommand=move_list_scrollbar.set)
-
-        # 3. Populate the Listbox with move data from the model
-        for move_pair in self.current_game_moves:
-            self.move_listbox.insert(tk.END, move_pair)
-
-        # 4. Add binding for action upon selection (clicking a move)
-        self.move_listbox.bind('<ButtonRelease-1>', self._move_selected)
+        # Manually set the selection in our logic if needed
+        # Then call your original selection logic
+        self._move_selected(MockEvent(self.touch_move_list))
 
     def _go_to_first_move(self):
         """Go to the first move of the current game."""
@@ -1572,14 +1813,18 @@ class ChessEventViewer:
         if number_ >= len(self.all_moves_chess):
             number_ = self.all_moves_chess
         self.current_move_index = number_
-
-        self.current_board_canvas = self.board_canvases[self.current_tab]
-        self.current_comment_widget = self.comment_widgets[self.current_tab]
-        self.current_miniature_widget = self.miniature_widgets[self.current_tab]
-        self.current_miniboard = self.miniboards[self.current_tab]
-        self.current_variation_widget = self.variation_widgets[self.current_tab]
-        self.current_move_display_widget = self.move_display_widgets[self.current_tab]
+        new_tab = self.current_tab
+        self.set_tab_variables(new_tab)
         self.display_diagram_move(self.current_move_index)
+
+    def set_tab_variables(self, new_tab):
+        self.current_board_canvas = self.board_canvases[new_tab]
+        self.current_comment_widget = self.comment_widgets[new_tab]
+        self.current_miniature_widget = self.miniature_widgets[new_tab]
+        self.current_miniboard = self.miniboards[new_tab]
+        self.current_variation_widget = self.variation_widgets[new_tab]
+        self.current_move_display_widget = self.move_display_widgets[new_tab]
+        self.current_movelistbox = self.move_listboxes[new_tab]
 
     def _create_meta_info_widgets(self, parent_frame):
         """
@@ -2234,11 +2479,9 @@ class ChessEventViewer:
         # 2. Determine the direction based on the click position
         if event.x < mid_x:
             # Left side clicked: Go back
-            print("Left side clicked - Previous move")
             self._go_to_previous_move()  # Or your specific move navigation function
         else:
             # Right side clicked: Go forward
-            print("Right side clicked - Next move")
             self._go_to_next_move()
 
             # 3. Always update the board state after moving
@@ -2336,7 +2579,7 @@ if __name__ == "__main__":
     try:
         root = tk.Tk()
         # Set the initial size to 1200x800
-        root.geometry("1200x1020")
+        root.geometry("1400x1020")
 
         IMAGE_DIRECTORY = "Images/piece"
         default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1, engine_depth = get_settings()
