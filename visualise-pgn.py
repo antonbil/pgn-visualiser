@@ -417,10 +417,6 @@ class PieceImageManager:
         return self.mini_cache[cache_key]
 
 
-import tkinter as tk
-import chess
-
-
 class ChessMiniature(tk.Canvas):
     """
     A miniature chess board that:
@@ -512,7 +508,14 @@ class ChessMiniature(tk.Canvas):
     def _show_zoom(self):
         """ Opens a separate persistent window with a close button. """
         # Ensure we don't open multiple windows
+        # Check if the window already exists and is valid
         if self.zoom_win is not None and self.zoom_win.winfo_exists():
+            # Bring the existing window to the front
+            self.zoom_win.lift()
+            # Optionally force focus so it grabs user attention
+            self.zoom_win.focus_force()
+            # If it was minimized, deiconify it
+            self.zoom_win.deiconify()
             return
         # 1. Setup the Toplevel window
         self.zoom_win = tk.Toplevel(self)
