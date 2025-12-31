@@ -818,6 +818,7 @@ class ChessEventViewer:
         self.move_display_widgets = []
         self.miniature_widgets = []
         self.miniboards = []
+        self.init_tab_variables()
 
         # Variable to hold the selected file path for display
         self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
@@ -911,6 +912,7 @@ class ChessEventViewer:
         # --- TABBED INTERFACE FOR EVENTS ---
         self._create_tabbed_event_viewer(master)
         self.load_initial_pgn(lastLoadedPgnPath)
+
         self.set_tab_variables(0)
 
     def set_theme(self):
@@ -1895,6 +1897,10 @@ class ChessEventViewer:
         if number_ >= len(self.all_moves_chess):
             number_ = self.all_moves_chess
         self.current_move_index = number_
+        #self.master.update_idletasks()
+        total_height = self.current_right_pane.winfo_height()
+        # If the window is e.g. 800px high, we place the sash at 800 - 350 = 450
+        self.current_right_pane.sash_place(0, 0, total_height - 310)
 
         self.display_diagram_move(self.current_move_index)
 
@@ -1906,6 +1912,7 @@ class ChessEventViewer:
         self.current_variation_widget = self.variation_widgets[new_tab]
         self.current_move_display_widget = self.move_display_widgets[new_tab]
         self.current_movelistbox = self.move_listboxes[new_tab]
+        self.current_right_pane = self.right_pane_widgets[new_tab]
 
     def init_tab_variables(self):
         self.board_canvases = []
@@ -1915,6 +1922,7 @@ class ChessEventViewer:
         self.variation_widgets = []
         self.move_display_widgets = []
         self.move_listboxes = []
+        self.right_pane_widgets = []
     def _create_meta_info_widgets(self, parent_frame):
         """
         CREATES the static Label widgets for the PGN metadata fields.
@@ -2508,6 +2516,7 @@ class ChessEventViewer:
             right_pane = tk.PanedWindow(right_column,
                                         orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
             right_pane.pack(fill=tk.BOTH, expand=True)
+            self.right_pane_widgets.append(right_pane)
 
             # Container for the Top part (Move Info + Variations)
             right_top_container = tk.Frame(right_pane)
@@ -2553,7 +2562,7 @@ class ChessEventViewer:
             last_variation = event_data.get('last_variation')
             self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=280,
                                              color_light=self.color_light, color_dark=self.color_dark)
-            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=0)
+            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=(0, 0))
             self.miniboards.append(self.mini_board)
 
             if last_variation is not None:
@@ -2569,7 +2578,9 @@ class ChessEventViewer:
             # --- TAB FINALIZATION ---
             self._update_move_listbox_content(pgn_snippet_text)
             tab_title = f"{event_data['move_text']}"
+
             self.notebook.add(tab_frame, text=tab_title)
+
 
         except Exception as e:
             print("error in creation notebook",e)
