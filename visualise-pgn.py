@@ -1907,6 +1907,14 @@ class ChessEventViewer:
         self.current_move_display_widget = self.move_display_widgets[new_tab]
         self.current_movelistbox = self.move_listboxes[new_tab]
 
+    def init_tab_variables(self):
+        self.board_canvases = []
+        self.comment_widgets = []
+        self.miniature_widgets = []
+        self.miniboards = []
+        self.variation_widgets = []
+        self.move_display_widgets = []
+        self.move_listboxes = []
     def _create_meta_info_widgets(self, parent_frame):
         """
         CREATES the static Label widgets for the PGN metadata fields.
@@ -2197,6 +2205,7 @@ class ChessEventViewer:
 
     def do_new_analysis_game(self, game):
         self._clear_content_frame()
+        self.init_tab_variables()
 
         all_events, game = self.get_all_significant_events_game(game)
         self.game = game
@@ -2441,7 +2450,7 @@ class ChessEventViewer:
         board_canvas.bind("<Button-1>", self._on_board_click)
         try:
             # --- COLUMN 1: PGN SNIPPET & ANALYSIS (Right Side) ---
-            pgn_block = tk.Frame(tab_frame, padx=10, pady=10, bd=2, relief=tk.GROOVE)
+            pgn_block = tk.Frame(tab_frame, padx=5, pady=2, bd=2, relief=tk.GROOVE)
             pgn_block.grid(row=0, column=1, padx=(15, 0), pady=5, sticky='nsew')
 
             # Configure pgn_block: Row 0 is content (expand), Row 1 is Toolbar (fixed)
@@ -2496,7 +2505,8 @@ class ChessEventViewer:
             # --- RIGHT COLUMN: INFO, VARIATIONS & MINIATURE ---
             # ---------------------------------------------------------
             # Create a vertical PanedWindow inside the right column
-            right_pane = tk.PanedWindow(right_column, orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
+            right_pane = tk.PanedWindow(right_column,
+                                        orient=tk.VERTICAL, sashrelief=tk.RAISED, sashwidth=4)
             right_pane.pack(fill=tk.BOTH, expand=True)
 
             # Container for the Top part (Move Info + Variations)
@@ -2543,7 +2553,7 @@ class ChessEventViewer:
             last_variation = event_data.get('last_variation')
             self.mini_board = ChessMiniature(miniature_frame, self.image_manager, size=280,
                                              color_light=self.color_light, color_dark=self.color_dark)
-            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=5)
+            self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=0)
             self.miniboards.append(self.mini_board)
 
             if last_variation is not None:
@@ -2554,7 +2564,7 @@ class ChessEventViewer:
             # --- TOOLBAR (Bottom, Full Width) ---
             # ---------------------------------------------------------
             toolbar = self._setup_quick_toolbar(pgn_block)
-            toolbar.grid(row=1, column=0, sticky='ew', pady=(5, 10))
+            toolbar.grid(row=1, column=0, sticky='ew', pady=(1, 2))
 
             # --- TAB FINALIZATION ---
             self._update_move_listbox_content(pgn_snippet_text)
@@ -2698,6 +2708,7 @@ if __name__ == "__main__":
         root = tk.Tk()
         # Set the initial size to 1200x800
         root.geometry("1400x1020")
+        #root.geometry("1400x700")
 
         IMAGE_DIRECTORY = "Images/piece"
         default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, square_size, board1, engine_depth = get_settings()
