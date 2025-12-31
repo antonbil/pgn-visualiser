@@ -202,6 +202,7 @@ def _format_pgn_history(move_list):
     last_variation = None
     previous_variation = None
     move_nr = 0
+    prev_variation = None
     for i, move in enumerate(move_list):
         move_number = move['move_number']
         move_san = move['san']
@@ -221,6 +222,16 @@ def _format_pgn_history(move_list):
                 # Add Black's move
                 current_line += f" {move_san}".replace('\n',  ' ')
 
+        # --- 3. Add Variations (these are stored separately) ---
+        if move.get('variations'):
+            previous_variation = last_variation
+            last_variation = move["variations"]
+            if prev_variation:
+                current_line += f" V{len(prev_variation["variations"]) - 1}"
+            if len(move["variations"]) > 1:
+                prev_variation = move
+            else:
+                prev_variation = None
         # --- 2. Clean up and Add Engine Comment ---
         if move.get('comment'):
             # Regular expression to remove ALL evaluation scores, [%eval ...] and variation parentheses.
@@ -233,11 +244,6 @@ def _format_pgn_history(move_list):
 
             if clean_comment:
                 current_line += f" {{{clean_comment}}}"
-
-        # --- 3. Add Variations (these are stored separately) ---
-        if move.get('variations'):
-            previous_variation = last_variation
-            last_variation = move["variations"]
 
     if not previous_variation is None:
         for i, variation in enumerate(previous_variation):
