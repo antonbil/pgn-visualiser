@@ -1900,7 +1900,7 @@ class ChessEventViewer:
         #self.master.update_idletasks()
         total_height = self.current_right_pane.winfo_height()
         # If the window is e.g. 800px high, we place the sash at 800 - 350 = 450
-        self.current_right_pane.sash_place(0, 0, total_height - 310)
+        self.current_right_pane.sash_place(0, 0, total_height - 330)
 
         self.display_diagram_move(self.current_move_index)
 
