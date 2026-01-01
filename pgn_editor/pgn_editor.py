@@ -802,6 +802,13 @@ class TouchMoveListColor(tk.Frame):
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.text_area.configure(yscrollcommand=self.scrollbar.set)
 
+        self.text_area.config(
+            selectbackground=self.text_area.cget("bg"),  # Maak selectie zelfde kleur als achtergrond
+            selectforeground=self.text_area.cget("fg"),  # Maak tekstkleur hetzelfde
+            exportselection=False,  # Voorkom dat andere apps de selectie zien
+            inactiveselectbackground=self.text_area.cget("bg")
+        )
+
         # Tags configuration
         self.text_area.tag_configure("highlight", background="#cfe2f3")
         self.text_area.tag_configure("move_num", foreground="#888888")
@@ -819,6 +826,10 @@ class TouchMoveListColor(tk.Frame):
 
         # Disable shift-selection
         self.text_area.bind("<Shift-Button-1>", lambda e: "break")
+
+        self.text_area.bind("<<Selection>>", lambda e: "break")
+        self.text_area.bind("<Control-a>", lambda e: "break")
+        self.text_area.bind("<Double-Button-1>", lambda e: "break")
 
         self.drag_start_y = 0
         self.start_scroll_pos = 0
