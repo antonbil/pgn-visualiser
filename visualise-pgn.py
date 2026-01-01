@@ -241,11 +241,12 @@ def _format_pgn_history(move_list):
                 '',
                 move['comment']
             ).strip()
-            if len(clean_comment) > 6:
+            if player == chess.WHITE and len(clean_comment) > 6:
                 current_line += " {1}"
+            elif clean_comment and len(clean_comment) < 6:
+                current_line += f" {{{clean_comment}}}"
             else:
-                if clean_comment:
-                    current_line += f"\n {{{clean_comment}}}"
+                current_line += f" \n{{{clean_comment}}}"
 
     if not previous_variation is None:
         for i, variation in enumerate(previous_variation):
