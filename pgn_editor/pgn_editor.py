@@ -1032,6 +1032,13 @@ class TouchMoveListColor(tk.Frame):
         """ Returns the text of the line at the given index. """
         return self.text_area.get(f"{index + 1}.0", f"{index + 1}.end")
 
+    def scroll_to_start(self):
+        """
+        Scrolls the move list back to the very first move.
+        """
+        # 0.0 means the very top (0%) of the scrollable area
+        self.text_area.yview_moveto(0.0)
+
 class GameChooserDialog(tk.Toplevel):
     """
     A Toplevel dialog for selecting a game from a PGN list,
@@ -2062,15 +2069,23 @@ class ChessAnnotatorApp:
                                           width=2, bg='#fff0e6')  # Width reduced
         self.prev_game_button.pack(side=tk.LEFT, padx=(5, 3))
 
+        # 2a. First Move
+        self.first_button = tk.Button(nav_buttons_frame, text="|<", command=self.go_first_move,
+                                     width=2)  # Width reduced
+        self.first_button.pack(side=tk.LEFT, padx=3)
         # 2. Previous Move
-        self.prev_button = tk.Button(nav_buttons_frame, text="< Move", command=self.go_back_move,
-                                     width=6)  # Width reduced
+        self.prev_button = tk.Button(nav_buttons_frame, text="<", command=self.go_back_move,
+                                     width=3)  # Width reduced
         self.prev_button.pack(side=tk.LEFT, padx=3)
 
         # 3. Next Move
-        self.next_button = tk.Button(nav_buttons_frame, text="Move >", command=self.go_forward_move,
-                                     width=6)  # Width reduced
+        self.next_button = tk.Button(nav_buttons_frame, text=">", command=self.go_forward_move,
+                                     width=3)  # Width reduced
         self.next_button.pack(side=tk.LEFT, padx=3)
+        # 3b. Last Move
+        self.last_button = tk.Button(nav_buttons_frame, text=">|", command=self.go_last_move,
+                                     width=2)  # Width reduced
+        self.last_button.pack(side=tk.LEFT, padx=3)
 
         # 4. Next Game
         self.next_game_button = tk.Button(nav_buttons_frame, text=">>", command=lambda: self._navigate_game(1),
@@ -2381,6 +2396,13 @@ class ChessAnnotatorApp:
 
     # --- Move Navigation ---
 
+    def go_first_move(self):
+        """ Go to the first move. """
+        if len(self.move_list) > 0:
+            self.current_move_index = -1
+            self.move_list_widget.scroll_to_start()
+            self.update_state()
+
     def go_forward_move(self):
         """ Go to the next move. """
         if self.current_move_index < len(self.move_list) - 1:
@@ -2391,6 +2413,12 @@ class ChessAnnotatorApp:
         """ Go to the previous move. """
         if self.current_move_index > -1:
             self.current_move_index -= 1
+            self.update_state()
+
+    def go_last_move(self):
+        """ Go to the last move. """
+        if len(self.move_list) > 0:
+            self.current_move_index = len(self.move_list) - 1
             self.update_state()
 
     # --- Update Functions ---
@@ -2432,7 +2460,9 @@ class ChessAnnotatorApp:
 
         # Update move navigation button states
         self.prev_button.config(state=tk.NORMAL if self.current_move_index > -1 else tk.DISABLED)
+        self.first_button.config(state=tk.NORMAL if self.current_move_index > -1 else tk.DISABLED)
         self.next_button.config(state=tk.NORMAL if self.current_move_index < len(self.move_list) - 1 else tk.DISABLED)
+        self.last_button.config(state=tk.NORMAL if self.current_move_index < len(self.move_list) - 1 else tk.DISABLED)
         self.prev_game_button.config(state=tk.NORMAL if self.current_game_index > 0 and len(self.all_games) > 1 else tk.DISABLED)
         self.next_game_button.config(state=tk.NORMAL if self.current_game_index < len(self.all_games) - 1 and len(self.all_games) > 1 else tk.DISABLED)
 
