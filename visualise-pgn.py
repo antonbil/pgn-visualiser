@@ -240,7 +240,7 @@ def _format_pgn_history(move_list):
                 r'\s*(?<![A-Za-z])([#]?[-+]?\d+\.?\d*)(?:/\d+)?\s*|\[%eval\s*([#]?[-]?\d+\.?\d*)\]|\s*\([^\)]*\)',
                 '',
                 move['comment']
-            ).strip().replace(",","")
+            ).strip().replace(",","")[:20]
             if player == chess.WHITE and len(clean_comment) > 6:
                 current_line += " {1}"
             elif clean_comment and len(clean_comment) < 6:
