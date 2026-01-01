@@ -202,7 +202,7 @@ def _format_pgn_history(move_list):
     last_variation = None
     previous_variation = None
     move_nr = 0
-    prev_variation = None
+    prev_variation_move = None
     for i, move in enumerate(move_list):
         move_number = move['move_number']
         move_san = move['san']
@@ -226,12 +226,12 @@ def _format_pgn_history(move_list):
         if move.get('variations'):
             previous_variation = last_variation
             last_variation = move["variations"]
-            if prev_variation:
-                current_line += f" V{len(prev_variation["variations"]) - 1}"
+            if prev_variation_move:
+                current_line += f" ({len(prev_variation_move["variations"]) - 1})"
             if len(move["variations"]) > 1:
-                prev_variation = move
+                prev_variation_move = move
             else:
-                prev_variation = None
+                prev_variation_move = None
         # --- 2. Clean up and Add Engine Comment ---
         if move.get('comment'):
             # Regular expression to remove ALL evaluation scores, [%eval ...] and variation parentheses.
@@ -588,6 +588,201 @@ class ChessMiniature(tk.Canvas):
 
         #target_canvas.update_idletasks()
 
+class TouchMoveListColor(tk.Frame):
+    """
+    A touch-friendly replacement for tk.Listbox using a tk.Text widget.
+    Supports syntax highlighting via tags and maintains compatibility
+    with insert/delete/selection methods.
+    """
+
+    def __init__(self, parent, move_pairs=None, select_callback=None, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.move_pairs = move_pairs if move_pairs else []
+        self.select_callback = select_callback
+        self.selected_index = None
+
+        # --- UI Setup ---
+        self.text_area = tk.Text(
+            self,
+            font=("Consolas", 14),
+            wrap=tk.NONE,
+            bg="white",
+            padx=10,
+            pady=10,
+            cursor="arrow",
+            highlightthickness=0,
+            bd=0,
+            state=tk.DISABLED
+        )
+        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.text_area.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_area.configure(yscrollcommand=self.scrollbar.set)
+
+        # Tags configuration
+        self.text_area.tag_configure("highlight", background="#cfe2f3")
+        self.text_area.tag_configure("move_num", foreground="#888888")
+        self.text_area.tag_configure("white_move", foreground="black", font=("Consolas", 14, "bold"))
+        self.text_area.tag_configure("variation", foreground="#0055ff")
+        self.text_area.tag_configure("comment", foreground="#008000")
+
+        # --- REVISED BINDINGS ---
+        # 1. Start drag
+        self.text_area.bind("<Button-1>", self._on_drag_start)
+        # 2. Handle motion (scrolling) - No lambda break here, handled in function
+        self.text_area.bind("<B1-Motion>", self._on_drag_motion)
+        # 3. Handle release (tap/select)
+        self.text_area.bind("<ButtonRelease-1>", self._on_tap)
+
+        # Disable shift-selection
+        self.text_area.bind("<Shift-Button-1>", lambda e: "break")
+
+        self.drag_start_y = 0
+        self.start_scroll_pos = 0
+        self.scrolled_too_far = False
+
+        if self.move_pairs:
+            self._populate()
+
+    def _populate(self):
+        """ Clears and fills the text area with initial move pairs. """
+        self.delete(0, tk.END)
+        for i, move in enumerate(self.move_pairs):
+            self.insert(tk.END, move)
+
+    def _on_click(self, event):
+        """ Records the start of a click/drag. """
+        self.drag_start_y = event.y
+        self.scrolled_too_far = False
+
+    def _on_drag_start(self, event):
+        """ Capture initial touch position and current scroll state. """
+        self.drag_start_y = event.y
+        # Get the current scroll position (top visible fraction)
+        self.start_scroll_pos = self.text_area.yview()[0]
+        self.scrolled_too_far = False
+        # Returning "break" here prevents the Text widget from starting a selection
+        return "break"
+
+    def _on_drag_motion(self, event):
+        """ Calculate drag distance and move the view manually. """
+        delta_y = event.y - self.drag_start_y
+
+        if abs(delta_y) > 5:
+            self.scrolled_too_far = True
+
+        # Map pixel movement to scroll fraction.
+        # We divide by the height of the widget to get the relative shift.
+        height = self.text_area.winfo_height()
+        if height > 1:
+            # We subtract because dragging 'down' should move the text 'up'
+            new_pos = self.start_scroll_pos - (delta_y / height)
+            self.text_area.yview_moveto(max(0, min(1, new_pos)))
+
+        return "break"  # Crucial: prevents text selection during drag
+
+    def _on_tap(self, event):
+        """ Trigger selection only if the user didn't swipe/scroll. """
+        if self.scrolled_too_far:
+            return "break"
+
+        # Identify line index
+        index_str = self.text_area.index(f"@{event.x},{event.y}")
+        line_index = int(index_str.split('.')[0]) - 1
+
+        self.selection_set(line_index)
+
+        if self.select_callback:
+            self.select_callback(line_index)
+
+        return "break"
+
+    # --- Public API (Listbox Compatibility) ---
+
+    def insert(self, index, move_text):
+        """
+        Inserts a move line and applies colors based on PGN structure:
+        - 11. (Move numbers) -> Gray
+        - Qd2, Nc4 (Moves) -> Bold Black
+        - (...) (Variations) -> Blue
+        - {...} (Comments) -> Green
+        """
+        self.text_area.config(state=tk.NORMAL)
+
+        # Determine insertion position string
+        if index == tk.END:
+            pos = self.text_area.index(tk.END)
+        else:
+            pos = f"{index + 1}.0"
+
+        # Define the regex pattern to capture different PGN elements:
+        # 1. Move numbers: \d+\.+\s?
+        # 2. Variations: \([^)]*\)
+        # 3. Comments: \{[^}]*\}
+        # 4. Standard moves/text: [^\s(){}]+
+        pattern = re.compile(r'(\d+\.+\s?)|(\([^)]*\))|(\{[^}]*\})|([^\s(){}]+)')
+
+        # Before inserting the new line, we track where we start
+        # so we can apply the tags correctly.
+        line_start = self.text_area.index("end-1c") if index == tk.END else pos
+
+        for match in pattern.finditer(str(move_text)):
+            move_num, variation, comment, move = match.groups()
+
+            if move_num:
+                self.text_area.insert(tk.END, move_num, "move_num")
+            elif variation:
+                self.text_area.insert(tk.END, f"{variation} ", "variation")
+            elif comment:
+                self.text_area.insert(tk.END, f"{comment} ", "comment")
+            elif move:
+                # We differentiate between white and black moves simply by order or
+                # we can use a generic 'move' tag for both.
+                self.text_area.insert(tk.END, f"{move} ", "white_move")
+
+        self.text_area.insert(tk.END, "\n")
+
+        self.text_area.config(state=tk.DISABLED, insertontime=0)
+
+    def delete(self, first, last=None):
+        """ Deletes lines from the text area. """
+        self.text_area.config(state=tk.NORMAL)
+        if first == 0 and (last == tk.END or last is None):
+            self.text_area.delete("1.0", tk.END)
+        else:
+            start = f"{first + 1}.0"
+            end = f"{last + 1}.0" if last else f"{first + 2}.0"
+            self.text_area.delete(start, end)
+        self.text_area.config(state=tk.DISABLED)
+
+    def selection_set(self, index):
+        """ Highlights the specified line. """
+        self.selection_clear()
+        self.selected_index = index
+
+        start = f"{index + 1}.0"
+        end = f"{index + 1}.end + 1c"
+        self.text_area.tag_add("highlight", start, end)
+        self.see(index)
+
+    def selection_clear(self, first=None, last=None):
+        """ Removes highlighting from all lines. """
+        self.text_area.tag_remove("highlight", "1.0", tk.END)
+        self.selected_index = None
+
+    def see(self, index):
+        """ Scrolls the text area to the given line index. """
+        self.text_area.see(f"{index + 1}.0")
+
+    def size(self):
+        """ Returns the number of lines. """
+        return int(self.text_area.index('end-1c').split('.')[0])
+
+    def get(self, index):
+        """ Returns the text of the line at the given index. """
+        return self.text_area.get(f"{index + 1}.0", f"{index + 1}.end")
 
 class TouchMoveList(tk.Frame):
     """
@@ -1493,7 +1688,7 @@ class ChessEventViewer:
         """
         # 1. Initialize our new custom widget
         # Pass 'self._move_selected' as the callback
-        self.touch_move_list = TouchMoveList(
+        self.touch_move_list = TouchMoveListColor(
             parent_frame,
             self.current_game_moves,
             self._on_move_tapped
