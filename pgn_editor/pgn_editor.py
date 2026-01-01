@@ -854,6 +854,9 @@ class TouchMoveListColor(tk.Frame):
         # You can add more, like a subtle yellow for a 'last move' or 'threat' line
         self.text_area.tag_configure("line_alert", background="#fff0f0")
 
+        self.text_area.tag_lower("line_grey")
+        self.text_area.tag_raise("highlight", "line_grey")
+
         if self.move_pairs:
             self._populate()
 
