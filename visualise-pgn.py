@@ -741,31 +741,20 @@ class TouchMoveListColor(tk.Frame):
     # --- Public API (Listbox Compatibility) ---
 
     def insert(self, index, move_text):
-        """
-        Inserts a move line and applies colors based on PGN structure:
-        - 11. (Move numbers) -> Gray
-        - Qd2, Nc4 (Moves) -> Bold Black
-        - (...) (Variations) -> Blue
-        - {...} (Comments) -> Green
-        """
         self.text_area.config(state=tk.NORMAL)
 
-        # Determine insertion position string
-        if index == tk.END:
-            pos = self.text_area.index(tk.END)
-        else:
-            pos = f"{index + 1}.0"
+        # Use tk.END or specific line
+        pos = tk.END if index == tk.END else f"{index + 1}.0"
 
-        # Define the regex pattern to capture different PGN elements:
-        # 1. Move numbers: \d+\.+\s?
-        # 2. Variations: \([^)]*\)
-        # 3. Comments: \{[^}]*\}
-        # 4. Standard moves/text: [^\s(){}]+
-        pattern = re.compile(r'(\d+\.+\s?)|(\([^)]*\))|(\{[^}]*\})|([^\s(){}]+)')
+        # IMPROVED REGEX:
+        # 1. Move numbers: (\d+\.+\s?)
+        # 2. Variations: (\(.+?\))  <-- Added +? for non-greedy matching including spaces
+        # 3. Comments: (\{.+?\})    <-- Added +? for non-greedy matching including spaces
+        # 4. Standard moves: ([^\s(){}]+)
+        pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}]+)')
 
-        # Before inserting the new line, we track where we start
-        # so we can apply the tags correctly.
-        line_start = self.text_area.index("end-1c") if index == tk.END else pos
+        # We use a temporary string to build the line or insert directly
+        # Note: Use self.text_area.index('end-1c') to ensure we are at the very end
 
         for match in pattern.finditer(str(move_text)):
             move_num, variation, comment, move = match.groups()
@@ -775,14 +764,12 @@ class TouchMoveListColor(tk.Frame):
             elif variation:
                 self.text_area.insert(tk.END, f"{variation} ", "variation")
             elif comment:
+                # This will now correctly catch {Long comments with spaces}
                 self.text_area.insert(tk.END, f"{comment} ", "comment")
             elif move:
-                # We differentiate between white and black moves simply by order or
-                # we can use a generic 'move' tag for both.
                 self.text_area.insert(tk.END, f"{move} ", "white_move")
 
         self.text_area.insert(tk.END, "\n")
-
         self.text_area.config(state=tk.DISABLED, insertontime=0)
 
     def delete(self, first, last=None):
