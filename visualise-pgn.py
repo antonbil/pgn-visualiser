@@ -710,19 +710,27 @@ class TouchMoveListColor(tk.Frame):
         return "break"
 
     def _apply_momentum(self, current_velocity):
-        """ Gradually decrease speed and scroll the view. """
-        # Friction: Every 10ms we reduce the speed (0.9 is 10% reduction)
+        """ Gradually decrease speed and scroll the view in the correct direction. """
+        # Friction: Every 10ms we reduce the speed
         friction = 0.92
         new_velocity = current_velocity * friction
 
         if abs(new_velocity) > 0.5:
             height = self.text_area.winfo_height()
             if height > 1:
-                # Move based on velocity
+                # Get current top position
                 current_pos = self.text_area.yview()[0]
-                # Convert pixel velocity to scroll fraction
+
+                # CORRECTION:
+                # If velocity is negative (swiping up), we want to ADD to current_pos
+                # to move the scrollbar down.
+                # If velocity is positive (swiping down), we want to SUBTRACT.
                 shift = new_velocity / height
-                self.text_area.yview_moveto(max(0, min(1, current_pos - shift)))
+
+                # By subtracting a negative shift, we effectively add it.
+                new_scroll_pos = current_pos - shift
+
+                self.text_area.yview_moveto(max(0, min(1, new_scroll_pos)))
 
                 # Schedule the next frame
                 self.momentum_id = self.after(10, lambda: self._apply_momentum(new_velocity))
