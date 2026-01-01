@@ -227,7 +227,7 @@ def _format_pgn_history(move_list):
             previous_variation = last_variation
             last_variation = move["variations"]
             if prev_variation_move:
-                current_line += f" ({len(prev_variation_move["variations"]) - 1})"
+                current_line += f" ({len(prev_variation_move['variations']) - 1})"
             if len(move["variations"]) > 1:
                 prev_variation_move = move
             else:
