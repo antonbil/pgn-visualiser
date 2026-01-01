@@ -241,8 +241,8 @@ def _format_pgn_history(move_list):
                 '',
                 move['comment']
             ).strip()
-            if player == chess.WHITE:
-                clean_comment = "{1}"
+            if player == chess.WHITE and len(clean_comment) > 6:
+                clean_comment = "{{1}}"
 
             if clean_comment:
                 current_line += f" {{{clean_comment}}}"
