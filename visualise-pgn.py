@@ -742,28 +742,26 @@ class TouchMoveListColor(tk.Frame):
 
     def insert(self, index, move_text):
         self.text_area.config(state=tk.NORMAL)
-        pos = tk.END if index == tk.END else f"{index + 1}.0"
 
-        # UPDATED REGEX:
-        # 1. Move numbers: (\d+\.+\s?)
-        # 2. Variations: (\(.+?\)) - non-greedy, matches anything between ( )
-        # 3. Comments: (\{.+?\}) - non-greedy, matches anything between { }
-        # 4. Standard moves: ([^\s(){}]+) - now handles commas and special chars better
-        pattern = re.compile(r'(\d+\.+\s?)|(\([^)]+\))|(\{[^}]+\})|([^\s(){}]+)')
+        # We add (\s+) to capture spaces as a separate group
+        # We use non-greedy matching (.*?) for the brackets to be absolutely safe
+        pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}]+)|(\s+)')
 
-        # We use a simple loop to process the matches
         for match in pattern.finditer(str(move_text)):
-            move_num, variation, comment, move = match.groups()
+            move_num, variation, comment, move, whitespace = match.groups()
 
             if move_num:
                 self.text_area.insert(tk.END, move_num, "move_num")
             elif variation:
-                self.text_area.insert(tk.END, f"{variation} ", "variation")
+                self.text_area.insert(tk.END, variation, "variation")
             elif comment:
-                # The .+? logic ensures that commas inside { } are ignored by the 'move' group
-                self.text_area.insert(tk.END, f"{comment} ", "comment")
+                # Matches: {A36 English Opening: Symmetrical Variation, Symmetrical Variation}
+                self.text_area.insert(tk.END, comment, "comment")
             elif move:
-                self.text_area.insert(tk.END, f"{move} ", "white_move")
+                self.text_area.insert(tk.END, move, "white_move")
+            elif whitespace:
+                # Just insert the space without special tags to keep the layout
+                self.text_area.insert(tk.END, whitespace)
 
         self.text_area.insert(tk.END, "\n")
         self.text_area.config(state=tk.DISABLED, insertontime=0)
