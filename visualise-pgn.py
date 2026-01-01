@@ -749,7 +749,7 @@ class TouchMoveListColor(tk.Frame):
         # 2. Variations: (\(.+?\)) - non-greedy, matches anything between ( )
         # 3. Comments: (\{.+?\}) - non-greedy, matches anything between { }
         # 4. Standard moves: ([^\s(){}]+) - now handles commas and special chars better
-        pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}]+)')
+        pattern = re.compile(r'(\d+\.+\s?)|(\([^)]+\))|(\{[^}]+\})|([^\s(){}]+)')
 
         # We use a simple loop to process the matches
         for match in pattern.finditer(str(move_text)):
