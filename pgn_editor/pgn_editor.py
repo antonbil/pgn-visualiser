@@ -1042,6 +1042,26 @@ class TouchMoveListColor(tk.Frame):
         # 0.0 means the very top (0%) of the scrollable area
         self.text_area.yview_moveto(0.0)
 
+    def set_font_size(self, size):
+        """
+        Updates the font size for the main text area and all specific tags.
+        """
+        # 1. Update the main widget font
+        current_font = ("Consolas", size)
+        self.text_area.config(font=current_font)
+
+        # 2. Update specific tags that have their own font settings
+        # Bold tags for moves
+        bold_font = ("Consolas", size, "bold")
+        self.text_area.tag_configure("white_move", font=bold_font)
+        self.text_area.tag_configure("black_move", font=bold_font)
+
+        # Slightly smaller or different styles for other tags
+        normal_font = ("Consolas", size)
+        self.text_area.tag_configure("move_num", font=("Consolas", max(8, size - 1)))
+        self.text_area.tag_configure("variation", font=normal_font)
+        self.text_area.tag_configure("comment", font=normal_font)
+
 class GameChooserDialog(tk.Toplevel):
     """
     A Toplevel dialog for selecting a game from a PGN list,
@@ -2296,6 +2316,7 @@ class ChessAnnotatorApp:
         # The callback 'self._on_move_selected' will be created in the next step
         self.move_list_widget = TouchMoveListColor(moves_frame, select_callback=self._on_move_selected)
         self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.move_list_widget.set_font_size(12)
 
     def _on_move_selected(self, index):
         """ Callback for the TouchMoveListColor widget. """
