@@ -715,8 +715,6 @@ class TouchMoveListColor(tk.Frame):
     def _apply_momentum(self, current_velocity):
         """ Gradually decrease speed and scroll the view in the correct direction. """
         # Friction: Every 10ms we reduce the speed
-        #switch off momentum
-        return
         friction = 0.92
         new_velocity = current_velocity * friction
 
