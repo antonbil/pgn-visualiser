@@ -1047,7 +1047,7 @@ class ChessEventViewer:
         self.init_tab_variables()
 
         # Variable to hold the selected file path for display
-        self.pgn_filepath = tk.StringVar(value="No PGN file selected.")
+        self. pgn_filepath = tk.StringVar(value="No PGN file selected.")
 
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -1833,13 +1833,6 @@ class ChessEventViewer:
         game_nav_group = tk.Frame(center_align_frame)
         game_nav_group.pack(side=tk.LEFT, padx=(0, 20))
 
-        # Game Number Label (e.g., "Game 1 of 10")
-        tk.Label(
-            game_nav_group,
-            textvariable=self.game_counter_var,
-            font=button_font
-        ).pack(side=tk.LEFT, padx=(5, 5))
-
         # Prev/Next Game Buttons
         tk.Button(
             game_nav_group,
@@ -1885,8 +1878,9 @@ class ChessEventViewer:
             return
         #self.current_game_index = current_game_index
         self.selected_game_var.set(self.game_descriptions[current_game_index])
-
-        self.game_counter_var.set(f"Game {self.current_game_index + 1} of {self.num_games}")
+        file_name = self.pgn_filepath.get()
+        file_name = os.path.basename(file_name)
+        self.game_counter_var.set(f"Game {self.current_game_index + 1} of {self.num_games} in {file_name}")
 
     def _create_tabbed_event_viewer(self, master):
         """
@@ -2282,12 +2276,18 @@ class ChessEventViewer:
             self._read_file_and_analyze(clean_path)
 
             # Update the path string
-            self.pgn_filepath.set(clean_path)
+            self.set_filepath(clean_path)
 
         else:
             print("WARNING: File not found or is a directory. Loading default data.")
             # If the file does not exist or is a directory, use the default pgn
             self.do_new_analysis(self.default_pgn_string)
+
+    def set_filepath(self, clean_path):
+        self.pgn_filepath.set(clean_path)
+        file_name = self.pgn_filepath.get()
+        file_name = os.path.basename(file_name)
+        self.game_counter_var.set(f"Game {self.current_game_index + 1} of {self.num_games} in {file_name}")
 
     def _clear_content_frame(self):
         return
@@ -2514,26 +2514,13 @@ class ChessEventViewer:
 
         # Configure the container to allow the path label to expand
         row_container.columnconfigure(0, weight=1)
-
-        # 1. Label/Entry for File Path Display
-        # We use pack inside this specific container
-        path_label = tk.Label(
+        button_font = ('Arial', 10, 'bold')
+        # Game Number Label (e.g., "Game 1 of 10")
+        tk.Label(
             row_container,
-            textvariable=self.pgn_filepath,
-            anchor="w",
-            relief=tk.SUNKEN,
-            bg="white",
-            padx=5
-        )
-        path_label.pack(side="left", fill="x", expand=True, padx=(0, 10))
-
-        # 2. Button to open the file dialog
-        select_button = tk.Button(
-            row_container,
-            text="Select PGN File",
-            command=self._select_pgn_file
-        )
-        select_button.pack(side="right")
+            textvariable=self.game_counter_var,
+            font=button_font
+        ).pack( padx=(5, 5))
 
         print(f"File Reader Widget initialized on row {row}.")
 
@@ -2556,7 +2543,7 @@ class ChessEventViewer:
 
         if filepath:
             # Update the displayed path
-            self.pgn_filepath.set(filepath)
+            self.set_filepath(filepath)
             print(f"File selected: {filepath}")
 
             # --- NEXT STEP: Call the function to process the file ---
