@@ -944,7 +944,7 @@ class TouchMoveListColor(tk.Frame):
             self.momentum_id = None
 
     # --- Public API (Listbox Compatibility) ---
-    def insert(self, index, move_text, tag_override=None):
+    def insert(self, index, move_text, tag_override=""):
         """
         Inserts PGN text.
         If tag_override starts with 'line_', the whole line gets that background.
