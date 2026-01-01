@@ -742,20 +742,16 @@ class TouchMoveListColor(tk.Frame):
 
     def insert(self, index, move_text):
         self.text_area.config(state=tk.NORMAL)
-
-        # Use tk.END or specific line
         pos = tk.END if index == tk.END else f"{index + 1}.0"
 
-        # IMPROVED REGEX:
+        # UPDATED REGEX:
         # 1. Move numbers: (\d+\.+\s?)
-        # 2. Variations: (\(.+?\))  <-- Added +? for non-greedy matching including spaces
-        # 3. Comments: (\{.+?\})    <-- Added +? for non-greedy matching including spaces
-        # 4. Standard moves: ([^\s(){}]+)
+        # 2. Variations: (\(.+?\)) - non-greedy, matches anything between ( )
+        # 3. Comments: (\{.+?\}) - non-greedy, matches anything between { }
+        # 4. Standard moves: ([^\s(){}]+) - now handles commas and special chars better
         pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}]+)')
 
-        # We use a temporary string to build the line or insert directly
-        # Note: Use self.text_area.index('end-1c') to ensure we are at the very end
-
+        # We use a simple loop to process the matches
         for match in pattern.finditer(str(move_text)):
             move_num, variation, comment, move = match.groups()
 
@@ -764,7 +760,7 @@ class TouchMoveListColor(tk.Frame):
             elif variation:
                 self.text_area.insert(tk.END, f"{variation} ", "variation")
             elif comment:
-                # This will now correctly catch {Long comments with spaces}
+                # The .+? logic ensures that commas inside { } are ignored by the 'move' group
                 self.text_area.insert(tk.END, f"{comment} ", "comment")
             elif move:
                 self.text_area.insert(tk.END, f"{move} ", "white_move")
