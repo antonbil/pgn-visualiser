@@ -642,6 +642,9 @@ class TouchMoveListColor(tk.Frame):
         self.drag_start_y = 0
         self.start_scroll_pos = 0
         self.scrolled_too_far = False
+        self.last_y = 0
+        self.velocity = 0
+        self.momentum_id = None
 
         if self.move_pairs:
             self._populate()
@@ -658,46 +661,71 @@ class TouchMoveListColor(tk.Frame):
         self.scrolled_too_far = False
 
     def _on_drag_start(self, event):
-        """ Capture initial touch position and current scroll state. """
+        """ Capture start and cancel any existing momentum. """
+        if self.momentum_id:
+            self.after_cancel(self.momentum_id)
+            self.momentum_id = None
+
         self.drag_start_y = event.y
-        # Get the current scroll position (top visible fraction)
+        self.last_y = event.y
         self.start_scroll_pos = self.text_area.yview()[0]
         self.scrolled_too_far = False
-        # Returning "break" here prevents the Text widget from starting a selection
+        self.velocity = 0
         return "break"
 
     def _on_drag_motion(self, event):
-        """ Calculate drag distance and move the view manually. """
+        """ Calculate instantaneous velocity during movement. """
         delta_y = event.y - self.drag_start_y
+
+        # Calculate velocity for momentum (pixels moved since last motion event)
+        self.velocity = event.y - self.last_y
+        self.last_y = event.y
 
         if abs(delta_y) > 5:
             self.scrolled_too_far = True
 
-        # Map pixel movement to scroll fraction.
-        # We divide by the height of the widget to get the relative shift.
         height = self.text_area.winfo_height()
         if height > 1:
-            # We subtract because dragging 'down' should move the text 'up'
             new_pos = self.start_scroll_pos - (delta_y / height)
             self.text_area.yview_moveto(max(0, min(1, new_pos)))
 
-        return "break"  # Crucial: prevents text selection during drag
+        return "break"
 
     def _on_tap(self, event):
-        """ Trigger selection only if the user didn't swipe/scroll. """
+        """ On release, either trigger selection or start momentum. """
         if self.scrolled_too_far:
+            # If the user was moving fast, start the decay
+            if abs(self.velocity) > 2:
+                self._apply_momentum(self.velocity)
             return "break"
 
-        # Identify line index
+        # Selection logic (unchanged)
         index_str = self.text_area.index(f"@{event.x},{event.y}")
         line_index = int(index_str.split('.')[0]) - 1
-
         self.selection_set(line_index)
-
         if self.select_callback:
             self.select_callback(line_index)
-
         return "break"
+
+    def _apply_momentum(self, current_velocity):
+        """ Gradually decrease speed and scroll the view. """
+        # Friction: Every 10ms we reduce the speed (0.9 is 10% reduction)
+        friction = 0.92
+        new_velocity = current_velocity * friction
+
+        if abs(new_velocity) > 0.5:
+            height = self.text_area.winfo_height()
+            if height > 1:
+                # Move based on velocity
+                current_pos = self.text_area.yview()[0]
+                # Convert pixel velocity to scroll fraction
+                shift = new_velocity / height
+                self.text_area.yview_moveto(max(0, min(1, current_pos - shift)))
+
+                # Schedule the next frame
+                self.momentum_id = self.after(10, lambda: self._apply_momentum(new_velocity))
+        else:
+            self.momentum_id = None
 
     # --- Public API (Listbox Compatibility) ---
 
