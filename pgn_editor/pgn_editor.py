@@ -769,6 +769,268 @@ BOARD_THEMES = [
         "dark": "#696969"  # Dark gray (Sufficient contrast)
     }
 ]
+class TouchMoveListColor(tk.Frame):
+    """
+    A touch-friendly replacement for tk.Listbox using a tk.Text widget.
+    Supports syntax highlighting via tags and maintains compatibility
+    with insert/delete/selection methods.
+    """
+
+    def __init__(self, parent, move_pairs=None, select_callback=None, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.move_pairs = move_pairs if move_pairs else []
+        self.select_callback = select_callback
+        self.selected_index = None
+
+        # --- UI Setup ---
+        self.text_area = tk.Text(
+            self,
+            font=("Consolas", 14),
+            wrap=tk.NONE,
+            bg="white",
+            padx=10,
+            pady=10,
+            cursor="arrow",
+            highlightthickness=0,
+            bd=0,
+            state=tk.DISABLED
+        )
+        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.text_area.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_area.configure(yscrollcommand=self.scrollbar.set)
+
+        # Tags configuration
+        self.text_area.tag_configure("highlight", background="#cfe2f3")
+        self.text_area.tag_configure("move_num", foreground="#888888")
+        self.text_area.tag_configure("white_move", foreground="black", font=("Consolas", 14, "bold"))
+        self.text_area.tag_configure("variation", foreground="#0055ff")
+        self.text_area.tag_configure("comment", foreground="#008000")
+
+        # --- REVISED BINDINGS ---
+        # 1. Start drag
+        self.text_area.bind("<Button-1>", self._on_drag_start)
+        # 2. Handle motion (scrolling) - No lambda break here, handled in function
+        self.text_area.bind("<B1-Motion>", self._on_drag_motion)
+        # 3. Handle release (tap/select)
+        self.text_area.bind("<ButtonRelease-1>", self._on_tap)
+
+        # Disable shift-selection
+        self.text_area.bind("<Shift-Button-1>", lambda e: "break")
+
+        self.drag_start_y = 0
+        self.start_scroll_pos = 0
+        self.scrolled_too_far = False
+        self.last_y = 0
+        self.velocity = 0
+        self.momentum_id = None
+
+        # --- Configure Tags ---
+        # Selection highlight
+        self.text_area.tag_configure("highlight", background="#cfe2f3")
+
+        # Move number style
+        self.text_area.tag_configure("move_num",
+                                     foreground="gray",
+                                     font=("Consolas", 11)
+                                     )
+
+        # White move style (Light gray background)
+        self.text_area.tag_configure("white_move",
+                                     background="#eeeeee",
+                                     foreground="black",
+                                     font=("Consolas", 12, "bold")
+                                     )
+
+        # Black move style (Dark background, white text)
+        self.text_area.tag_configure("black_move",
+                                     background="#333333",
+                                     foreground="white",
+                                     font=("Consolas", 12, "bold")
+                                     )
+        self.text_area.tag_configure("line_grey", background="#f5f5f5")
+        # You can add more, like a subtle yellow for a 'last move' or 'threat' line
+        self.text_area.tag_configure("line_alert", background="#fff0f0")
+
+        if self.move_pairs:
+            self._populate()
+
+    def _populate(self):
+        """ Clears and fills the text area with initial move pairs. """
+        self.delete(0, tk.END)
+        for i, move in enumerate(self.move_pairs):
+            self.insert(tk.END, move)
+
+    def _on_click(self, event):
+        """ Records the start of a click/drag. """
+        self.drag_start_y = event.y
+        self.scrolled_too_far = False
+
+    def _on_drag_start(self, event):
+        """ Capture start and cancel any existing momentum. """
+        if self.momentum_id:
+            self.after_cancel(self.momentum_id)
+            self.momentum_id = None
+
+        self.drag_start_y = event.y
+        self.last_y = event.y
+        self.start_scroll_pos = self.text_area.yview()[0]
+        self.scrolled_too_far = False
+        self.velocity = 0
+        return "break"
+
+    def _on_drag_motion(self, event):
+        """ Calculate instantaneous velocity during movement. """
+        delta_y = event.y - self.drag_start_y
+
+        # Calculate velocity for momentum (pixels moved since last motion event)
+        self.velocity = event.y - self.last_y
+        self.last_y = event.y
+
+        if abs(delta_y) > 5:
+            self.scrolled_too_far = True
+
+        height = self.text_area.winfo_height()
+        if height > 1:
+            new_pos = self.start_scroll_pos - (delta_y / height)
+            self.text_area.yview_moveto(max(0, min(1, new_pos)))
+
+        return "break"
+
+    def _on_tap(self, event):
+        """ On release, either trigger selection or start momentum. """
+        if self.scrolled_too_far:
+            # If the user was moving fast, start the decay
+            if abs(self.velocity) > 2:
+                self._apply_momentum(self.velocity)
+            return "break"
+
+        # Selection logic (unchanged)
+        index_str = self.text_area.index(f"@{event.x},{event.y}")
+        line_index = int(index_str.split('.')[0]) - 1
+        self.selection_set(line_index)
+        if self.select_callback:
+            self.select_callback(line_index)
+        return "break"
+
+    def _apply_momentum(self, current_velocity):
+        """ Gradually decrease speed and scroll the view in the correct direction. """
+        # Friction: Every 10ms we reduce the speed
+        friction = 0.92
+        new_velocity = current_velocity * friction
+
+        if abs(new_velocity) > 0.5:
+            height = self.text_area.winfo_height()
+            if height > 1:
+                # Get current top position
+                current_pos = self.text_area.yview()[0]
+
+                # CORRECTION:
+                # If velocity is negative (swiping up), we want to ADD to current_pos
+                # to move the scrollbar down.
+                # If velocity is positive (swiping down), we want to SUBTRACT.
+                shift = new_velocity / height
+
+                # By subtracting a negative shift, we effectively add it.
+                new_scroll_pos = current_pos - shift
+
+                self.text_area.yview_moveto(max(0, min(1, new_scroll_pos)))
+
+                # Schedule the next frame
+                self.momentum_id = self.after(10, lambda: self._apply_momentum(new_velocity))
+        else:
+            self.momentum_id = None
+
+    # --- Public API (Listbox Compatibility) ---
+    def insert(self, index, move_text, tag_override=None):
+        """
+        Inserts PGN text.
+        If tag_override starts with 'line_', the whole line gets that background.
+        """
+        self.text_area.config(state=tk.NORMAL)
+
+        # Determine the starting position of this new line
+        start_index = self.text_area.index("end-1c")
+
+        pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}\[\]]+)|(\s+)')
+
+        # We still need to know if it's white or black for the move boxes
+        # If the override is a line tag, we assume white by default unless we check the text
+        is_white = "black" not in (tag_override or "").lower()
+
+        for match in pattern.finditer(str(move_text)):
+            move_num, variation, comment, move, whitespace = match.groups()
+
+            # Collect tags for this specific segment
+            tags = []
+            if tag_override and tag_override.startswith("line_"):
+                tags.append(tag_override)
+
+            if move_num:
+                tags.append("move_num")
+                self.text_area.insert(tk.END, move_num, tuple(tags))
+            elif variation:
+                tags.append("variation")
+                self.text_area.insert(tk.END, variation, tuple(tags))
+            elif comment:
+                tags.append("comment")
+                self.text_area.insert(tk.END, f"{comment} ", tuple(tags))
+            elif move:
+                # Add the specific move box tag
+                if "move" in tag_override:
+                    tags.append(tag_override)
+                self.text_area.insert(tk.END, f" {move} ", tuple(tags))
+            elif whitespace:
+                self.text_area.insert(tk.END, whitespace, tuple(tags))
+
+        # Apply the line tag to the trailing newline as well to avoid white gaps
+        end_index = self.text_area.index("end-1c")
+        if tag_override and tag_override.startswith("line_"):
+            self.text_area.insert(tk.END, "\n", tag_override)
+        else:
+            self.text_area.insert(tk.END, "\n")
+
+        self.text_area.config(state=tk.DISABLED)
+
+    def delete(self, first, last=None):
+        """ Deletes lines from the text area. """
+        self.text_area.config(state=tk.NORMAL)
+        if first == 0 and (last == tk.END or last is None):
+            self.text_area.delete("1.0", tk.END)
+        else:
+            start = f"{first + 1}.0"
+            end = f"{last + 1}.0" if last else f"{first + 2}.0"
+            self.text_area.delete(start, end)
+        self.text_area.config(state=tk.DISABLED)
+
+    def selection_set(self, index):
+        """ Highlights the specified line. """
+        self.selection_clear()
+        self.selected_index = index
+
+        start = f"{index + 1}.0"
+        end = f"{index + 1}.end + 1c"
+        self.text_area.tag_add("highlight", start, end)
+        self.see(index)
+
+    def selection_clear(self, first=None, last=None):
+        """ Removes highlighting from all lines. """
+        self.text_area.tag_remove("highlight", "1.0", tk.END)
+        self.selected_index = None
+
+    def see(self, index):
+        """ Scrolls the text area to the given line index. """
+        self.text_area.see(f"{index + 1}.0")
+
+    def size(self):
+        """ Returns the number of lines. """
+        return int(self.text_area.index('end-1c').split('.')[0])
+
+    def get(self, index):
+        """ Returns the text of the line at the given index. """
+        return self.text_area.get(f"{index + 1}.0", f"{index + 1}.end")
 
 class GameChooserDialog(tk.Toplevel):
     """
@@ -2013,53 +2275,15 @@ class ChessAnnotatorApp:
         )
         self.move_list_label.pack(side=tk.LEFT, padx=(5, 0))
 
-        # 1. Create the Canvas (the viewport)
-        # Ensure the Canvas fills the space previously occupied by the Listbox
-        self.moves_canvas = tk.Canvas(moves_frame, borderwidth=0, highlightthickness=0)
-        self.moves_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # The callback 'self._on_move_selected' will be created in the next step
+        self.move_list_widget = TouchMoveListColor(moves_frame, select_callback=self._on_move_selected)
+        self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 2. Create the Scrollbar and link it to the Canvas
-        scrollbar = tk.Scrollbar(moves_frame, orient=tk.VERTICAL, command=self.moves_canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.moves_canvas.config(yscrollcommand=scrollbar.set)
-
-
-        # 3. Create a frame INSIDE the canvas for the moves
-        self.inner_moves_frame = tk.Frame(self.moves_canvas)
-
-        # Place the frame inside the canvas, and STORE the id
-        self.canvas_window_id = self.moves_canvas.create_window(
-            (0, 0),
-            window=self.inner_moves_frame,
-            anchor="nw"
-        )
-
-        # The inner_frame grabs the whole width
-        def on_canvas_configure(event):
-            self.moves_canvas.itemconfig(self.canvas_window_id, width=event.width)
-
-        self.moves_canvas.bind('<Configure>', on_canvas_configure)
-
-        # the scrollregion will be notified if moves will be added
-        def on_frame_configure(event):
-            self.moves_canvas.configure(scrollregion=self.moves_canvas.bbox("all"))
-
-        self.inner_moves_frame.bind('<Configure>', on_frame_configure)
-
-        # 4. Remove the Listbox and place a Frame for the Labels
-        # We no longer need self.move_listbox as a widget; we now use the inner_frame.
-        # HOWEVER, for compatibility with your other code, we could point self.move_listbox to a dummy.
-        # BUT: We need to select the labels. We will store the labels in a list.
-        self.move_labels = []  # New list to store the label widgets
-
-        # 5. Attach the Inner Frame to the Canvas
-        self.canvas_window_id = self.moves_canvas.create_window(
-            (0, 0),
-            window=self.inner_moves_frame,
-            anchor="nw",
-            tags="inner_frame"
-        )
-
+    def _on_move_selected(self, index):
+        """ Callback for the TouchMoveListColor widget. """
+        if self.current_move_index != index:
+            self.current_move_index = index
+            self.update_state()  # Updates your board and logic
 
     def show_clear_variation_button(self):
         """
@@ -2080,168 +2304,53 @@ class ChessAnnotatorApp:
 
     def _populate_move_listbox(self):
         """
-        Fills the Listbox with all moves, including any commentaries and variation indicators.
+        Refactored to use the TouchMoveListColor widget.
         """
-        # 1. Empty the Inner Frame
-        for widget in self.inner_moves_frame.winfo_children():
-            widget.destroy()
-        self.move_labels.clear()
+        # Clear the existing list
+        self.move_list_widget.delete(0, tk.END)
+
         if not self.game:
             return
 
-
         for i, node in enumerate(self.move_list):
-
-            # The board *before* the move
             prev_board = node.parent.board()
-
-            # Calculate Notation Prefix
             move_num = (i // 2) + 1
+
+            # Build the string for the Regex to parse
             if prev_board.turn == chess.WHITE:
                 prefix = f"{move_num}. "
             else:
-                # This logic is complex, simpler to just use spaces if not the first move of black
-                prefix = f"{move_num}... " if prev_board.turn == chess.BLACK and (i == 0 or self.move_list[i-1].parent.board().turn == chess.WHITE) else "    "
+                # Check if we need '...' for black's first move in a list
+                if i == 0 or self.move_list[i - 1].parent.board().turn == chess.WHITE:
+                    prefix = f"{move_num}... "
+                else:
+                    prefix = "    "  # Space for alignment
 
-            # Generate the notation (SAN)
-            try:
-                san_move = prev_board.san(node.move)
-            except:
-                 san_move = node.move.uci() # Fallback
+            san_move = prev_board.san(node.move)
 
-            # Add commentary if present
-            comment_text = f" ({node.comment.strip()})" if node.comment and node.comment.strip() else ""
+            # Format comments for our Regex: {Comment}
+            comment_text = f" {{{node.comment.strip()}}}" if node.comment and node.comment.strip() else ""
 
-            # Variation indicator
-            variation_indicator = f" [+ {len(node.variations)-1} V]" if len(node.variations) > 1 else ""
+            # Variation indicators (can be colored as variations using parentheses)
+            variation_text = f" ({len(node.variations) - 1})" if len(node.variations) > 1 else ""
 
-            list_item = f"{prefix}{san_move}{comment_text}{variation_indicator}"
-            #self.move_listbox.insert(tk.END, list_item)
-            # create and bind Label
-            label = ttk.Label(
-                self.inner_moves_frame,
-                text=list_item,
-                font=('Consolas', 10),
-                anchor='w',
-                padding=(5, 2), # Voeg wat padding toe
-                background='white', # Standaard kleur
-                cursor='hand2'
-            )
-            label.pack(fill=tk.X, pady=0)
+            full_line = f"{prefix}{san_move}{variation_text}{comment_text}"
 
-            # Store the index in the Label-object for selection
-            label.list_index = i
+            # Insert into the new widget - it handles the tags/colors!
+            # Determine the tag based on whose turn it was
+            current_tag = "" if prev_board.turn == chess.WHITE else "line_grey"
 
-            # Bind Touch-events for scrolling
-            label.bind("<ButtonPress-1>", self._start_scroll)
-            label.bind("<B1-Motion>", self._do_scroll)
-            label.bind("<ButtonRelease-1>", self._on_release_or_select)
-
-            self.move_labels.append(label) # Sla het label op
-        self._update_scroll_region()
-
-    def _start_scroll(self, event):
-        """Registers the absolute starting position of the click."""
-        self._start_y = event.y_root
-        self._is_dragging = False
-        self.moves_canvas.focus_set()
-        return "break"
-
-    def _do_scroll(self, event):
-        """Calculates the delta and shifts the Canvas content."""
-        MIN_DRAG_DISTANCE = 5
-
-        # 1. Start Drag Check
-        if not self._is_dragging:
-            if abs(event.y_root - self._start_y) > MIN_DRAG_DISTANCE:
-                self._is_dragging = True
-                self._last_y = event.y_root  # Initialize _last_y with absolute Y
-            else:
-                return
-
-        # 2. Scroll with delta (y_root ensures coordinate independence)
-        delta = self._last_y - event.y_root
-        self.moves_canvas.yview_scroll(int(delta / 4), "units")
-        self._last_y = event.y_root
-
-        # 3. Cancel selection
-        # self.move_listbox.selection_clear(0, tk.END) # Important: clear selection during scroll
-
-        return "break"
-
-    def _on_canvas_configure(self, event):
-        """Adjusts the width of the inner frame and updates the scrollregion."""
-
-        self.moves_canvas.update_idletasks()
-
-        # 1. Force the Inner Frame to match the WIDTH of the Canvas (NOT HEIGHT!)
-        self.moves_canvas.itemconfig(self.canvas_window_id, width=event.width)
-
-        # 2. Update the scrollregion
-        self._update_scroll_region()  # Call the helper function
-
-    def _update_scroll_region(self):
-        """Helper to set the scrollregion (crucial for scrolling)."""
-
-        self.moves_canvas.update_idletasks()
-        bbox = self.moves_canvas.bbox("all")
-
-        if bbox:
-            canvas_height = self.moves_canvas.winfo_height()
-
-            if bbox[3] > canvas_height:
-                # Content is longer than viewport: allow scrolling
-                self.moves_canvas.config(scrollregion=bbox)
-            else:
-                # Content is shorter than viewport: disable scrolling
-                self.moves_canvas.config(scrollregion=(0, 0, bbox[2], canvas_height))
-
-    def _on_release_or_select(self, event):
-        """Handles selection by changing the Label color."""
-
-        if self._is_dragging:
-            self._is_dragging = False
-            return
-
-        # First, clear all previous selections (reset all labels to white)
-        for lbl in self.move_labels:
-            lbl.config(background='white')
-
-        # Find which label was clicked
-        widget_clicked = event.widget
-
-        # Check if the clicked widget is a label that we created
-        if isinstance(widget_clicked, ttk.Label) and hasattr(widget_clicked, 'list_index'):
-            index = widget_clicked.list_index
-
-            # Visually set the selection
-            widget_clicked.config(background='#0078D7', foreground='white')  # Blue for selection
-
-            # Call your update logic (replace this with your ChessAnnotator logic)
-            if self.current_move_index != index:
-                self.current_move_index = index
-                self.update_state()  # Your function to update the board
-
-        self._is_dragging = False
+            # The widget's insert method now uses this tag to color the move
+            self.move_list_widget.insert(tk.END, full_line, tag_override=current_tag)
 
     def update_move_listbox_selection(self):
         """
-        Synchronizes the Label selection with the current move index.
+        Synchronizes the widget selection with the current move index.
         """
-
-        # Clear all selections
-        for lbl in self.move_labels:
-            lbl.config(background='white', foreground='black')
-
-        if 0 <= self.current_move_index < len(self.move_labels):
-            # Select the target label
-            target_label = self.move_labels[self.current_move_index]
-            target_label.config(background='#0078D7', foreground='white')
-
-            # Scroll to the item in the Canvas
-            # This is the Canvas-specific way to scroll to an item
-            target_label.update_idletasks()
-            self.moves_canvas.yview_moveto
+        if 0 <= self.current_move_index < self.move_list_widget.size():
+            self.move_list_widget.selection_set(self.current_move_index)
+        else:
+            self.move_list_widget.selection_clear()
 
 
     def _get_board_at_index(self, index):
@@ -2367,61 +2476,6 @@ class ChessAnnotatorApp:
         # The game root node can also have a comment
         comment = node.comment.strip() if node and node.comment and node.comment.strip() else "—"
         self.set_comment_text(comment)
-
-    def update_move_listbox_selection(self):
-        """
-        Synchronizes the selection in the Listbox.
-        """
-        # Reset all labels to default colors
-        for lbl in self.move_labels:
-            lbl.config(background='white', foreground='black')
-
-        if 0 <= self.current_move_index < len(self.move_labels):
-
-            # The index is valid: perform selection
-            target_label = self.move_labels[self.current_move_index]
-
-            # 1. SELECT THE ITEM (visually)
-            # Set the selected colors
-            target_label.config(background='#0078D7', foreground='white')
-
-            # 2. SCROLL TO THE ITEM (simulates .see() functionality)
-
-            # First: ensure the widget is fully rendered to determine its Y-position
-            target_label.update_idletasks()
-
-            # Get the absolute Y-position of the top of the label within the Canvas
-            label_y_position = target_label.winfo_y()
-
-            # Calculate the scroll fraction needed to position this point.
-            # We scroll so that the label appears in the center of the viewport for better visibility.
-
-            canvas_height = self.moves_canvas.winfo_height()
-            label_height = target_label.winfo_height()
-
-            # Determine the target Y-position in the Canvas view:
-            # We aim to place the center of the label in the center of the canvas
-            target_y = label_y_position - (canvas_height / 2) + (label_height / 2)
-
-            # Ensure the target position is not negative
-            if target_y < 0:
-                target_y = 0
-
-            # Retrieve the maximum scrollable height (bbox[3])
-            self.moves_canvas.update_idletasks()
-            bbox = self.moves_canvas.bbox("all")
-            if bbox:
-                max_scroll_height = bbox[3]
-
-                # Ensure the target does not exceed the bottom of the content
-                if target_y > (max_scroll_height - canvas_height):
-                    target_y = max_scroll_height - canvas_height
-
-                # Perform the scroll: yview_moveto requires a fraction (0.0 to 1.0)
-                scroll_fraction = target_y / max_scroll_height
-                self.moves_canvas.yview_moveto(scroll_fraction)
-
-        # Optional: If index is -1 (starting position), ensure we
 
     def update_listbox_item(self, index):
         """
