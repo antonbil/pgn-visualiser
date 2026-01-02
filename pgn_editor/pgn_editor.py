@@ -2378,7 +2378,7 @@ class ChessAnnotatorApp:
                     prefix = "    "  # Space for alignment
 
             san_move = prev_board.san(node.move)
-            new_comment = node.comment.strip().replace("\n"," ")[:6]+node.comment.strip()[6:60].replace(" ","\u00A0")
+            new_comment = node.comment.strip().replace('\n', ' ')[:6]+node.comment.strip()[6:40].replace(" ","\u00A0")
             # Format comments for our Regex: {Comment}
             comment_text = f"{{{new_comment}}}" if node.comment and node.comment.strip() else ""
 
