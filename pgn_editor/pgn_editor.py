@@ -851,15 +851,15 @@ class TouchMoveListColor(tk.Frame):
 
         # White move style (Light gray background)
         self.text_area.tag_configure("white_move",
-                                     # background="#eeeeee",
-                                     # foreground="black",
+                                     background="#eeeeee",
+                                     foreground="black",
                                      font=("Consolas", 12, "bold")
                                      )
 
         # Black move style (Dark background, white text)
         self.text_area.tag_configure("black_move",
-                                     # background="#333333",
-                                     # foreground="white",
+                                     background="#333333",
+                                     foreground="white",
                                      font=("Consolas", 12, "bold")
                                      )
         self.text_area.tag_configure("line_grey", background="#f5f5f5")
@@ -959,74 +959,54 @@ class TouchMoveListColor(tk.Frame):
             self.momentum_id = None
 
     # --- Public API (Listbox Compatibility) ---
-    def insert(self, index, move_text, tag_override=None):
+    def insert(self, index, move_text, tag_override=""):
+        """
+        Inserts PGN text.
+        If tag_override starts with 'line_', the whole line gets that background.
+        """
         self.text_area.config(state=tk.NORMAL)
 
-        # The regex pattern: 1.Num 2.(Var) 3.{Comment} 4.Move 5.Spaces
+        # Determine the starting position of this new line
+        start_index = self.text_area.index("end-1c")
+
         pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}\[\]]+)|(\s+)')
 
-        line_tag = tag_override if tag_override and tag_override.startswith("line_") else None
+        # We still need to know if it's white or black for the move boxes
+        # If the override is a line tag, we assume white by default unless we check the text
         is_white = "black" not in (tag_override or "").lower()
-
-        # We use this to prevent double spaces but ensure separation
-        needs_space = False
 
         for match in pattern.finditer(str(move_text)):
             move_num, variation, comment, move, whitespace = match.groups()
 
-            # Build current tag list for this specific segment
-            current_tags = []
-            if line_tag:
-                current_tags.append(line_tag)
+            # Collect tags for this specific segment
+            tags = []
+            if tag_override and tag_override.startswith("line_"):
+                tags.append(tag_override)
 
-            # 1. Handle spaces needed between elements
-            if needs_space and not whitespace:
-                self.text_area.insert(tk.END, " ", line_tag)
-                needs_space = False
-
-            # 2. Process each match group
             if move_num:
-                tags = tuple(current_tags + ["move_num"])
-                self.text_area.insert(tk.END, move_num.strip(), tags)
-                needs_space = True
-
+                tags.append("move_num")
+                self.text_area.insert(tk.END, move_num, tuple(tags))
             elif variation:
-                tags = tuple(current_tags + ["variation"])
-                self.text_area.insert(tk.END, variation, tags)
-                needs_space = True
-
+                tags.append("variation")
+                self.text_area.insert(tk.END, variation, tuple(tags))
             elif comment:
-                tags = tuple(current_tags + ["comment"])
-                # Translation and length rule
-                # As per your instructions, we'd translate here.
-                # Example: 'Loper' becomes 'Bishop'
-                clean_comment = comment.strip()
-                if is_white and len(clean_comment) > 6:
-                    display_text = "{1}"
-                else:
-                    display_text = clean_comment
-
-                self.text_area.insert(tk.END, display_text, tags)
-                needs_space = True
-
+                tags.append("comment")
+                self.text_area.insert(tk.END, f"{comment} ", tuple(tags))
             elif move:
-                move_tag = "white_move" if is_white else "black_move"
-                tags = tuple(current_tags + [move_tag])
-                self.text_area.insert(tk.END, move, tags)
-                needs_space = True
-
+                # Add the specific move box tag
+                if "move" in tag_override:
+                    tags.append(tag_override)
+                self.text_area.insert(tk.END, f" {move} ", tuple(tags))
             elif whitespace:
-                # If the source text has spaces, we insert exactly one space with the line_tag
-                # This ensures the background remains solid
-                self.text_area.insert(tk.END, " ", line_tag)
-                needs_space = False
+                self.text_area.insert(tk.END, whitespace, tuple(tags))
 
-        # Finalize the line with the background tag reaching the end
-        self.text_area.insert(tk.END, "\n", line_tag)
-        self.text_area.config(state=tk.DISABLED)
+        # Apply the line tag to the trailing newline as well to avoid white gaps
+        end_index = self.text_area.index("end-1c")
+        if tag_override and tag_override.startswith("line_"):
+            self.text_area.insert(tk.END, "\n", tag_override)
+        else:
+            self.text_area.insert(tk.END, "\n")
 
-        # Close the line with the line_tag to ensure the background reaches the end of the widget
-        self.text_area.insert(tk.END, "\n", line_tag)
         self.text_area.config(state=tk.DISABLED)
 
     def delete(self, first, last=None):
@@ -2400,10 +2380,10 @@ class ChessAnnotatorApp:
             san_move = prev_board.san(node.move)
             new_comment = node.comment.strip()[:6]+node.comment.strip()[6:36].replace(" ","\u00A0")
             # Format comments for our Regex: {Comment}
-            comment_text = f" {{{new_comment}}}" if node.comment and node.comment.strip() else ""
+            comment_text = f"{{{new_comment}}}" if node.comment and node.comment.strip() else ""
 
             # Variation indicators (can be colored as variations using parentheses)
-            variation_text = f" ({len(node.variations) - 1})" if len(node.variations) > 1 else ""
+            variation_text = f"({len(node.variations) - 1})" if len(node.variations) > 1 else ""
 
             full_line = f"{prefix}{san_move}{variation_text}{comment_text}"
 
