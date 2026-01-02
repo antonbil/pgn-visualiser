@@ -806,7 +806,8 @@ class TouchMoveListColor(tk.Frame):
             selectbackground=self.text_area.cget("bg"),  # Maak selectie zelfde kleur als achtergrond
             selectforeground=self.text_area.cget("fg"),  # Maak tekstkleur hetzelfde
             exportselection=False,  # Voorkom dat andere apps de selectie zien
-            inactiveselectbackground=self.text_area.cget("bg")
+            inactiveselectbackground=self.text_area.cget("bg"),
+            spacing1=2, spacing2=0, spacing3=2
         )
 
         # Tags configuration
@@ -850,15 +851,15 @@ class TouchMoveListColor(tk.Frame):
 
         # White move style (Light gray background)
         self.text_area.tag_configure("white_move",
-                                     background="#eeeeee",
-                                     foreground="black",
+                                     # background="#eeeeee",
+                                     # foreground="black",
                                      font=("Consolas", 12, "bold")
                                      )
 
         # Black move style (Dark background, white text)
         self.text_area.tag_configure("black_move",
-                                     background="#333333",
-                                     foreground="white",
+                                     # background="#333333",
+                                     # foreground="white",
                                      font=("Consolas", 12, "bold")
                                      )
         self.text_area.tag_configure("line_grey", background="#f5f5f5")
@@ -958,54 +959,55 @@ class TouchMoveListColor(tk.Frame):
             self.momentum_id = None
 
     # --- Public API (Listbox Compatibility) ---
-    def insert(self, index, move_text, tag_override=""):
-        """
-        Inserts PGN text.
-        If tag_override starts with 'line_', the whole line gets that background.
-        """
+    def insert(self, index, move_text, tag_override=None):
         self.text_area.config(state=tk.NORMAL)
-
-        # Determine the starting position of this new line
-        start_index = self.text_area.index("end-1c")
 
         pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}\[\]]+)|(\s+)')
 
-        # We still need to know if it's white or black for the move boxes
-        # If the override is a line tag, we assume white by default unless we check the text
+        # Check if the override is a line-wide background
+        line_tag = tag_override if tag_override and tag_override.startswith("line_") else None
+
+        # Determine move color logic
         is_white = "black" not in (tag_override or "").lower()
+
+        first_item = True
 
         for match in pattern.finditer(str(move_text)):
             move_num, variation, comment, move, whitespace = match.groups()
 
-            # Collect tags for this specific segment
-            tags = []
-            if tag_override and tag_override.startswith("line_"):
-                tags.append(tag_override)
+            # Insert exactly one space between elements
+            if not first_item and not whitespace:
+                # IMPORTANT: The space MUST have the line_tag to avoid white gaps
+                self.text_area.insert(tk.END, " ", line_tag)
+
+            # Build the list of tags for this segment
+            current_tags = []
+            if line_tag:
+                current_tags.append(line_tag)
 
             if move_num:
-                tags.append("move_num")
-                self.text_area.insert(tk.END, move_num, tuple(tags))
+                current_tags.append("move_num")
+                self.text_area.insert(tk.END, move_num.strip(), tuple(current_tags))
+                first_item = False
             elif variation:
-                tags.append("variation")
-                self.text_area.insert(tk.END, variation, tuple(tags))
+                current_tags.append("variation")
+                self.text_area.insert(tk.END, variation, tuple(current_tags))
+                first_item = False
             elif comment:
-                tags.append("comment")
-                self.text_area.insert(tk.END, f"{comment} ", tuple(tags))
+                current_tags.append("comment")
+                # Logic for white comments > 6 chars as per your rules
+                display_comment = "{1}" if is_white and len(comment) > 6 else comment
+                self.text_area.insert(tk.END, display_comment, tuple(current_tags))
+                first_item = False
             elif move:
-                # Add the specific move box tag
-                if "move" in tag_override:
-                    tags.append(tag_override)
-                self.text_area.insert(tk.END, f" {move} ", tuple(tags))
-            elif whitespace:
-                self.text_area.insert(tk.END, whitespace, tuple(tags))
+                move_tag = "white_move" if is_white else "black_move"
+                current_tags.append(move_tag)
+                # Insert move. Note: spaces around the move are now handled by the separator logic
+                self.text_area.insert(tk.END, move, tuple(current_tags))
+                first_item = False
 
-        # Apply the line tag to the trailing newline as well to avoid white gaps
-        end_index = self.text_area.index("end-1c")
-        if tag_override and tag_override.startswith("line_"):
-            self.text_area.insert(tk.END, "\n", tag_override)
-        else:
-            self.text_area.insert(tk.END, "\n")
-
+        # Close the line with the line_tag to ensure the background reaches the end of the widget
+        self.text_area.insert(tk.END, "\n", line_tag)
         self.text_area.config(state=tk.DISABLED)
 
     def delete(self, first, last=None):
