@@ -2010,12 +2010,10 @@ class ChessAnnotatorApp:
         """
         Saves all games in self.all_games to a PGN file, preserving order.
         """
-        print("0")
         # Check if the list exists and is not empty
         if not hasattr(self, 'all_games') or not self.all_games:
             messagebox.showwarning("Save Failed", "No games in the database to save.", parent=self.master)
             return
-        print("1")
 
         try:
                 # Important: Ensure the current active game in the UI is updated

@@ -213,14 +213,14 @@ def _format_pgn_history(move_list):
             # Start of White's move: New line or add White's move
             if current_line:
                 output.append(current_line.strip())
-            current_line = f"{move_number}. {move_san}"
+            current_line = f"{move_number}.{move_san}"
         else:  # player == chess.BLACK
             if i == 0 and starts_with_black:
                 # First move is Black: "Move number..."
-                current_line = f"{move_number}. ... {move_san}"
+                current_line = f"{move_number}.\u00A0...{move_san}"
             else:
                 # Add Black's move
-                current_line += f" {move_san}".replace('\n',  ' ')
+                current_line += f"{move_san}".replace('\n',  ' ')
 
         # --- 3. Add Variations (these are stored separately) ---
         if move.get('variations'):
@@ -1519,6 +1519,7 @@ class ChessEventViewer:
             #self._move_selected_wrapper  # see wrapper below
         )
         self.move_listboxes.append(self.touch_move_list)
+        self.touch_move_list.set_font_size(12)
 
         # 2. Place it in the grid (replacing the old listbox and scrollbar code)
         self.touch_move_list.grid(row=0, column=0, columnspan=2, sticky='nsew')
