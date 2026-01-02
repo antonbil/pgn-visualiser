@@ -2377,9 +2377,9 @@ class ChessAnnotatorApp:
                     prefix = "    "  # Space for alignment
 
             san_move = prev_board.san(node.move)
-
+            new_comment = node.comment.strip()[:6]+node.comment.strip()[6:36].replace(" ","\u00A0")
             # Format comments for our Regex: {Comment}
-            comment_text = f" {{{node.comment.strip()[:6]+node.comment.strip()[6:36].replace(" ","\u00A0")}}}" if node.comment and node.comment.strip() else ""
+            comment_text = f" {{{new_comment}}}" if node.comment and node.comment.strip() else ""
 
             # Variation indicators (can be colored as variations using parentheses)
             variation_text = f" ({len(node.variations) - 1})" if len(node.variations) > 1 else ""
