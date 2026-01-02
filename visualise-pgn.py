@@ -427,12 +427,11 @@ class PieceImageManager:
 
         return self.mini_cache[cache_key]
 
-
 class ChessMiniature(tk.Canvas):
     """
     A miniature chess board that:
-    1. Toggles between start/end of a variation on a short tap.
-    2. Shows a large 'Zoom' popup on a long press (hold).
+    1. Navigation: Click LEFT to go back, RIGHT to go forward through a variation.
+    2. Long Press: Shows a large 'Zoom' popup window.
     """
 
     def __init__(self, master, image_manager, size=300, color_light="#f0d9b5", color_dark="#b58863", **kwargs):
@@ -444,129 +443,146 @@ class ChessMiniature(tk.Canvas):
         self.image_manager = image_manager
 
         # --- State Management ---
-        self.start_board = None
-        self.end_board = None
-        self.showing_end = True
+        self.base_board = None  # The starting position before the variation begins
+        self.current_board = None  # The position currently rendered on screen
+        self.moves = []  # List of moves in the variation
+        self.current_index = 0  # Current step in the move list
 
         # --- Long Press & Zoom Logic ---
-        self.long_press_ms = 500  # Threshold for long press
-        self.after_id = None  # ID of the pending timer
+        self.long_press_ms = 500  # Threshold for long press in milliseconds
+        self.after_id = None  # Timer ID for long press detection
         self.is_long_press = False  # Flag to distinguish tap from hold
         self.zoom_win = None  # Reference to the popup window
 
-        # Bind touch/mouse events
+        # Bind touch and mouse events
         self.bind("<Button-1>", self._on_button_down)
         self.bind("<ButtonRelease-1>", self._on_button_up)
 
     def draw_from_node(self, node):
         """
-        Calculates the start and end of a variation and renders the end position.
+        Initializes the variation data from a PGN node.
+        Starts the view at the BEGINNING of the variation.
         """
-        # Store initial state at this node
-        self.start_board = node.board()
+        self.base_board = node.board()
+        self.moves = []
 
-        # Traverse to the end of the main variation
-        temp_board = node.board()
+        # Traverse and collect all moves in the main variation of this node
         current = node
         while current.variations:
             current = current.variation(0)
-            temp_board.push(current.move)
+            self.moves.append(current.move)
 
-        self.end_board = temp_board
-        self.showing_end = True
-        self.draw_board()
+        # Set index to 0 to start at the position BEFORE the first move
+        self.current_index = 0
+        self._update_current_board()
+
 
     def _on_button_down(self, event):
         """
-        Starts the timer when the user touches the board.
-        Resets the long_press flag.
+        Starts the long-press timer.
         """
         self.is_long_press = False
-        # Schedule the zoom popup after 500ms
         self.after_id = self.after(self.long_press_ms, self._trigger_long_press)
 
     def _trigger_long_press(self):
         """
-        Called after 500ms of holding.
-        Sets the flag and opens the window.
+        Triggered if the button is held longer than long_press_ms.
         """
         self.is_long_press = True
         self._show_zoom()
 
     def _on_button_up(self, event):
-        """
-        Handles the end of the touch/click.
-        Only toggles if it was NOT a long press.
-        """
-        # Cancel the timer if the finger is lifted before it expires
+        """ Handles click release on the main miniature. """
         if self.after_id:
             self.after_cancel(self.after_id)
             self.after_id = None
 
-        # IMPORTANT: Only toggle if the long-press event was never triggered
         if not self.is_long_press:
-            self._toggle_position()
+            # Use the shared navigation handler
+            self._handle_nav_click(event.x, self.size)
 
-        # Reset the flag for the next interaction
         self.is_long_press = False
 
-    def _toggle_position(self):
-        """ Switches between the start and end board positions. """
-        if self.start_board and self.end_board:
-            self.showing_end = not self.showing_end
-            self.draw_board()
+    def _handle_nav_click(self, x_coord, current_width):
+        """ Logic to step back/forward and update all active views. """
+        if x_coord < (current_width / 2):
+            self._step_backward()
+        else:
+            self._step_forward()
+
+    def _update_current_board(self):
+        """ Reconstructs the board and updates all visible canvassen. """
+        board = self.base_board.copy()
+        for i in range(self.current_index):
+            board.push(self.moves[i])
+
+        self.current_board = board
+
+        # 1. Update the miniature
+        self.draw_board()
+
+        # 2. Update the zoom canvas if it exists
+        if hasattr(self, 'zoom_canvas') and self.zoom_canvas and self.zoom_canvas.winfo_exists():
+            zoom_size = int(self.zoom_canvas.cget("width"))
+            self._render_board_to_canvas(self.zoom_canvas, self.current_board, zoom_size)
+
+    def _step_forward(self):
+        """ Steps one move forward in the variation stack. """
+        if self.current_index < len(self.moves):
+            self.current_index += 1
+            self._update_current_board()
+
+    def _step_backward(self):
+        """ Steps one move backward in the variation stack. """
+        if self.current_index > 0:
+            self.current_index -= 1
+            self._update_current_board()
+
+    def draw_board(self):
+        """ Renders the current position on the main miniature canvas. """
+        if self.current_board:
+            self._render_board_to_canvas(self, self.current_board, self.size)
 
     def _show_zoom(self):
-        """ Opens a separate persistent window with a close button. """
-        # Ensure we don't open multiple windows
-        # Check if the window already exists and is valid
+        """ Opens a large preview window that also supports navigation. """
         if self.zoom_win is not None and self.zoom_win.winfo_exists():
-            # Bring the existing window to the front
             self.zoom_win.lift()
-            # Optionally force focus so it grabs user attention
-            self.zoom_win.focus_force()
-            # If it was minimized, deiconify it
-            self.zoom_win.deiconify()
             return
-        # 1. Setup the Toplevel window
+
         self.zoom_win = tk.Toplevel(self)
         self.zoom_win.title("Variation Preview")
-        self.zoom_win.attributes("-topmost", True) # Keep on top
+        self.zoom_win.attributes("-topmost", True)
 
-        # 2. Main Container
         main_frame = tk.Frame(self.zoom_win, padx=10, pady=10)
         main_frame.pack()
 
-        # 3. Large Canvas
-        zoom_size = 650
-        zoom_canvas = tk.Canvas(main_frame, width=zoom_size, height=zoom_size, highlightthickness=1)
-        zoom_canvas.pack(pady=(0, 10))
+        zoom_size = 600
+        # We store the canvas as an attribute so we can update it from other methods
+        self.zoom_canvas = tk.Canvas(main_frame, width=zoom_size, height=zoom_size, highlightthickness=1)
+        self.zoom_canvas.pack(pady=(0, 10))
 
-        # 4. Close Button
-        close_btn = tk.Button(main_frame, text="Close Preview", command=self.zoom_win.destroy,
+        # Bind the same navigation logic to the zoom canvas
+        # Note: We use a lambda to pass the zoom_size so the coordinate check works
+        self.zoom_canvas.bind("<ButtonRelease-1>",
+                              lambda e: self._handle_nav_click(e.x, zoom_size))
+
+        close_btn = tk.Button(main_frame, text="Close Preview", command=self._on_close_zoom,
                               font=("Arial", 10, "bold"), bg="#f44336", fg="white",
                               padx=20, pady=5)
         close_btn.pack(fill=tk.X)
 
-        # 5. Render board
-        current_board = self.end_board if self.showing_end else self.start_board
-        self._render_board_to_canvas(zoom_canvas, current_board, zoom_size)
+        self._update_current_board()
 
-    def _close_zoom(self):
-        """ Destroys the zoom popup. """
-        if self.zoom_window:
-            self.zoom_window.destroy()
-            self.zoom_window = None
-
-    def draw_board(self):
-        """ Renders the current position on the main miniature canvas. """
-        board = self.end_board if self.showing_end else self.start_board
-        if board:
-            self._render_board_to_canvas(self, board, self.size)
+    def _on_close_zoom(self):
+        """ Cleans up the reference when closing. """
+        if self.zoom_win:
+            self.zoom_win.destroy()
+            self.zoom_win = None
+            self.zoom_canvas = None
 
     def _render_board_to_canvas(self, target_canvas, board, board_size):
         """
-        Generic rendering method used for both miniature and zoom popup.
+        Core rendering logic used by both the main canvas and the zoom popup.
         """
         target_canvas.delete("all")
         sq_size = board_size // 8
@@ -575,6 +591,7 @@ class ChessMiniature(tk.Canvas):
         for square in chess.SQUARES:
             rank = chess.square_rank(square)
             file = chess.square_file(square)
+            # Standard coordinates: (0,0) is top-left, so flip the rank
             x1, y1 = file * sq_size, (7 - rank) * sq_size
 
             color = self.color_light if (rank + file) % 2 != 0 else self.color_dark
@@ -586,12 +603,10 @@ class ChessMiniature(tk.Canvas):
             cx = (file * sq_size) + (sq_size // 2)
             cy = ((7 - rank) * sq_size) + (sq_size // 2)
 
-            # Get image from manager (resized by the manager)
+            # Retrieve the appropriate image from the manager
             img = self.image_manager.get_miniature_image(piece.symbol(), sq_size)
             if img:
                 target_canvas.create_image(cx, cy, image=img)
-
-        #target_canvas.update_idletasks()
 
 class TouchMoveList(tk.Frame):
     """
