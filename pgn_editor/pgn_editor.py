@@ -962,49 +962,68 @@ class TouchMoveListColor(tk.Frame):
     def insert(self, index, move_text, tag_override=None):
         self.text_area.config(state=tk.NORMAL)
 
+        # The regex pattern: 1.Num 2.(Var) 3.{Comment} 4.Move 5.Spaces
         pattern = re.compile(r'(\d+\.+\s?)|(\(.+?\))|(\{.+?\})|([^\s(){}\[\]]+)|(\s+)')
 
-        # Check if the override is a line-wide background
         line_tag = tag_override if tag_override and tag_override.startswith("line_") else None
-
-        # Determine move color logic
         is_white = "black" not in (tag_override or "").lower()
 
-        first_item = True
+        # We use this to prevent double spaces but ensure separation
+        needs_space = False
 
         for match in pattern.finditer(str(move_text)):
             move_num, variation, comment, move, whitespace = match.groups()
 
-            # Insert exactly one space between elements
-            if not first_item and not whitespace:
-                # IMPORTANT: The space MUST have the line_tag to avoid white gaps
-                self.text_area.insert(tk.END, " ", line_tag)
-
-            # Build the list of tags for this segment
+            # Build current tag list for this specific segment
             current_tags = []
             if line_tag:
                 current_tags.append(line_tag)
 
+            # 1. Handle spaces needed between elements
+            if needs_space and not whitespace:
+                self.text_area.insert(tk.END, " ", line_tag)
+                needs_space = False
+
+            # 2. Process each match group
             if move_num:
-                current_tags.append("move_num")
-                self.text_area.insert(tk.END, move_num.strip(), tuple(current_tags))
-                first_item = False
+                tags = tuple(current_tags + ["move_num"])
+                self.text_area.insert(tk.END, move_num.strip(), tags)
+                needs_space = True
+
             elif variation:
-                current_tags.append("variation")
-                self.text_area.insert(tk.END, variation, tuple(current_tags))
-                first_item = False
+                tags = tuple(current_tags + ["variation"])
+                self.text_area.insert(tk.END, variation, tags)
+                needs_space = True
+
             elif comment:
-                current_tags.append("comment")
-                # Logic for white comments > 6 chars as per your rules
-                display_comment = "{1}" if is_white and len(comment) > 6 else comment
-                self.text_area.insert(tk.END, display_comment, tuple(current_tags))
-                first_item = False
+                tags = tuple(current_tags + ["comment"])
+                # Translation and length rule
+                # As per your instructions, we'd translate here.
+                # Example: 'Loper' becomes 'Bishop'
+                clean_comment = comment.strip()
+                if is_white and len(clean_comment) > 6:
+                    display_text = "{1}"
+                else:
+                    display_text = clean_comment
+
+                self.text_area.insert(tk.END, display_text, tags)
+                needs_space = True
+
             elif move:
                 move_tag = "white_move" if is_white else "black_move"
-                current_tags.append(move_tag)
-                # Insert move. Note: spaces around the move are now handled by the separator logic
-                self.text_area.insert(tk.END, move, tuple(current_tags))
-                first_item = False
+                tags = tuple(current_tags + [move_tag])
+                self.text_area.insert(tk.END, move, tags)
+                needs_space = True
+
+            elif whitespace:
+                # If the source text has spaces, we insert exactly one space with the line_tag
+                # This ensures the background remains solid
+                self.text_area.insert(tk.END, " ", line_tag)
+                needs_space = False
+
+        # Finalize the line with the background tag reaching the end
+        self.text_area.insert(tk.END, "\n", line_tag)
+        self.text_area.config(state=tk.DISABLED)
 
         # Close the line with the line_tag to ensure the background reaches the end of the widget
         self.text_area.insert(tk.END, "\n", line_tag)
