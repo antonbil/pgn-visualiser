@@ -2596,9 +2596,6 @@ class ChessEventViewer:
             self.mini_board.pack(expand=True, fill=tk.BOTH, padx=5, pady=(0, 0))
             self.miniboards.append(self.mini_board)
 
-            if last_variation is not None:
-                self.mini_board.draw_from_node(last_variation)
-                miniature_frame.config(text=get_full_move_text(last_variation))
             self.miniature_widgets.append(miniature_frame)
             # ---------------------------------------------------------
             # --- TOOLBAR (Bottom, Full Width) ---
@@ -2608,6 +2605,18 @@ class ChessEventViewer:
 
             # --- TAB FINALIZATION ---
             self._update_move_listbox_content(pgn_snippet_text)
+
+            last_move = self.tab_data[index-1]['last_move']
+            if last_move > 0:
+                #get last_node
+                node_before_last = self.game
+                for i in range(last_move):
+                    node_before_last = node_before_last.variations[0]
+                if len(node_before_last.variations) > 1:
+                    self.mini_board.draw_from_node(node_before_last.variations[1])
+                    miniature_frame.config(text=get_full_move_text(node_before_last.variations[1]))
+
+            #print("tab-data", self.tab_data[index-1], self.all_moves_chess[self.tab_data[index-1]['last_move']])
             tab_title = f"{event_data['move_text']}"
 
             self.notebook.add(tab_frame, text=tab_title)
@@ -2615,6 +2624,7 @@ class ChessEventViewer:
 
         except Exception as e:
             print("error in creation notebook",e)
+            traceback.print_exc()
 
     def _on_board_click(self, event):
         """
@@ -2700,8 +2710,11 @@ class ChessEventViewer:
                 "last_variation": last_variation
             }
             self.tab_data[i] = {
-                "num_moves": num_moves
+                "num_moves": num_moves,
+                "first_move": last_move_index + 1,
+                "last_move": current_move_index
             }
+            print(" self.tab_data[i]",  self.tab_data[i])
             processed_events.append(tab_data)
             last_move_index = current_move_index
 
