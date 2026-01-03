@@ -222,7 +222,7 @@ def _format_pgn_history(move_list):
                 current_line = f"{move_number}.\u00A0...{move_san}"
             else:
                 # Add Black's move
-                current_line += f"{move_san}".replace('\n',  ' ')
+                current_line += f" {move_san}".replace('\n',  ' ')
 
         # --- 3. Add Variations (these are stored separately) ---
         if move.get('variations'):
