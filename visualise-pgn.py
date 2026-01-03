@@ -1930,10 +1930,8 @@ class ChessEventViewer:
             return
         self.current_movelistbox_info = None
         info = self.get_info_current_listbox()
+        number_ = self.tab_data[self.current_tab]['last_move']
 
-        number_ = 2 * (info["max_move_number"] - 1)
-        if number_ >= len(self.all_moves_chess):
-            number_ = self.all_moves_chess
         self.current_move_index = number_
         #self.master.update_idletasks()
         total_height = self.current_right_pane.winfo_height()
@@ -2714,7 +2712,6 @@ class ChessEventViewer:
                 "first_move": last_move_index + 1,
                 "last_move": current_move_index
             }
-            print(" self.tab_data[i]",  self.tab_data[i])
             processed_events.append(tab_data)
             last_move_index = current_move_index
 
