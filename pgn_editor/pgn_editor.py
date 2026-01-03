@@ -1150,7 +1150,7 @@ class TouchFileDialog(tk.Toplevel):
         # Reduced font size to 13 for more items per page
         self.list_area = tk.Text(container, bg="#1e1e1e", fg="white", font=("Arial", 13),
                                  padx=10, pady=10, wrap=tk.NONE,
-                                 highlightthickness=0, borderwidth=0,height=6,
+                                 highlightthickness=0, borderwidth=0,height=9,
                                  exportselection=False,
                                  yscrollcommand=self.scrollbar.set)
         self.list_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
