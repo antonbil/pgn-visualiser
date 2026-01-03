@@ -1102,7 +1102,7 @@ class TouchFileDialog(tk.Toplevel):
         screen_height = self.winfo_screenheight()
 
         # Use 90% of screen height to ensure footer buttons are visible
-        win_height = 600
+        win_height = 700
         win_width = min(900, int(screen_width * 0.95))
         self.geometry(f"{win_width}x{win_height}+50+30")
 
@@ -1197,7 +1197,7 @@ class TouchFileDialog(tk.Toplevel):
             self.is_dragging = True
 
         if self.is_dragging:
-            self.list_area.scan_dragto(event.x, event.y, gain=2)
+            self.list_area.scan_dragto(event.x, event.y)
             self.list_area.tag_remove("sel", "1.0", tk.END)
         return "break"
 
