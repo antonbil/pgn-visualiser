@@ -203,7 +203,9 @@ def _format_pgn_history(move_list):
     previous_variation = None
     move_nr = 0
     prev_variation_move = None
+    it = 0
     for i, move in enumerate(move_list):
+        it = i
         move_number = move['move_number']
         move_san = move['san']
         player = move['player']
@@ -257,7 +259,7 @@ def _format_pgn_history(move_list):
     if current_line:
         output.append(current_line.strip())
 
-    return output
+    return output, it+1
 
 
 def select_key_positions(all_events):
@@ -832,6 +834,7 @@ class ChessEventViewer:
         self.current_move_index = None
         self.game = None
         self.board_canvases = []
+        self.tab_data = {}
         self.current_board_canvas = None
         self.num_events = None
         self.sorted_events = None
@@ -1448,6 +1451,7 @@ class ChessEventViewer:
         move_index_map = []  # List of (move_number, listbox_index) pairs
         moves_added = []
         last_index = 0
+        first_is_black = False
 
         # Regex to match a move number (e.g., "1." or "12.")
         move_pattern = re.compile(r'^(\d+)\.')
@@ -1457,6 +1461,9 @@ class ChessEventViewer:
         for i in range(self.current_movelistbox.size()):
             # Get content using the .get(i) method we added to the custom class
             line_content = self.current_movelistbox.get(i).strip()
+
+            if i == 0 and "..." in line_content:
+                first_is_black = True
 
             if not line_content:
                 continue
@@ -1497,7 +1504,8 @@ class ChessEventViewer:
             'min_move_number': min_move_number,
             'max_move_number': max_move_number,
             'move_index_map': move_index_map,
-            'last_index': last_index
+            'last_index': last_index,
+            "first_is_black": first_is_black
         }
 
         if self.current_move_index is None:
@@ -1557,17 +1565,24 @@ class ChessEventViewer:
 
     def _go_to_next_move(self):
         """Go to the next move in the game."""
-        info = self.get_info_current_listbox()
-        if self.current_move_index < 2*(info["max_move_number"]-1) and self.current_move_index < len(self.all_moves_chess):
+        last = self.get_last_move()
+        if self.current_move_index + 1 <= last:
             self.display_diagram_move(self.current_move_index + 1)
 
     def _go_to_last_move(self):
         """Go to the last move of the game."""
+        last = self.get_last_move()
+        self.display_diagram_move(last)
+
+    def get_last_move(self):
         info = self.get_info_current_listbox()
-        number_ = 2 * (info["max_move_number"] - 1)
-        if number_ >= len(self.all_moves_chess):
-            number_ = self.all_moves_chess
-        self.display_diagram_move(number_)
+        first = 2 * (info["min_move_number"] - 1)
+        if first < 0:
+            first = 0
+        last = first + self.tab_data[self.current_tab]["num_moves"] - 1
+        if info["first_is_black"]:
+            last = last + 1
+        return last
 
     def _create_move_navigation_widgets(self, parent_frame):
         """Creates buttons for move navigation within the current game."""
@@ -2666,7 +2681,7 @@ class ChessEventViewer:
         for i, event in enumerate(events):
             current_move_index = event['move_index']
             moves_to_display = event['full_move_history'][last_move_index + 1: current_move_index + 1]
-            pgn_snippet = _format_pgn_history(moves_to_display)
+            pgn_snippet, num_moves = _format_pgn_history(moves_to_display)
 
             last_variation = None
             for move in moves_to_display:
@@ -2681,7 +2696,11 @@ class ChessEventViewer:
                 "eval_after": event.get('eval_after', 0.0),
                 "event_type": event.get('event_type', 'Event'),
                 "move_history": pgn_snippet,
+                "num_moves": num_moves,
                 "last_variation": last_variation
+            }
+            self.tab_data[i] = {
+                "num_moves": num_moves
             }
             processed_events.append(tab_data)
             last_move_index = current_move_index
