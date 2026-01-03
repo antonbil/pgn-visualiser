@@ -1086,15 +1086,27 @@ from tkinter import ttk
 import os
 from datetime import datetime
 
+import tkinter as tk
+from tkinter import ttk
+import os
+from datetime import datetime
+
 
 class TouchFileDialog(tk.Toplevel):
     def __init__(self, parent, initialdir=".", file_extension=".pgn"):
         super().__init__(parent)
-        self.title("Touch PGN Browser")
+        self.title("PGN Browser")
 
-        # INCREASED SIZE: 900x900 for better visibility of footer buttons
-        self.geometry("900x900")
-        self.grab_set()  # Modal: blocks interaction with main window
+        # --- Responsive Geometry for Chromebook ---
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        # Use 90% of screen height to ensure footer buttons are visible
+        win_height = int(screen_height * 0.85)
+        win_width = min(900, int(screen_width * 0.95))
+        self.geometry(f"{win_width}x{win_height}+50+30")
+
+        self.grab_set()
         self.focus_set()
 
         # --- State Management ---
@@ -1104,113 +1116,95 @@ class TouchFileDialog(tk.Toplevel):
         self.item_mapping = {}
         self.current_sort = "name"
 
-        # --- Touch Scroll Logic ---
-        self.last_y = 0
+        # --- Touch Logic ---
+        self.start_y = 0
         self.is_dragging = False
-        self.click_threshold = 10
-        self.scroll_speed = 3  # Fast scroll factor
+        self.click_threshold = 8
 
         self.configure(bg="#2d2d2d")
 
         # --- Style for the Fat Scrollbar ---
         style = ttk.Style()
-        # 'arrowsize' and 'width' make it chunky and touch-friendly
-        style.configure("Fat.Vertical.TScrollbar", width=30, arrowsize=25)
+        style.configure("Fat.Vertical.TScrollbar", width=25, arrowsize=20)
+
         # 1. Header (Breadcrumbs)
-        self.header_frame = tk.Frame(self, bg="#404040", pady=10)
+        self.header_frame = tk.Frame(self, bg="#404040", pady=5)
         self.header_frame.pack(fill=tk.X)
 
-        # 2. Sorting Bar
-        sort_frame = tk.Frame(self, bg="#333333", pady=5)
+        # 2. Sorting Bar (More compact)
+        sort_frame = tk.Frame(self, bg="#333333", pady=2)
         sort_frame.pack(fill=tk.X)
-        btn_opt = {"font": ("Arial", 12, "bold"), "bg": "#505050", "fg": "white", "padx": 20, "pady": 10}
+        btn_opt = {"font": ("Arial", 10, "bold"), "bg": "#505050", "fg": "white", "padx": 10, "pady": 5}
         tk.Button(sort_frame, text="Sort: Name", command=lambda: self._load_dir("name"), **btn_opt).pack(side=tk.LEFT,
                                                                                                          padx=10)
         tk.Button(sort_frame, text="Sort: Date", command=lambda: self._load_dir("date"), **btn_opt).pack(side=tk.LEFT,
                                                                                                          padx=5)
 
-        # 3. Main List Area
+        # 3. Main Area
         container = tk.Frame(self, bg="#1e1e1e")
-        container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # The chunky scrollbar
         self.scrollbar = ttk.Scrollbar(container, orient="vertical", style="Fat.Vertical.TScrollbar")
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.list_area = tk.Text(container, bg="#1e1e1e", fg="white", font=("Arial", 16),
-                                 padx=20, pady=20, wrap=tk.NONE,
+        # Reduced font size to 13 for more items per page
+        self.list_area = tk.Text(container, bg="#1e1e1e", fg="white", font=("Arial", 13),
+                                 padx=10, pady=10, wrap=tk.NONE,
                                  highlightthickness=0, borderwidth=0,
-                                 exportselection=False,  # Important: prevents blue highlighting on drag
-                                takefocus = False, yscrollcommand=self.scrollbar.set)  # Prevent focus-jumps
-        self.list_area.pack(fill=tk.BOTH, expand=True)
+                                 exportselection=False,
+                                 yscrollcommand=self.scrollbar.set)
+        self.list_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.scrollbar.config(command=self.list_area.yview)
 
-        # Style Tags
-        self.list_area.tag_configure("folder", foreground="#ffca28", font=("Arial", 16, "bold"))
+        # Compact Style Tags (reduced spacing)
+        self.list_area.tag_configure("folder", foreground="#ffca28", font=("Arial", 13, "bold"))
         self.list_area.tag_configure("file", foreground="#ffffff")
-        self.list_area.tag_configure("details", foreground="#aaaaaa", font=("Arial", 11))
+        self.list_area.tag_configure("details", foreground="#aaaaaa", font=("Arial", 9))
         self.list_area.tag_configure("selected", background="#005a9e", foreground="white")
-        self.list_area.tag_configure("row", spacing1=15, spacing3=15, lmargin1=10)
-        # Disable the internal Tkinter Class bindings for selection
-        self.list_area.bind_class("Text", "<<Selection>>", lambda e: "break")
-        self.list_area.bind("<Control-1>", lambda e: "break")  # Disable accidental multi-select
+        # spacing reduced from 15 to 8
+        self.list_area.tag_configure("row", spacing1=8, spacing3=8, lmargin1=5)
 
-        # High-speed Drag Bindings
+        # Bindings
         self.list_area.bind("<Button-1>", self._on_press)
         self.list_area.bind("<B1-Motion>", self._on_drag)
         self.list_area.bind("<ButtonRelease-1>", self._on_release)
+        self.list_area.bind("<<Selection>>", lambda e: self.list_area.tag_remove("sel", "1.0", tk.END))
 
-        # 4. Footer
-        footer = tk.Frame(self, bg="#2d2d2d", pady=20)
+        # 4. Footer (Action Buttons)
+        footer = tk.Frame(self, bg="#2d2d2d", pady=10)
         footer.pack(fill=tk.X, side=tk.BOTTOM)
 
-        self.open_btn = tk.Button(footer, text="SELECT FILE", command=self._confirm_selection,
-                                  bg="#28a745", fg="white", font=("Arial", 14, "bold"),
-                                  width=15, height=2, state=tk.DISABLED)
+        self.open_btn = tk.Button(footer, text="OPEN FILE", command=self._confirm_selection,
+                                  bg="#28a745", fg="white", font=("Arial", 12, "bold"),
+                                  width=12, height=1, state=tk.DISABLED, pady=10)
         self.open_btn.pack(side=tk.RIGHT, padx=20)
 
         tk.Button(footer, text="CANCEL", command=self.destroy,
-                  bg="#dc3545", fg="white", font=("Arial", 14, "bold"),
-                  width=10, height=2).pack(side=tk.RIGHT)
+                  bg="#dc3545", fg="white", font=("Arial", 12, "bold"),
+                  width=10, height=1, pady=10).pack(side=tk.RIGHT)
 
         self._update_breadcrumb()
         self._load_dir()
 
     def _on_press(self, event):
         self.start_y = event.y
-        self.last_y = event.y
         self.is_dragging = False
-        # Prevent the widget from taking focus which causes "jumping"
-        self.list_area.focus_set()
-        # 'scan_mark' sets the anchor point for the high-speed drag
         self.list_area.scan_mark(event.x, event.y)
         return "break"
 
     def _on_drag(self, event):
-        """ High-speed scrolling with stability fixes. """
-        delta_y = event.y - self.last_y
-
-        # Check if we moved enough to start a drag
-        if not self.is_dragging:
-            if abs(event.y - self.start_y) > self.click_threshold:
-                self.is_dragging = True
+        if abs(event.y - self.start_y) > self.click_threshold:
+            self.is_dragging = True
 
         if self.is_dragging:
-            # We use 'moveto' logic or direct pixel scroll without 'see' calls
-            # Fraction calculation for more stability:
-            self.list_area.yview_scroll(int(-1 * delta_y), "pixels")
-
-        self.last_y = event.y
-        # Important: 'break' prevents Tkinter's internal scan_mark/scan_dragto
-        # which is often the cause of the 'back-scrolling' behavior.
+            self.list_area.scan_dragto(event.x, event.y, gain=2)
+            self.list_area.tag_remove("sel", "1.0", tk.END)
         return "break"
 
     def _on_release(self, event):
         if not self.is_dragging:
             index = self.list_area.index(f"@{event.x},{event.y}")
             self._handle_tap(index)
-
-        # Reset dragging state
         self.is_dragging = False
         return "break"
 
@@ -1249,11 +1243,14 @@ class TouchFileDialog(tk.Toplevel):
 
                     self.list_area.insert(tk.END, f" {icon}  {entry.name}\n", (tag_type, "row", item_tag))
                     mtime = datetime.fromtimestamp(entry.stat().st_mtime).strftime('%d-%m-%Y %H:%M')
-                    self.list_area.insert(tk.END, f"      Modified: {mtime}\n", ("details", "row", item_tag))
-                    self.list_area.insert(tk.END, "—" * 50 + "\n", "details")
+                    # Modified size of details text
+                    self.list_area.insert(tk.END, f"      {mtime}\n", ("details", "row", item_tag))
+                    self.list_area.insert(tk.END, "—" * 40 + "\n", "details")
         except Exception as e:
             self.list_area.insert(tk.END, f"Error: {e}")
+
         self.list_area.config(state=tk.DISABLED)
+        self.list_area.yview_moveto(0)
 
     def _select_file(self, path, tag):
         self.list_area.tag_remove("selected", "1.0", tk.END)
@@ -1272,20 +1269,23 @@ class TouchFileDialog(tk.Toplevel):
         for widget in self.header_frame.winfo_children():
             widget.destroy()
         tk.Button(self.header_frame, text=" ⬅ UP ", bg="#555555", fg="white",
-                  font=("Arial", 12, "bold"), padx=15, pady=5,
+                  font=("Arial", 10, "bold"), padx=10, pady=2,
                   command=lambda: self._change_dir(os.path.dirname(self.current_dir))).pack(side=tk.LEFT, padx=10)
 
         parts = [p for p in self.current_dir.split(os.sep) if p]
         acc_path = "/" if self.current_dir.startswith("/") else ""
-        for part in parts[-3:]:  # Show last 3 segments
+        for part in parts[-3:]:
             idx = parts.index(part)
             btn_path = os.sep + os.sep.join(parts[:idx + 1]) if self.current_dir.startswith(os.sep) else os.sep.join(
                 parts[:idx + 1])
             tk.Button(self.header_frame, text=f"{part} >", fg="#bbdefb", bg="#404040", relief=tk.FLAT,
+                      font=("Arial", 9),
                       command=lambda p=btn_path: self._change_dir(p)).pack(side=tk.LEFT)
 
     def _confirm_selection(self):
-        if self.result: self.destroy()
+        if self.result:
+            self.destroy()
+            
 class GameChooserDialog(tk.Toplevel):
     """
     A Toplevel dialog for selecting a game from a PGN list,
