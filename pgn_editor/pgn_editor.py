@@ -1102,7 +1102,7 @@ class TouchFileDialog(tk.Toplevel):
         screen_height = self.winfo_screenheight()
 
         # Use 90% of screen height to ensure footer buttons are visible
-        win_height = int(screen_height * 0.50)
+        win_height = 600
         win_width = min(900, int(screen_width * 0.95))
         self.geometry(f"{win_width}x{win_height}+50+30")
 
@@ -1150,7 +1150,7 @@ class TouchFileDialog(tk.Toplevel):
         # Reduced font size to 13 for more items per page
         self.list_area = tk.Text(container, bg="#1e1e1e", fg="white", font=("Arial", 13),
                                  padx=10, pady=10, wrap=tk.NONE,
-                                 highlightthickness=0, borderwidth=0,
+                                 highlightthickness=0, borderwidth=0,height=6,
                                  exportselection=False,
                                  yscrollcommand=self.scrollbar.set)
         self.list_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
