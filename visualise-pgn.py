@@ -11,7 +11,7 @@ import re
 from PIL import Image, ImageTk
 from pathlib import Path
 import json
-from pgn_editor.pgn_editor import ChessAnnotatorApp, Tooltip, TouchMoveListColor
+from pgn_editor.pgn_editor import ChessAnnotatorApp, Tooltip, TouchMoveListColor, TouchFileDialog
 from pgn_editor.pgn_editor import GameChooserDialog, BOARD_THEMES, SettingsDialog
 from pgn_entry.pgn_entry import PGNEntryApp, PieceImageManager1
 import cairosvg
@@ -1140,6 +1140,15 @@ class ChessEventViewer:
         """
         Opens a dialog to select a PGN file and loads all games from it.
         """
+        initial_dir = os.path.dirname(self.lastLoadedPgnPath)
+        dialog = TouchFileDialog(self.master, initialdir=initial_dir)
+        self.master.wait_window(dialog)
+        if dialog.result:
+            self.lastLoadedPgnPath = dialog.result
+            self.set_filepath(self.lastLoadedPgnPath)
+            self._read_file_and_analyze(self.lastLoadedPgnPath)
+        return
+
         filepath = filedialog.askopenfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
@@ -1337,6 +1346,7 @@ class ChessEventViewer:
         except Exception as e:
             # Unexpected error
             print(f"An unexpected error occurred: {e}")
+            traceback.print_exc()
 
     def _get_square_coords(self, rank, file):
         """
@@ -1941,14 +1951,17 @@ class ChessEventViewer:
         self.display_diagram_move(self.current_move_index)
 
     def set_tab_variables(self, new_tab):
-        self.current_board_canvas = self.board_canvases[new_tab]
-        self.current_comment_widget = self.comment_widgets[new_tab]
-        self.current_miniature_widget = self.miniature_widgets[new_tab]
-        self.current_miniboard = self.miniboards[new_tab]
-        self.current_variation_widget = self.variation_widgets[new_tab]
-        self.current_move_display_widget = self.move_display_widgets[new_tab]
-        self.current_movelistbox = self.move_listboxes[new_tab]
-        self.current_right_pane = self.right_pane_widgets[new_tab]
+        try:
+            self.current_board_canvas = self.board_canvases[new_tab]
+            self.current_comment_widget = self.comment_widgets[new_tab]
+            self.current_miniature_widget = self.miniature_widgets[new_tab]
+            self.current_miniboard = self.miniboards[new_tab]
+            self.current_variation_widget = self.variation_widgets[new_tab]
+            self.current_move_display_widget = self.move_display_widgets[new_tab]
+            self.current_movelistbox = self.move_listboxes[new_tab]
+            self.current_right_pane = self.right_pane_widgets[new_tab]
+        except:
+            pass
 
     def init_tab_variables(self):
         self.board_canvases = []
@@ -2785,3 +2798,4 @@ if __name__ == "__main__":
         error_root.mainloop()
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+        traceback.print_exc()
