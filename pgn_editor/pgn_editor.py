@@ -1076,22 +1076,6 @@ class TouchMoveListColor(tk.Frame):
         self.text_area.tag_configure("comment", font=normal_font)
 
 
-import tkinter as tk
-from tkinter import ttk
-import os
-from datetime import datetime
-
-import tkinter as tk
-from tkinter import ttk
-import os
-from datetime import datetime
-
-import tkinter as tk
-from tkinter import ttk
-import os
-from datetime import datetime
-
-
 class TouchFileDialog(tk.Toplevel):
     def __init__(self, parent, initialdir=".", file_extension=".pgn", title="PGN Browser"):
         super().__init__(parent)
@@ -1115,6 +1099,9 @@ class TouchFileDialog(tk.Toplevel):
         self.file_extension = file_extension
         self.item_mapping = {}
         self.current_sort = "name"
+        self.sort_reverse = False  # track toggle state
+        self.show_folders = tk.BooleanVar(value=True)  # folder visibility
+        self.filter_small_pgn = tk.BooleanVar(value=False)
 
         # --- Touch Logic ---
         self.start_y = 0
@@ -1131,14 +1118,29 @@ class TouchFileDialog(tk.Toplevel):
         self.header_frame = tk.Frame(self, bg="#404040", pady=5)
         self.header_frame.pack(fill=tk.X)
 
-        # 2. Sorting Bar (More compact)
+        # 2. Sorting Bar
         sort_frame = tk.Frame(self, bg="#333333", pady=2)
         sort_frame.pack(fill=tk.X)
         btn_opt = {"font": ("Arial", 10, "bold"), "bg": "#505050", "fg": "white", "padx": 10, "pady": 5}
+
         tk.Button(sort_frame, text="Sort: Name", command=lambda: self._load_dir("name"), **btn_opt).pack(side=tk.LEFT,
                                                                                                          padx=10)
         tk.Button(sort_frame, text="Sort: Date", command=lambda: self._load_dir("date"), **btn_opt).pack(side=tk.LEFT,
                                                                                                          padx=5)
+
+        # Folder toggle checkbox
+        self.folder_chk = tk.Checkbutton(sort_frame, text="Folders", variable=self.show_folders,
+                                         command=lambda: self._load_dir(self.current_sort),
+                                         bg="#333333", fg="white", selectcolor="#2d2d2d",
+                                         activebackground="#333333", activeforeground="white",
+                                         font=("Arial", 9))
+        self.folder_chk.pack(side=tk.RIGHT, padx=10)
+        # Checkbox for large PGN's (> 6KB)
+        tk.Checkbutton(sort_frame, text="> 6KB", variable=self.filter_small_pgn,
+                       command=lambda: self._load_dir(self.current_sort),
+                       bg="#333333", fg="white", selectcolor="#2d2d2d",
+                       activebackground="#333333", activeforeground="white",
+                       font=("Arial", 9)).pack(side=tk.RIGHT, padx=5)
 
         # 3. Main Area
         container = tk.Frame(self, bg="#1e1e1e")
@@ -1221,7 +1223,16 @@ class TouchFileDialog(tk.Toplevel):
                 break
 
     def _load_dir(self, sort_by=None):
-        if sort_by: self.current_sort = sort_by
+        # NEW: Toggle logic
+        if sort_by == self.current_sort:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.current_sort = sort_by if sort_by else "name"
+            self.sort_reverse = False
+            # Default behavior: names ascending, dates descending
+            if self.current_sort == "date":
+                self.sort_reverse = True
+
         self.list_area.config(state=tk.NORMAL)
         self.list_area.delete("1.0", tk.END)
         self.item_mapping = {}
@@ -1230,11 +1241,22 @@ class TouchFileDialog(tk.Toplevel):
 
         try:
             entries = list(os.scandir(self.current_dir))
+
+            # Sort logic incorporating the toggle
             entries.sort(
                 key=lambda e: (not e.is_dir(), e.name.lower() if self.current_sort == "name" else e.stat().st_mtime),
-                reverse=(self.current_sort == "date"))
+                reverse=self.sort_reverse
+            )
 
             for entry in entries:
+                # Skip folders if checkbox is unchecked
+                if entry.is_dir() and not self.show_folders.get():
+                    continue
+                if self.filter_small_pgn.get():
+                    file_size_kb = entry.stat().st_size / 1024
+                    if file_size_kb <= 6:
+                        continue
+
                 if entry.is_dir() or entry.name.lower().endswith(self.file_extension):
                     tag_type = "folder" if entry.is_dir() else "file"
                     icon = "📁" if entry.is_dir() else "📄"
@@ -1243,7 +1265,6 @@ class TouchFileDialog(tk.Toplevel):
 
                     self.list_area.insert(tk.END, f" {icon}  {entry.name}\n", (tag_type, "row", item_tag))
                     mtime = datetime.fromtimestamp(entry.stat().st_mtime).strftime('%d-%m-%Y %H:%M')
-                    # Modified size of details text
                     self.list_area.insert(tk.END, f"      {mtime}\n", ("details", "row", item_tag))
                     self.list_area.insert(tk.END, "—" * 40 + "\n", "details")
         except Exception as e:
