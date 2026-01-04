@@ -3297,11 +3297,17 @@ class ChessAnnotatorApp:
 
     def update_meta_header(self):
         if self.last_filepath:
-            # Haal alleen de bestandsnaam uit het volledige pad
+            # get the filename from the path
             filename = os.path.basename(self.last_filepath)
-            self.meta_frame.config(text=f"Game Meta-Tags ({filename})")
+            try:
+                self.meta_frame.config(text=f"Game Meta-Tags ({filename})")
+            except:
+                pass
         else:
-            self.meta_frame.config(text="Game Meta-Tags (No file loaded)")
+            try:
+                self.meta_frame.config(text="Game Meta-Tags (No file loaded)")
+            except:
+                pass
 
     # --- Variation Management Logic (NEW) ---
 
