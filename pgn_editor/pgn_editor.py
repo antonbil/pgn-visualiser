@@ -1093,9 +1093,9 @@ from datetime import datetime
 
 
 class TouchFileDialog(tk.Toplevel):
-    def __init__(self, parent, initialdir=".", file_extension=".pgn"):
+    def __init__(self, parent, initialdir=".", file_extension=".pgn", title="PGN Browser"):
         super().__init__(parent)
-        self.title("PGN Browser")
+        self.title(title)
 
         # --- Responsive Geometry for Chromebook ---
         screen_width = self.winfo_screenwidth()
@@ -1103,7 +1103,7 @@ class TouchFileDialog(tk.Toplevel):
 
         # Use 90% of screen height to ensure footer buttons are visible
         win_height = 700
-        win_width = min(900, int(screen_width * 0.95))
+        win_width = min(500, int(screen_width * 0.95))
         self.geometry(f"{win_width}x{win_height}+50+30")
 
         self.grab_set()
@@ -1157,12 +1157,12 @@ class TouchFileDialog(tk.Toplevel):
         self.scrollbar.config(command=self.list_area.yview)
 
         # Compact Style Tags (reduced spacing)
-        self.list_area.tag_configure("folder", foreground="#ffca28", font=("Arial", 13, "bold"))
+        self.list_area.tag_configure("folder", foreground="#ffca28", font=("Arial", 12, "bold"))
         self.list_area.tag_configure("file", foreground="#ffffff")
-        self.list_area.tag_configure("details", foreground="#aaaaaa", font=("Arial", 9))
+        self.list_area.tag_configure("details", foreground="#aaaaaa", font=("Arial", 8))
         self.list_area.tag_configure("selected", background="#005a9e", foreground="white")
         # spacing reduced from 15 to 8
-        self.list_area.tag_configure("row", spacing1=8, spacing3=8, lmargin1=5)
+        self.list_area.tag_configure("row", spacing1=6, spacing3=6, lmargin1=5)
 
         # Bindings
         self.list_area.bind("<Button-1>", self._on_press)
