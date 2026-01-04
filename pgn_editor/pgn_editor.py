@@ -864,11 +864,15 @@ class TouchMoveListColor(tk.Frame):
                                      font=("Consolas", 12, "bold")
                                      )
         self.text_area.tag_configure("line_grey", background="#f5f5f5")
+        self.text_area.tag_configure("line_major", background="#f8d7da")
+        self.text_area.tag_configure("line_minor", background="#fff3cd") 
         # You can add more, like a subtle yellow for a 'last move' or 'threat' line
         self.text_area.tag_configure("line_alert", background="#fff0f0")
 
         self.text_area.tag_lower("line_grey")
         self.text_area.tag_raise("highlight", "line_grey")
+        self.text_area.tag_raise("highlight", "line_major")
+        self.text_area.tag_raise("highlight", "line_minor")
 
         if self.move_pairs:
             self._populate()
@@ -2046,6 +2050,8 @@ class ChessAnnotatorApp:
             self.board = self.game.board()
 
             self._update_meta_entries()
+            self.create_evaluations()
+            self.analyze_eval_changes()
             self._populate_move_listbox()
             self.show_clear_variation_button()
             self.update_state()
@@ -2624,6 +2630,7 @@ class ChessAnnotatorApp:
 
             san_move = prev_board.san(node.move)
             new_comment = node.comment.strip().replace('\n', ' ')
+
             new_comment = new_comment[:6]+new_comment[6:40].replace(" ","\u00A0")
             # Format comments for our Regex: {Comment}
             comment_text = f"{{{new_comment}}}" if node.comment and node.comment.strip() else ""
@@ -2636,7 +2643,10 @@ class ChessAnnotatorApp:
             # Insert into the new widget - it handles the tags/colors!
             # Determine the tag based on whose turn it was
             current_tag = "" if prev_board.turn == chess.WHITE else "line_grey"
-
+            if i in self.top_5_major_set:
+                current_tag = "line_major"
+            if i in self.top_5_minor_set:
+                current_tag = "line_minor"
             # The widget's insert method now uses this tag to color the move
             self.move_list_widget.insert(tk.END, full_line, tag_override=current_tag)
 
@@ -3765,6 +3775,68 @@ class ChessAnnotatorApp:
         )
         # Ensure the highlight is below the pieces
         self.canvas.tag_lower(self.highlight_item, "piece")
+
+    def create_evaluations(self):
+        self.evaluations = []  # Separate array to store numerical evaluations
+
+        node = self.game
+        while node.variations:
+            node = node.variation(0)
+            self.move_list.append(node)
+
+            # Extract evaluation from the comment
+            eval_val = None
+            if node.comment:
+                # Regex to find the first decimal or integer (positive or negative)
+                # Matches formats like "0.15", "+1.20", "-0.50", or "10"
+                match = re.search(r"[-+]?\d*\.\d+|\d+", node.comment)
+                if match:
+                    try:
+                        eval_val = float(match.group())
+                    except ValueError:
+                        eval_val = None
+
+            # Append the found value or None if no evaluation exists for this move
+            self.evaluations.append(eval_val)
+
+    def analyze_eval_changes(self):
+        """
+        Analyzes the evaluation array to find the 5 largest swings
+        and 5 moderate changes in the game.
+        """
+        changes = []
+
+        # Loop through evaluations starting from the second move
+        for i in range(1, len(self.evaluations)):
+            val_current = self.evaluations[i]
+            val_prev = self.evaluations[i - 1]
+
+            # Only calculate if both moves have a valid numerical evaluation
+            if val_current is not None and val_prev is not None:
+                # The absolute difference represents the "impact" of the move
+                diff = abs(val_current - val_prev)
+                changes.append({
+                    'index': i,
+                    'diff': diff,
+                    'move_num': (i // 2) + 1,
+                    'color': "White" if i % 2 == 0 else "Black"
+                })
+
+        if not changes:
+            return None  # Return None if no evaluations were available
+
+        # Sort the changes by the magnitude of the difference (highest first)
+        sorted_changes = sorted(changes, key=lambda x: x['diff'], reverse=True)
+
+        # Major changes: The top 5 absolute highest swings (likely blunders)
+        top_5_major = sorted_changes[:5]
+        self.top_5_major_set = {item['index'] for item in top_5_major}
+
+        # Minor changes: A secondary group (e.g., positions 6 to 10)
+        # representing significant but less catastrophic mistakes.
+        top_5_minor = sorted_changes[5:10]
+        self.top_5_minor_set = {item['index'] for item in top_5_minor}
+
 
 def parse_args():
     """
