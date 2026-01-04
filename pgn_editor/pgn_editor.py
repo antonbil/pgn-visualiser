@@ -1536,7 +1536,7 @@ COMPACT_HEIGHT_THRESHOLD = 1000
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None, engine_depth=17):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
-        self.last_filepath = pgn_game
+
         self.theme_name=board
         self.master = master
         self.piece_set = piece_set
@@ -1619,6 +1619,7 @@ class ChessAnnotatorApp:
         master.update_idletasks()
 
         self.set_screen_position(master)
+        self.set_filepath(pgn_game)
 
         if not(pgn_game is None or len(pgn_game) == 0):
             try:
@@ -1631,6 +1632,10 @@ class ChessAnnotatorApp:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
+
+    def set_filepath(self, pgn_game):
+        self.last_filepath = pgn_game
+        self.update_meta_header()
 
     def set_theme(self):
         # Find the theme
@@ -2176,6 +2181,15 @@ class ChessAnnotatorApp:
         # Check if the directory is valid, and exists
         if os.path.isdir(directory):
             initial_dir = self.default_pgn_dir
+        dialog = TouchFileDialog(self.master, initialdir=initial_dir)
+        self.master.wait_window(dialog)
+        if dialog.result:
+            self.set_filepath(dialog.result)
+            with open(self.last_filepath, 'r', encoding='utf-8') as f:
+                pgn_content = f.read()
+            self.current_game_index = 0
+            self._load_game_from_content(pgn_content)
+        return
         filepath = filedialog.askopenfilename(
             defaultextension=".pgn",
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
@@ -2184,7 +2198,7 @@ class ChessAnnotatorApp:
         )
         if filepath:
             try:
-                self.last_filepath = filepath
+                self.set_filepath(filepath)
                 with open(filepath, 'r', encoding='utf-8') as f:
                     pgn_content = f.read()
                 self.current_game_index = 0
@@ -2233,7 +2247,7 @@ class ChessAnnotatorApp:
                         # Add extra newlines between games for readability
                         f.write("\n\n")
                     self.is_dirty = False
-                self.last_filepath = filepath
+                self.set_filepath(filepath)
 
                 messagebox.showinfo("Save Complete", f"Database successfully saved ({len(self.all_games)} games).", parent=self.master)
 
@@ -2263,7 +2277,7 @@ class ChessAnnotatorApp:
                         # Add extra newlines between games for readability
                         f.write("\n\n")
                     self.is_dirty = False
-                self.last_filepath = filepath
+                self.set_filepath(filepath)
                 print("saved all to:", filepath)
 
         except Exception as e:
@@ -3280,6 +3294,14 @@ class ChessAnnotatorApp:
         dialog.geometry(f'+{position_x}+{position_y}')
 
         self.master.wait_window(dialog)
+
+    def update_meta_header(self):
+        if self.last_filepath:
+            # Haal alleen de bestandsnaam uit het volledige pad
+            filename = os.path.basename(self.last_filepath)
+            self.meta_frame.config(text=f"Game Meta-Tags ({filename})")
+        else:
+            self.meta_frame.config(text="Game Meta-Tags (No file loaded)")
 
     # --- Variation Management Logic (NEW) ---
 
