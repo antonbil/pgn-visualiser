@@ -2180,7 +2180,7 @@ class ChessAnnotatorApp:
 
         # Check if the directory is valid, and exists
         if os.path.isdir(directory):
-            initial_dir = self.default_pgn_dir
+            initial_dir = directory
         dialog = TouchFileDialog(self.master, initialdir=initial_dir)
         self.master.wait_window(dialog)
         if dialog.result:
