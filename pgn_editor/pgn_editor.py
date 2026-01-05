@@ -865,7 +865,7 @@ class TouchMoveListColor(tk.Frame):
                                      )
         self.text_area.tag_configure("line_grey", background="#f5f5f5")
         self.text_area.tag_configure("line_major", background="#f8d7da")
-        self.text_area.tag_configure("line_minor", background="#fff3cd") 
+        self.text_area.tag_configure("line_minor", background="#fff3cd")
         # You can add more, like a subtle yellow for a 'last move' or 'threat' line
         self.text_area.tag_configure("line_alert", background="#fff0f0")
 
@@ -2038,23 +2038,25 @@ class ChessAnnotatorApp:
             self.current_game_index = index
             self.game = self.all_games[index]
 
-            # Reset moves and position
-            self.move_list = []
-            node = self.game
-            while node.variations:
-                # Always follow the main (first) variation
-                node = node.variation(0)
-                self.move_list.append(node)
-
-            self.current_move_index = -1
-            self.board = self.game.board()
+            self.init_move_list()
 
             self._update_meta_entries()
-            self.create_evaluations()
             self.analyze_eval_changes()
             self._populate_move_listbox()
             self.show_clear_variation_button()
             self.update_state()
+
+    def init_move_list(self):
+        # Reset moves and position
+        self.move_list = []
+        node = self.game
+        while node.variations:
+            # Always follow the main (first) variation
+            node = node.variation(0)
+            self.move_list.append(node)
+
+        self.current_move_index = -1
+        self.board = self.game.board()
 
     def store_meta_data(self):
         if not self.game is None:
@@ -2180,6 +2182,7 @@ class ChessAnnotatorApp:
         Opens a dialog to select a PGN file and loads all games from it.
         """
         initial_dir = None
+        directory = None
         if hasattr(self, 'last_filepath') and self.last_filepath:
             # Extract the directory from the path
             directory = os.path.dirname(self.last_filepath)
@@ -2195,22 +2198,6 @@ class ChessAnnotatorApp:
                 pgn_content = f.read()
             self.current_game_index = 0
             self._load_game_from_content(pgn_content)
-        return
-        filepath = filedialog.askopenfilename(
-            defaultextension=".pgn",
-            filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")],
-            title="Choose a PGN file to load",
-            initialdir=initial_dir
-        )
-        if filepath:
-            try:
-                self.set_filepath(filepath)
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    pgn_content = f.read()
-                self.current_game_index = 0
-                self._load_game_from_content(pgn_content)
-            except Exception as e:
-                messagebox.showerror("Loading Error", f"Could not read the file: {e}", parent=self.master)
 
     def save_pgn_file(self):
         """
@@ -2513,12 +2500,7 @@ class ChessAnnotatorApp:
     def select_variation(self, current_node, previous_current_move_index, variation_node):
         self.stored_moves.append([current_node, current_node.variations[0], previous_current_move_index])
         current_node.promote_to_main(variation_node)
-        self.move_list = []
-        node = self.game
-        while node.variations:
-            # Always follow the main (first) variation
-            node = node.variation(0)
-            self.move_list.append(node)
+        self.init_move_list()
 
         self._populate_move_listbox()
         self.current_move_index = previous_current_move_index
@@ -2613,7 +2595,7 @@ class ChessAnnotatorApp:
 
         if not self.game:
             return
-
+        self.move_tags = []
         for i, node in enumerate(self.move_list):
             prev_board = node.parent.board()
             move_num = (i // 2) + 1
@@ -2648,6 +2630,7 @@ class ChessAnnotatorApp:
             if i in self.top_5_minor_set:
                 current_tag = "line_minor"
             # The widget's insert method now uses this tag to color the move
+            self.move_tags.append(current_tag)
             self.move_list_widget.insert(tk.END, full_line, tag_override=current_tag)
 
     def update_move_listbox_selection(self):
@@ -2671,7 +2654,10 @@ class ChessAnnotatorApp:
         board = self.game.board() # Starting board (FEN or default)
         for i in range(index + 1):
             if i < len(self.move_list):
-                board.push(self.move_list[i].move)
+                try:
+                    board.push(self.move_list[i].move)
+                except:
+                    pass
         return board
 
     def _get_current_node(self):
@@ -2828,11 +2814,13 @@ class ChessAnnotatorApp:
 
         new_list_item_text = f"{prefix}{san_move}{comment_text}{variation_indicator}"
 
-        # Fetch the> Label-object from the stored list
-        target_label = self.move_labels[index]
-
-        # Use .config() to change the 'text' attribute
-        target_label.config(text=new_list_item_text)
+        line_number = index + 1
+        # remove the old line
+        self.move_list_widget.delete(line_number)
+        # Add the new text on the right position
+        self.move_list_widget.insert(index, new_list_item_text, tag_override=self.move_tags[index])
+        self._populate_move_listbox()
+        self.update_state()
 
 
     # --- Commentary Logic ---
@@ -2878,6 +2866,7 @@ class ChessAnnotatorApp:
             node.comment = new_comment
             if self.current_move_index != -1: # Only update listbox item if it's not the root
                 self.update_listbox_item(self.current_move_index)
+                self._populate_move_listbox()
             self.update_comment_display()
             dialog.destroy()
 
@@ -3054,6 +3043,7 @@ class ChessAnnotatorApp:
             node.comment = ""
             if self.current_move_index != -1: # Only update listbox item if it's not the root
                 self.update_listbox_item(self.current_move_index)
+                self._populate_move_listbox()
             self.update_comment_display()
             messagebox.showinfo("Commentary", f"Commentary deleted for {current_move_text}.", parent=self.master)
         else:
@@ -3357,7 +3347,7 @@ class ChessAnnotatorApp:
         # Populate the listbox with current variations
         def _populate_variations():
             variation_listbox.delete(0, tk.END)
-            for i, variation_start_node in enumerate(current_node.variations):
+            for i, variation_start_node in enumerate(self._get_current_node().variations):
                 # The node is a GameNode, which serves as the root of the variation.
                 # We need to wrap it in a temporary Game structure to use the standard PGN export.
 
@@ -3479,11 +3469,7 @@ class ChessAnnotatorApp:
         base_node.promote_to_main(move_to_restore)
 
         # 3. Rebuild the main move_list
-        self.move_list = []
-        node = self.game
-        while node.variations:
-            node = node.variation(0)  # Follow the new main line
-            self.move_list.append(node)
+        self.init_move_list()
 
         # 4. INSTANT BOARD UPDATE
         # Get the board object directly from the node at the target index
@@ -3776,13 +3762,16 @@ class ChessAnnotatorApp:
         # Ensure the highlight is below the pieces
         self.canvas.tag_lower(self.highlight_item, "piece")
 
-    def create_evaluations(self):
-        self.evaluations = []  # Separate array to store numerical evaluations
+    def analyze_eval_changes(self):
+        """
+        Creates and analyzes the evaluation array to find the 5 largest swings
+        and 5 moderate changes in the game.
+        """
+        evaluations = []  # Separate array to store numerical evaluations
 
         node = self.game
         while node.variations:
             node = node.variation(0)
-            self.move_list.append(node)
 
             # Extract evaluation from the comment
             eval_val = None
@@ -3797,30 +3786,26 @@ class ChessAnnotatorApp:
                         eval_val = None
 
             # Append the found value or None if no evaluation exists for this move
-            self.evaluations.append(eval_val)
-
-    def analyze_eval_changes(self):
-        """
-        Analyzes the evaluation array to find the 5 largest swings
-        and 5 moderate changes in the game.
-        """
+            evaluations.append(eval_val)
         changes = []
 
+        val_prev = None
         # Loop through evaluations starting from the second move
-        for i in range(1, len(self.evaluations)):
-            val_current = self.evaluations[i]
-            val_prev = self.evaluations[i - 1]
+        for i in range(0, len(evaluations)):
+            val_current = evaluations[i]
 
             # Only calculate if both moves have a valid numerical evaluation
-            if val_current is not None and val_prev is not None:
+            if val_current is not None:
                 # The absolute difference represents the "impact" of the move
-                diff = abs(val_current - val_prev)
-                changes.append({
-                    'index': i,
-                    'diff': diff,
-                    'move_num': (i // 2) + 1,
-                    'color': "White" if i % 2 == 0 else "Black"
-                })
+                if  val_prev is not None:
+                    diff = abs(val_current - val_prev)
+                    changes.append({
+                        'index': i,
+                        'diff': diff,
+                        'move_num': (i // 2) + 1,
+                        'color': "White" if i % 2 == 0 else "Black"
+                    })
+                val_prev = val_current
 
         if not changes:
             return None  # Return None if no evaluations were available
