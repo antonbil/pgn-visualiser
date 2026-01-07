@@ -821,7 +821,7 @@ class ChessEventViewer:
     Tkinter application to display the top events from an analyzed PGN.
     """
 
-    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard", engine_depth=17):
+    def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard", engine_depth=17, current_game_index=0):
         image_manager = PieceImageManager(square_size, IMAGE_DIRECTORY, piece_set)
         self.current_movelistbox_info = None
         self.engine_path = engine_path
@@ -856,7 +856,7 @@ class ChessEventViewer:
 
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        self.current_game_index = 0
+        self.current_game_index = current_game_index
         self.num_games = 0
         self.game_counter_var = tk.StringVar(value=f"Game 1 of {self.num_games}")
         self.game_descriptions = []
@@ -2102,7 +2102,7 @@ class ChessEventViewer:
         if file_path.is_file():
             print("SUCCESS: File found and is a valid file. Loading data.")
 
-            self._read_file_and_analyze(clean_path)
+            self._read_file_and_analyze(clean_path, self.current_game_index)
 
             # Update the path string
             self.set_filepath(clean_path)
@@ -2279,7 +2279,7 @@ class ChessEventViewer:
         self.num_events = len(self.sorted_events)
         self.populate_event_tabs(self.sorted_events)
 
-    def _read_file_and_analyze(self, filepath):
+    def _read_file_and_analyze(self, filepath, start_index = 0):
         """Reads the PGN-content of the file and start the analysis."""
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -2299,7 +2299,7 @@ class ChessEventViewer:
 
             # --- 2. Check and Analyze the First Game ---
             if self.all_games:
-                first_game = self.all_games[0]
+                first_game = self.all_games[start_index]
 
                 # Define the Exporter: Set headers, VARIATIONS and COMMENTS to True
                 exporter = chess.pgn.StringExporter(
@@ -2312,7 +2312,7 @@ class ChessEventViewer:
                 single_pgn_string = first_game.accept(exporter)
 
                 # Reset the current game index to the first game
-                self.current_game_index = 0
+                self.current_game_index = start_index
 
                 # Do the analysis of the first game
                 self.do_new_analysis(single_pgn_string)

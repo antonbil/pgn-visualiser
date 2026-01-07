@@ -211,30 +211,35 @@ class AnalysisManager:
         analysis_thread.start()
 
     def _create_progress_window(self):
-        """Sets up the Toplevel window for progress tracking."""
-        self.progress_win = tk.Toplevel(self.root)
-        self.progress_win.title("Stockfish Analysis")
-        self.progress_win.geometry("400x200")
-        self.progress_win.transient(self.root)
-        self.progress_win.grab_set()
+          """Sets up the Toplevel window for progress tracking."""
+          try:
+                self.progress_win = tk.Toplevel(self.root)
+                self.progress_win.title("Stockfish Analysis")
+                self.progress_win.geometry("400x200")
+                self.progress_win.transient(self.root)
+                self.progress_win.grab_set()
 
-        # Database progress label
-        if self.db_info:
-            self.db_label = tk.Label(self.progress_win, text=self.db_info, font=("Arial", 10, "bold"), wraplength=350)
-            self.db_label.pack(pady=(10, 0))
+                # Database progress label
+                if self.db_info:
+                    self.db_label = tk.Label(self.progress_win, text=self.db_info, font=("Arial", 10, "bold"), wraplength=350)
+                    self.db_label.pack(pady=(10, 0))
 
-        # Current move status label
-        self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=350)
-        self.status_label.pack(pady=10)
+                # Current move status label
+                self.status_label = tk.Label(self.progress_win, text="Starting Stockfish...", wraplength=350)
+                self.status_label.pack(pady=10)
 
-        # Progress bar
-        self.progress_bar = ttk.Progressbar(self.progress_win, length=300, mode='determinate')
-        self.progress_bar.pack(pady=10)
+                # Progress bar
+                self.progress_bar = ttk.Progressbar(self.progress_win, length=300, mode='determinate')
+                self.progress_bar.pack(pady=10)
 
-        # Stop/Cancel button
-        self.stop_button = tk.Button(self.progress_win, text="Stop Analysis", command=self._cancel_analysis,
-                                     bg="#ffcccc")
-        self.stop_button.pack(pady=10)
+                # Stop/Cancel button
+                self.stop_button = tk.Button(self.progress_win, text="Stop Analysis", command=self._cancel_analysis,
+                                             bg="#ffcccc")
+                self.stop_button.pack(pady=10)
+          except tk.TclError:
+              # Als een ander venster de grab heeft, loggen we het
+              # maar laten we het programma gewoon doorgaan.
+              print("Waarschuwing: kon grab niet instellen, ander venster is actief.")
 
     def _cancel_analysis(self):
         """Triggered by the Stop button to halt analysis."""
@@ -1572,6 +1577,8 @@ class ChessAnnotatorApp:
         self.meta_entries = {}   # Dictionary to store the Entry widgets for meta-tags
         self.game_menu = None    # Reference to the Game Menu for updating item states
         self.stored_moves = []
+        self.top_5_major_set = {}
+        self.top_5_minor_set = {}
 
         # Store button references for robust access
         self.insert_edit_comment_button = None
