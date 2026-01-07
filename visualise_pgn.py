@@ -812,7 +812,7 @@ class TouchMoveList(tk.Frame):
             # Scroll the canvas
             self.canvas.yview_moveto(relative_pos)
 
-IMAGE_DIRECTORY = "pgn_entry/Images/60"
+IMAGE_DIRECTORY = "Images/piece"
 TOUCH_WIDTH = 25
 # --- TKINTER CLASS ---
 
@@ -822,7 +822,10 @@ class ChessEventViewer:
     """
 
     def __init__(self, master, pgn_string, square_size, image_manager, default_pgn_dir, lastLoadedPgnPath, engine_path, piece_set, board="Standard", engine_depth=17, current_game_index=0):
-        image_manager = PieceImageManager(square_size, IMAGE_DIRECTORY, piece_set)
+        if image_manager is None:
+            base_path = Path(__file__).parent.resolve()
+            full_image_path = base_path / IMAGE_DIRECTORY.strip("/")
+            image_manager = PieceImageManager(square_size, str(full_image_path), piece_set)
         self.current_movelistbox_info = None
         self.engine_path = engine_path
         self.engine_depth = engine_depth
@@ -970,7 +973,7 @@ class ChessEventViewer:
         file_menu.add_separator()
         file_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=master.quit)
+        file_menu.add_command(label="Exit", command=master.destroy)
 
         # Game Menu
         game_menu = tk.Menu(menubar, tearoff=0)
@@ -2063,7 +2066,7 @@ class ChessEventViewer:
 
     def on_closing(self):
         _save_config(self.default_pgn_dir,self.lastLoadedPgnPath, self.engine_path, self.piece_set, self.square_size, self.board, self.engine_depth)
-        exit()
+        self.master.destroy()
 
     def show_settings_dialog(self):
 
