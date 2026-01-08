@@ -2167,6 +2167,12 @@ class ChessAnnotatorApp:
         if new_width > 0:
             self.comment_display.config(wraplength=new_width)
 
+    def display_game_externally(self, file_path, game_index):
+        self.current_game_index = game_index
+        with open(file_path, 'r', encoding='utf-8') as f:
+            pgn_content = f.read()
+            self._load_game_from_content(pgn_content)
+
     def force_restart(self):
         """
         Closes the current application and starts a fresh instance.
@@ -3893,7 +3899,8 @@ class PieceImageManager1:
         # Clear old images to prevent Garbage Collector issues during reloading
         self.images = {}
 
-        print(f"Loading chess set '{self.set_identifier}' from: {self.image_dir_path}")
+        image_dir = BASE_DIR = Path(__file__).resolve().parent / self.image_dir_path
+        print(f"Loading chess set '{self.set_identifier}' from: {image_dir}")
 
         for symbol, base_prefix in self.piece_map.items():
 
@@ -3908,7 +3915,7 @@ class PieceImageManager1:
             image_path = None
 
             for ext in extensions:
-                image_path = os.path.join(self.image_dir_path, self.set_identifier, f"{filename_prefix}{ext}")
+                image_path = os.path.join(image_dir, self.set_identifier, f"{filename_prefix}{ext}")
 
                 if os.path.exists(image_path):
                     try:
