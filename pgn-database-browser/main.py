@@ -111,6 +111,10 @@ class TouchMoveListColor(tk.Frame):
         self.velocity = 0
         self.momentum_id = None
         self.text_area.tag_configure("game_count", foreground="#888888")  # Grey color
+        # A very light grey (#f9f9f9) or a soft blue-grey (#f2f4f6) works well
+        self.text_area.tag_configure("odd_row", background="#f2f4f6")
+        # Ensure the selection highlight stays on top of the row color
+        self.text_area.tag_raise("highlight", "odd_row")
         if self.move_pairs:
             self._populate()
 
@@ -181,25 +185,35 @@ class TouchMoveListColor(tk.Frame):
     # --- Public API ---
     def insert(self, index, text):
         """
-        Inserts text and applies the 'game_count' tag to
-        content found inside parentheses.
+        Inserts text with alternating background colors and
+        automatic color tagging for game counts.
         """
         self.text_area.config(state=tk.NORMAL)
 
-        # Regex to find text within parentheses, e.g., (123 games)
+        # Determine the current line number to decide on background color
+        # index 'end-1c' gives the position before the final newline
+        line_number = int(self.text_area.index("end-1c").split('.')[0])
+
+        # Decide which tag to use for the background
+        line_tag = "odd_row" if line_number % 2 == 0 else ""
+
+        # Regex to find text within parentheses
         import re
         parts = re.split(r'(\(.+?\))', text)
 
         for part in parts:
-            if part.startswith('(') and part.endswith(')'):
-                # Apply the specific color tag to the parentheses part
-                self.text_area.insert(tk.END, part, "game_count")
-            else:
-                # Insert the rest as normal text
-                self.text_area.insert(tk.END, part)
+            # Combine the background tag with the functional tags
+            tags = [line_tag] if line_tag else []
 
-        # Add the newline at the end
-        self.text_area.insert(tk.END, "\n")
+            if part.startswith('(') and part.endswith(')'):
+                tags.append("game_count")
+                self.text_area.insert(tk.END, part, tuple(tags))
+            else:
+                self.text_area.insert(tk.END, part, tuple(tags))
+
+        # Add the newline and apply the background tag to it as well
+        # to ensure the color covers the full width.
+        self.text_area.insert(tk.END, "\n", line_tag if line_tag else None)
         self.text_area.config(state=tk.DISABLED)
 
     def delete(self, first, last=None):
@@ -894,7 +908,7 @@ class GlobalLibraryBrowser(tk.Tk):
 
     def _display_openings(self):
         self._fill_list("opening", self.opening_index,
-                        self.tabs["opening"].search_var.get(), self.opening_start)
+                        self.tabs["opening"].search_var.get(), self.opening_start, sort_by_count=False, ascending=True)
         self._update_nav_labels()
 
     def _display_years(self):
@@ -907,7 +921,7 @@ class GlobalLibraryBrowser(tk.Tk):
                         self.tabs["file"].search_var.get(), self.file_start)
         self._update_nav_labels()
 
-    def _fill_list(self, tab_key, data_index, filter_term, start_index, sort_by_count=True):
+    def _fill_list(self, tab_key, data_index, filter_term, start_index, sort_by_count=True, ascending=False):
         tab = self.tabs[tab_key]
 
         # 1. Clear current list
@@ -919,9 +933,9 @@ class GlobalLibraryBrowser(tk.Tk):
                           if not filter_term or filter_term.lower() in item[0].lower()]
 
         if sort_by_count:
-            sorted_items = sorted(filtered_items, key=lambda x: len(x[1]), reverse=True)
+            sorted_items = sorted(filtered_items, key=lambda x: len(x[1]), reverse=not ascending)
         else:
-            sorted_items = sorted(filtered_items, key=lambda x: x[0], reverse=True)
+            sorted_items = sorted(filtered_items, key=lambda x: x[0], reverse=not ascending)
 
         page_items = sorted_items[start_index: start_index + self.page_size]
 
@@ -1103,6 +1117,11 @@ class GlobalGameListWindow(tk.Toplevel):
         self.tree.column("result", width=80, anchor="center")
         self.tree.column("file", width=250)
 
+        # Configure the alternating row color
+        self.tree.tag_configure("odd_row", background="#f2f4f6")
+        # The even row stays white by default, but you can define it explicitly if needed
+        self.tree.tag_configure("even_row", background="white")
+
         # Wide scrollbar
         scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL,
                                command=self.tree.yview, style="Vertical.TScrollbar")
@@ -1206,8 +1225,15 @@ class GlobalGameListWindow(tk.Toplevel):
 
         # 3. Populate the Treeview
         page_items = self.game_data[start_idx:end_idx]
-        for file_path, offset, original_index in page_items:
+        for i, (file_path, offset, original_index) in enumerate(page_items):
             try:
+                # Determine if the row is even or odd for the background color
+                # i + 1 because the user sees page starting at 1
+                row_tag = "odd_row" if i % 2 != 0 else "even_row"
+
+                # Combine the row color tag with any metadata tags (file_path, offset, etc.)
+                all_tags = (row_tag, file_path, offset, original_index)
+
                 with open(file_path, encoding='utf-8', errors='ignore') as f:
                     f.seek(offset)
                     headers = chess.pgn.read_headers(f)
@@ -1219,7 +1245,7 @@ class GlobalGameListWindow(tk.Toplevel):
                         headers.get("Black", "Unknown"),
                         headers.get("Result", "*"),
                         short_filename
-                    ), tags=(file_path, offset, original_index))
+                    ), tags=all_tags)  # Apply the tags here
             except Exception as e:
                 print(f"Error loading game: {e}")
 
