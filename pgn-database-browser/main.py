@@ -583,14 +583,33 @@ class GlobalLibraryBrowser(tk.Tk):
         nav_frame = ttk.Frame(self)
         nav_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
 
-        self.btn_prev = ttk.Button(nav_frame, text="<< Previous", command=self._prev_page)
-        self.btn_prev.pack(side=tk.LEFT)
+        # Previous Button
+        self.btn_prev = ttk.Button(nav_frame, text="<<", command=self._prev_page, width=5)
+        self.btn_prev.pack(side=tk.LEFT, padx=5)
 
-        self.page_label = ttk.Label(nav_frame, text="0 - 0")
-        self.page_label.pack(side=tk.LEFT, expand=True)
+        # The Slider (Scale)
+        # We use tk.Scale because it's easier to style for touch than ttk.Scale
+        self.page_slider = tk.Scale(
+            nav_frame,
+            from_=0,
+            to=100,  # This will be updated dynamically
+            orient=tk.HORIZONTAL,
+            showvalue=False,  # We show the value in our own label
+            command=self._on_slider_move,
+            sliderlength=40,  # Bigger handle for fingers
+            width=20,  # Thicker bar
+            bd=0,
+            highlightthickness=0
+        )
+        self.page_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
 
-        self.btn_next = ttk.Button(nav_frame, text="Next >>", command=self._next_page)
-        self.btn_next.pack(side=tk.RIGHT)
+        # Next Button
+        self.btn_next = ttk.Button(nav_frame, text=">>", command=self._next_page, width=5)
+        self.btn_next.pack(side=tk.LEFT, padx=5)
+
+        # Page Label (showing the current range)
+        self.page_label = ttk.Label(nav_frame, text="0 - 0", width=15, anchor="center")
+        self.page_label.pack(side=tk.LEFT, padx=5)
         # pack notebook last
         self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
@@ -614,20 +633,52 @@ class GlobalLibraryBrowser(tk.Tk):
         }
         refresh_methods[context]()
 
+    def _on_slider_move(self, value):
+        """
+        Handles slider movement. Translates the page number from the slider
+        to the starting index of the current active tab.
+        """
+        # Convert slider value to integer page number
+        new_page = int(float(value))
+        new_start = new_page * self.page_size
+
+        context, _, _, _ = self._get_current_context()
+
+        # Check if the start index actually changed to avoid redundant refreshes
+        if context == "player" and self.player_start != new_start:
+            self.player_start = new_start
+            self._display_players()
+        elif context == "opening" and self.opening_start != new_start:
+            self.opening_start = new_start
+            self._display_openings()
+        elif context == "year" and self.year_start != new_start:
+            self.year_start = new_start
+            self._display_years()
+        elif context == "file" and self.file_start != new_start:
+            self.file_start = new_start
+            self._display_files()
+
+        # Update the labels to reflect the new range
+        self._update_nav_labels()
+
     def _next_page(self):
         context, _, _, _ = self._get_current_context()
         if context == "player":
-            self.player_start += self.page_size
-            self._display_players()
+            if self.player_start + self.page_size < len(self.player_index):
+                self.player_start += self.page_size
+                self._display_players()
         elif context == "opening":
-            self.opening_start += self.page_size
-            self._display_openings()
+            if self.opening_start + self.page_size < len(self.opening_index):
+                self.opening_start += self.page_size
+                self._display_openings()
         elif context == "year":
-            self.year_start += self.page_size
-            self._display_years()
+            if self.year_start + self.page_size < len(self.year_index):
+                self.year_start += self.page_size
+                self._display_years()
         elif context == "file":
-            self.file_start += self.page_size
-            self._display_files()
+            if self.file_start + self.page_size < len(self.file_index):
+                self.file_start += self.page_size
+                self._display_files()
         self._update_nav_labels()
 
     def _prev_page(self):
@@ -647,21 +698,46 @@ class GlobalLibraryBrowser(tk.Tk):
         self._update_nav_labels()
 
     def _update_nav_labels(self):
-        """Update the text between the buttons based on current data"""
-        context, data_index, search_term, start = self._get_current_context()
+        """
+        Synchronizes the slider range, slider position, and page labels
+        based on the current active tab's data and scroll position.
+        """
+        context, _, _, _ = self._get_current_context()
 
-        # Filter the data first to determine the total
-        filtered = [name for name in data_index if not search_term or search_term.lower() in name.lower()]
-        total = len(filtered)
-        end = min(start + self.page_size, total)
+        # 1. Determine current start index and total items for the active tab
+        if context == "player":
+            current_start = self.player_start
+            total_items = len(self.player_index)
+        elif context == "opening":
+            current_start = self.opening_start
+            total_items = len(self.opening_index)
+        elif context == "year":
+            current_start = self.year_start
+            total_items = len(self.year_index)
+        else:  # file
+            current_start = self.file_start
+            total_items = len(self.file_index)
 
-        if total == 0:
-            self.page_label.config(text="No results")
+        # 2. Calculate pagination values
+        total_pages = (total_items + self.page_size - 1) // self.page_size
+        current_page = current_start // self.page_size
+
+        # 3. Update the Slider widget
+        # We temporarily disable the command to prevent a feedback loop
+        self.page_slider.config(command="")
+        self.page_slider.config(to=max(0, total_pages - 1))
+        self.page_slider.set(current_page)
+        self.page_slider.config(command=self._on_slider_move)
+
+        # 4. Update the Range Label (e.g., "1 - 200 of 5000")
+        end_item = min(current_start + self.page_size, total_items)
+        if total_items == 0:
+            self.page_label.config(text="No items")
         else:
-            self.page_label.config(text=f"{start + 1} to {end} (of {total})")
+            self.page_label.config(text=f"{current_start + 1} - {end_item} of {total_items}")
 
-        self.btn_prev.config(state=tk.NORMAL if start > 0 else tk.DISABLED)
-        self.btn_next.config(state=tk.NORMAL if end < total else tk.DISABLED)
+        # 5. Update Button States (Disable if at boundaries)
+        self.btn_prev.config(state=tk.NORMAL if current_start > 0 else tk.DISABLED)
 
     def _save_preferences(self):
         """Saves current directory and other settings to configuration.json."""
@@ -1037,16 +1113,33 @@ class GlobalGameListWindow(tk.Toplevel):
 
         # Pagination Footer
         nav_frame = ttk.Frame(self)
-        nav_frame.pack(fill=tk.X, pady=15, padx=10)
+        nav_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=15, padx=10)
 
-        self.btn_prev = ttk.Button(nav_frame, text="   < Previous   ", command=self._prev_page)
+        # Smaller width for buttons to make room for the slider
+        self.btn_prev = ttk.Button(nav_frame, text="  <<  ", command=self._prev_page, width=6)
         self.btn_prev.pack(side=tk.LEFT, padx=5)
 
-        self.lbl_page = ttk.Label(nav_frame, text="Page 1 of X")
-        self.lbl_page.pack(side=tk.LEFT, expand=True)
+        # Finger-friendly slider
+        self.page_slider = tk.Scale(
+            nav_frame,
+            from_=0,
+            to=100,  # Dynamic
+            orient=tk.HORIZONTAL,
+            showvalue=False,
+            command=self._on_slider_move,
+            sliderlength=40,  # Touch target size
+            width=20,  # Bar thickness
+            bd=0,
+            highlightthickness=0
+        )
+        self.page_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
 
-        self.btn_next = ttk.Button(nav_frame, text="   Next >   ", command=self._next_page)
-        self.btn_next.pack(side=tk.RIGHT, padx=5)
+        self.btn_next = ttk.Button(nav_frame, text="  >>  ", command=self._next_page, width=6)
+        self.btn_next.pack(side=tk.LEFT, padx=5)
+
+        # Status Label
+        self.lbl_page = ttk.Label(nav_frame, text="Page 1 of X", width=20, anchor="center")
+        self.lbl_page.pack(side=tk.LEFT, padx=5)
 
         # Bindings
         self.tree.bind("<Double-1>", self._on_select)
@@ -1080,18 +1173,39 @@ class GlobalGameListWindow(tk.Toplevel):
         select_menu.add_command(label="Clear Selection", command=self._clear_selection, accelerator="Esc")
         select_menu.add_command(label="Invert Selection", command=self._invert_selection, accelerator="Ctrl+I")
 
+    def _on_slider_move(self, value):
+        """ Handles slider scrubbing. Updates the current page and refreshes. """
+        new_page = int(float(value))
+        if new_page != self.current_page:
+            self.current_page = new_page
+            self.refresh_page()
+
     def refresh_page(self):
-        """ Loads only the items for the current page. """
+        """ Loads only the items for the current page and syncs UI elements. """
         self.tree.delete(*self.tree.get_children())
 
         total_games = len(self.game_data)
         total_pages = (total_games + self.page_size - 1) // self.page_size
 
+        # Ensure current_page stays within bounds
+        self.current_page = max(0, min(self.current_page, total_pages - 1))
+
         start_idx = self.current_page * self.page_size
         end_idx = min(start_idx + self.page_size, total_games)
 
-        page_items = self.game_data[start_idx:end_idx]
+        # 1. Update the Slider position and range without triggering _on_slider_move
+        self.page_slider.config(command="")
+        self.page_slider.config(to=max(0, total_pages - 1))
+        self.page_slider.set(self.current_page)
+        self.page_slider.config(command=self._on_slider_move)
 
+        # 2. Update Label and Button states
+        self.lbl_page.config(text=f"Page {self.current_page + 1} of {total_pages}")
+        self.btn_prev.config(state=tk.NORMAL if self.current_page > 0 else tk.DISABLED)
+        self.btn_next.config(state=tk.NORMAL if (self.current_page + 1) < total_pages else tk.DISABLED)
+
+        # 3. Populate the Treeview
+        page_items = self.game_data[start_idx:end_idx]
         for file_path, offset, original_index in page_items:
             try:
                 with open(file_path, encoding='utf-8', errors='ignore') as f:
@@ -1109,21 +1223,18 @@ class GlobalGameListWindow(tk.Toplevel):
             except Exception as e:
                 print(f"Error loading game: {e}")
 
-        # Update Navigation Labels
-        self.lbl_page.config(text=f"Page {self.current_page + 1} of {total_pages}")
-        self.lbl_info.config(text=f"Showing games {start_idx + 1} to {end_idx} of {total_games}")
-
-        # Toggle button states
-        self.btn_prev.config(state=tk.NORMAL if self.current_page > 0 else tk.DISABLED)
-        self.btn_next.config(state=tk.NORMAL if (self.current_page + 1) < total_pages else tk.DISABLED)
-
     def _next_page(self):
-        self.current_page += 1
-        self.refresh_page()
+        """ Moves to the next page if available. """
+        total_pages = (len(self.game_data) + self.page_size - 1) // self.page_size
+        if (self.current_page + 1) < total_pages:
+            self.current_page += 1
+            self.refresh_page()
 
     def _prev_page(self):
-        self.current_page -= 1
-        self.refresh_page()
+        """ Moves to the previous page if available. """
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.refresh_page()
 
     def _sort_by(self, col):
         """ Sorts the entire dataset and returns to the first page. """
