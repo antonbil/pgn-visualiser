@@ -565,7 +565,7 @@ class GlobalLibraryBrowser(tk.Tk):
         self.prog_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
 
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: self._update_nav_labels())
 
         # 3. NOW CREATE THE TABS (passing self.notebook as parent)
@@ -581,7 +581,7 @@ class GlobalLibraryBrowser(tk.Tk):
         self.notebook.add(self.tabs["file"], text=" Databases ")
         # 3. Navigation Frame: at the bottom, outside the tabs
         nav_frame = ttk.Frame(self)
-        nav_frame.pack(fill=tk.X, padx=10, pady=10)
+        nav_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
 
         self.btn_prev = ttk.Button(nav_frame, text="<< Previous", command=self._prev_page)
         self.btn_prev.pack(side=tk.LEFT)
@@ -591,6 +591,8 @@ class GlobalLibraryBrowser(tk.Tk):
 
         self.btn_next = ttk.Button(nav_frame, text="Next >>", command=self._next_page)
         self.btn_next.pack(side=tk.RIGHT)
+        # pack notebook last
+        self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
     def _get_current_context(self):
         tab_idx = self.notebook.index(self.notebook.select())
