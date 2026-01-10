@@ -870,24 +870,28 @@ class GlobalLibraryBrowser(tk.Tk):
 
     def _set_page_size_pref(self):
         """Dialog to modify the page_size of the library."""
-        current_val = PREFS.get("page_size", 20)
+        current_val = self.prefs.get("page_size", 20)
         new_val = tk.simpledialog.askinteger(
             "Settings", "Enter items per page in library:",
-            initialvalue=current_val, minvalue=10, maxvalue=2000
+            initialvalue=current_val, minvalue=5, maxvalue=2000
         )
         if new_val:
-            PREFS["page_size"] = new_val
+            self.prefs["page_size"] = new_val
+            self._save_preferences()
+            self.page_size = new_val
+            self.refresh_library()
             print(f"Updated page_size: {new_val}")
 
     def _set_page_size_games_pref(self):
         """Dialog to modify the page_size of the game-list."""
-        current_val = PREFS.get("file_page_size", 20)
+        current_val = self.prefs.get("file_page_size", 20)
         new_val = tk.simpledialog.askinteger(
             "Settings", "Enter items per page in games-list:",
-            initialvalue=current_val, minvalue=10, maxvalue=2000
+            initialvalue=current_val, minvalue=5, maxvalue=2000
         )
         if new_val:
-            PREFS["file_page_size"] = new_val
+            self.prefs["file_page_size"] = new_val
+            self._save_preferences()
             print(f"Updated page_size: {new_val}")
 
     def refresh_library(self):
