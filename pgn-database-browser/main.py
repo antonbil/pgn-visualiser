@@ -40,7 +40,7 @@ if editor_path not in sys.path:
 
 # Now you can import as if it were in your local directory
 try:
-    from pgn_editor.pgn_editor import ChessAnnotatorApp, PieceImageManager1, TouchMoveListColor
+    from pgn_editor.pgn_editor import ChessAnnotatorApp, PieceImageManager1
     print("Annotator successfully imported!")
 except ImportError as e:
     print(f"Could not find the annotator at {editor_path}: {e}")
@@ -58,6 +58,181 @@ try:
 except ImportError as e:
     print(f"Could not find the annotator at {editor_path}: {e}")
 
+class TouchMoveListColor(tk.Frame):
+    """
+    A streamlined, touch-friendly list replacement for the Library.
+    Supports basic highlighting, smooth scrolling, and momentum.
+    """
+
+    def __init__(self, parent, move_pairs=None, select_callback=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.move_pairs = move_pairs if move_pairs else []
+        self.select_callback = select_callback
+        self.selected_index = None
+
+        # --- UI Setup ---
+        # --- UI Setup ---
+        self.text_area = tk.Text(
+            self,
+            font=("Segoe UI", 13),  # Increased base font size
+            wrap=tk.NONE,
+            bg="white",
+            padx=10,
+            pady=10,
+            cursor="arrow",
+            highlightthickness=0,
+            bd=0,
+            state=tk.DISABLED,
+            undo=False,
+            exportselection=False,
+            # Spacing makes the lines much easier to tap with fingers
+            spacing1=8,  # Extra space above the line
+            spacing3=8  # Extra space below the line
+        )
+        self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.text_area.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_area.configure(yscrollcommand=self.scrollbar.set)
+
+        # Basic tag configuration for highlighting
+        self.text_area.tag_configure("highlight", background="#cfe2f3")
+
+        # --- Event Bindings ---
+        self.text_area.bind("<Button-1>", self._on_drag_start)
+        self.text_area.bind("<B1-Motion>", self._on_drag_motion)
+        self.text_area.bind("<ButtonRelease-1>", self._on_tap)
+
+        # Scrolling and momentum variables
+        self.drag_start_y = 0
+        self.start_scroll_pos = 0
+        self.scrolled_too_far = False
+        self.last_y = 0
+        self.velocity = 0
+        self.momentum_id = None
+        self.text_area.tag_configure("game_count", foreground="#888888")  # Grey color
+        if self.move_pairs:
+            self._populate()
+
+    def _populate(self):
+        """ Clears and fills the text area with initial move pairs. """
+        self.delete(0, tk.END)
+        for i, move in enumerate(self.move_pairs):
+            self.insert(tk.END, move)
+
+    def _on_drag_start(self, event):
+        """ Handles the initial press and cancels active momentum. """
+        if self.momentum_id:
+            self.after_cancel(self.momentum_id)
+            self.momentum_id = None
+
+        self.drag_start_y = event.y
+        self.last_y = event.y
+        self.start_scroll_pos = self.text_area.yview()[0]
+        self.scrolled_too_far = False
+        self.velocity = 0
+
+        # Ensure the text_area gains focus for keyboard shortcuts
+        self.text_area.focus_set()
+        return "break"
+
+    def _on_drag_motion(self, event):
+        """ Tracks movement to perform scrolling and calculate velocity. """
+        delta_y = event.y - self.drag_start_y
+        self.velocity = event.y - self.last_y
+        self.last_y = event.y
+
+        if abs(delta_y) > 5:
+            self.scrolled_too_far = True
+
+        height = self.text_area.winfo_height()
+        if height > 1:
+            new_pos = self.start_scroll_pos - (delta_y / height)
+            self.text_area.yview_moveto(max(0, min(1, new_pos)))
+        return "break"
+
+    def _on_tap(self, event):
+        """ Handles the release event to trigger selection or momentum. """
+        if self.scrolled_too_far:
+            if abs(self.velocity) > 2:
+                self._apply_momentum(self.velocity)
+            return "break"
+
+        index_str = self.text_area.index(f"@{event.x},{event.y}")
+        line_index = int(index_str.split('.')[0]) - 1
+
+        # Selection logic is usually handled by the subclass MultiSelectTouchList
+        if self.select_callback:
+            self.select_callback(line_index)
+        return "break"
+
+    def _apply_momentum(self, current_velocity):
+        """ Smoothly continues scrolling after a fast swipe. """
+        friction = 0.92
+        new_velocity = current_velocity * friction
+        if abs(new_velocity) > 0.5:
+            height = self.text_area.winfo_height()
+            if height > 1:
+                current_pos = self.text_area.yview()[0]
+                new_scroll_pos = current_pos - (new_velocity / height)
+                self.text_area.yview_moveto(max(0, min(1, new_scroll_pos)))
+                self.momentum_id = self.after(10, lambda: self._apply_momentum(new_velocity))
+
+    # --- Public API ---
+    def insert(self, index, text):
+        """
+        Inserts text and applies the 'game_count' tag to
+        content found inside parentheses.
+        """
+        self.text_area.config(state=tk.NORMAL)
+
+        # Regex to find text within parentheses, e.g., (123 games)
+        import re
+        parts = re.split(r'(\(.+?\))', text)
+
+        for part in parts:
+            if part.startswith('(') and part.endswith(')'):
+                # Apply the specific color tag to the parentheses part
+                self.text_area.insert(tk.END, part, "game_count")
+            else:
+                # Insert the rest as normal text
+                self.text_area.insert(tk.END, part)
+
+        # Add the newline at the end
+        self.text_area.insert(tk.END, "\n")
+        self.text_area.config(state=tk.DISABLED)
+
+    def delete(self, first, last=None):
+        """ Deletes lines based on zero-based index. """
+        self.text_area.config(state=tk.NORMAL)
+        if first == 0 and (last == tk.END or last is None):
+            self.text_area.delete("1.0", tk.END)
+        else:
+            self.text_area.delete(f"{first + 1}.0", f"{last + 1}.0" if last else f"{first + 2}.0")
+        self.text_area.config(state=tk.DISABLED)
+
+    def selection_set(self, index):
+        """ Applies the highlight tag to a specific line. """
+        start = f"{index + 1}.0"
+        end = f"{index + 1}.end + 1c"
+        self.text_area.tag_add("highlight", start, end)
+
+    def selection_clear(self):
+        """ Removes the highlight tag from all text. """
+        self.text_area.tag_remove("highlight", "1.0", tk.END)
+
+    def get_selected_indices(self):
+        """ Returns a list of all line indices that are currently highlighted. """
+        ranges = self.text_area.tag_ranges("highlight")
+        indices = []
+        for i in range(0, len(ranges), 2):
+            start_line = int(ranges[i].string.split('.')[0]) - 1
+            indices.append(start_line)
+        return indices
+
+    def see(self, index):
+        """ Ensures the specified line is visible in the view. """
+        self.text_area.see(f"{index + 1}.0")
 
 class MultiSelectTouchList(TouchMoveListColor):
     """
@@ -803,11 +978,11 @@ class GlobalGameListWindow(tk.Toplevel):
         # Increase font to 12 or 13 for better legibility.
         # Keeping rowheight at 35 makes the margins smaller
         # because the text takes up more of that vertical space.
-        tree_font = ("Segoe UI", 12)
-        header_font = ("Segoe UI Bold", 11)
+        tree_font = ("Segoe UI", 13)
+        header_font = ("Segoe UI Bold", 12)
 
         style.configure("Touch.Treeview",
-                        rowheight=35,
+                        rowheight=40,
                         font=tree_font)
 
         style.configure("Touch.Treeview.Heading",
