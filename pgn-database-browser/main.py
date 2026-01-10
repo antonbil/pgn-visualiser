@@ -301,7 +301,7 @@ class GlobalLibraryBrowser(tk.Tk):
         self.tab_keys = ["player", "opening", "year", "file"]
 
         self.title(f"Chess Library Browser - {self.directory}")
-        self.geometry("700x850")
+        self.geometry("700x650")
 
         self.page_size = self.prefs.get("page_size", 35)
 
@@ -774,7 +774,7 @@ class GlobalGameListWindow(tk.Toplevel):
         super().__init__(parent)
         self.chess_annotator_app = None
         self.title(f"Games of {player_name}")
-        self.geometry("1000x750")  # Slightly larger for touch
+        self.geometry("1000x650")  # Slightly larger for touch
 
         self.game_data = game_data
         self.prefs = parent.prefs
