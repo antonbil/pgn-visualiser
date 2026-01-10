@@ -1537,7 +1537,6 @@ class ChessEventViewer:
             parent_frame,
             self.current_game_moves,
             self._on_move_tapped
-            #self._move_selected_wrapper  # see wrapper below
         )
         self.move_listboxes.append(self.touch_move_list)
         self.touch_move_list.set_font_size(12)

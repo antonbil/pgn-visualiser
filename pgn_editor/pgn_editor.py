@@ -1543,7 +1543,9 @@ class GameChooserDialog(tk.Toplevel):
 COMPACT_HEIGHT_THRESHOLD = 1000
 
 class ChessAnnotatorApp:
-    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75, current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None, engine_depth=17):
+    def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75,
+                 current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None,
+                 engine_depth=17):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
 
         self.theme_name=board
