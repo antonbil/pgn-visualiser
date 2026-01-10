@@ -949,7 +949,7 @@ class GlobalGameListWindow(tk.Toplevel):
         super().__init__(parent)
         self.chess_annotator_app = None
         self.title(f"Games of {player_name}")
-        self.geometry("1000x650")  # Slightly larger for touch
+        self.geometry("1200x650")  # Slightly larger for touch
 
         self.game_data = game_data
         self.prefs = parent.prefs
