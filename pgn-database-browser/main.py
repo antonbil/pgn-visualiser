@@ -1420,10 +1420,11 @@ class GlobalGameListWindow(tk.Toplevel):
 
         # Get data from tags
         tags = self.tree.item(selected[0], "tags")
-        file_path = tags[0]
-        offset = tags[1]
+        print("tags:", tags)
+        file_path = tags[1]
+        offset = tags[3]
         # Convert game_index to an integer!
-        game_index = int(tags[2])
+        game_index = int(tags[3])
 
         # Create a new window for the annotator
         new_window = tk.Toplevel(self)
@@ -1501,10 +1502,11 @@ class GlobalGameListWindow(tk.Toplevel):
 
         # Retrieve the data from the tags
         tags = self.tree.item(item[0], "tags")
-        file_path = tags[0]
-        offset = tags[1]
+        print("tags:", tags)
+        file_path = tags[1]
+        offset = tags[3]
         # Convert the game_index to an integer!
-        game_index = int(tags[2])
+        game_index = int(tags[3])
         if self.chess_annotator_app is None:
 
             # Create a new window for the annotator
