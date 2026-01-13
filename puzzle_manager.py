@@ -1,13 +1,15 @@
+
+
 import chess
 import chess.pgn
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
 import os
 import json
 import random
 import argparse
+import webbrowser  # Required for Lichess integration
 from PIL import Image, ImageTk
-from tkinter import filedialog # Added for file selection
 
 
 # --- HISTORY DETAIL WINDOW ---
@@ -176,7 +178,6 @@ class HistoryWindow(tk.Toplevel):
             p_id = self.tree.item(item)['values'][0]
             HistoryDetailWindow(self, self.engine.puzzles[int(p_id)], self.piece_images)
 
-
 # --- PUZZLE ENGINE ---
 
 class PuzzleEngine:
@@ -184,7 +185,6 @@ class PuzzleEngine:
         base_name = os.path.splitext(pgn_file)[0]
         self.save_file = f"{base_name}_results.json"
 
-        # Only try to load if file actually exists
         if os.path.exists(pgn_file):
             self.puzzles = self._load_puzzles(pgn_file)
         else:
@@ -197,7 +197,8 @@ class PuzzleEngine:
         self.current_index = -1
 
     def _load_puzzles(self, filename):
-        puzzles = []
+        """ Reads PGN and extracts puzzle data including Lichess Site URL. """
+        p_list = []
         try:
             with open(filename) as f:
                 while True:
@@ -207,6 +208,7 @@ class PuzzleEngine:
                     w = game.headers.get("White", "").strip()
                     b = game.headers.get("Black", "").strip()
 
+                    # Distinguish between training format (one mistake first) and normal PGN
                     is_training = "wins" in w.lower() or "wins" in b.lower()
 
                     if is_training:
@@ -219,19 +221,20 @@ class PuzzleEngine:
                         names = [n for n in [w, b] if n and n != "?"]
                         display_name = " - ".join(names) if len(names) > 1 else (names[0] if names else "")
 
-                    puzzles.append({
+                    p_list.append({
                         'fen': game.headers.get("FEN"),
                         'initial_move': initial_move,
                         'solution': solution,
                         'display_name': display_name,
                         'date': game.headers.get("Date", ""),
                         'event': game.headers.get("Event", "Chess Puzzle"),
+                        'site': game.headers.get("Site", ""),  # Link to Lichess
                         'rating': game.headers.get("Rating", "N/A"),
                         'themes': game.headers.get("Themes", "")
                     })
         except Exception as e:
             print(f"PGN Error: {e}")
-        return puzzles
+        return p_list
 
     def _load_state(self):
         if os.path.exists(self.save_file):
@@ -254,7 +257,7 @@ class PuzzleEngine:
         return self.puzzles[self.current_index]
 
 
-# --- CHESS PUZZLE APP CLASS ---
+# --- MAIN APP ---
 
 class ChessPuzzleApp(tk.Toplevel):
     def __init__(self, pgn_file=None):
@@ -262,17 +265,16 @@ class ChessPuzzleApp(tk.Toplevel):
         self.title("Chess Puzzle Manager")
         self.geometry("550x780")
 
-        # 1. Load configuration first (Recent files, etc.)
+        # 1. Config loading (AttributeError fix)
         self.config_data = self._load_config()
 
-        # 2. Initialize Engine (Use provided file or fallback to example)
+        # 2. Engine Initialization
         if pgn_file and os.path.exists(pgn_file):
             self.engine = PuzzleEngine(pgn_file)
             self._add_to_recent(pgn_file)
         else:
             self.engine = self._create_fallback_engine()
 
-        # 3. State variables
         self.board = None
         self.selected_square = None
         self.hint_square = None
@@ -281,21 +283,16 @@ class ChessPuzzleApp(tk.Toplevel):
         self.solve_step = 0
         self.is_flipped = False
 
-        # 4. Setup UI Components
         self._load_images()
         self._setup_menu()
         self._setup_ui()
 
-        # 5. Load the first puzzle
         self.load_puzzle()
-
-        # Handle window closing
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    # --- CONFIGURATION & RECENT FILES ---
+    # --- CONFIG & MENU ---
 
     def _load_config(self):
-        """ Loads app settings from config.json. """
         if os.path.exists("config.json"):
             try:
                 with open("config.json", "r") as f:
@@ -305,87 +302,39 @@ class ChessPuzzleApp(tk.Toplevel):
         return {"recent_files": []}
 
     def _save_config(self):
-        """ Saves current settings to config.json. """
-        with open("config.json", "w") as f:
-            json.dump(self.config_data, f)
+        with open("config.json", "w") as f: json.dump(self.config_data, f)
 
     def _add_to_recent(self, filename):
-        """ Adds a file path to the recent list and refreshes the menu. """
         filename = os.path.abspath(filename)
         recent = self.config_data.get("recent_files", [])
-        if filename in recent:
-            recent.remove(filename)
+        if filename in recent: recent.remove(filename)
         recent.insert(0, filename)
         self.config_data["recent_files"] = recent[:5]
         self._save_config()
-        if hasattr(self, 'menubar'):
-            self._setup_menu()
-
-    # --- ENGINE MANAGEMENT ---
-
-    def _create_fallback_engine(self):
-        """ Creates a temporary engine with an example puzzle to prevent empty startup. """
-        dummy = PuzzleEngine.__new__(PuzzleEngine)
-        dummy.save_file = "temp_results.json"
-        dummy.total_score = 0
-        dummy.total_solved = 0
-        dummy.played_history = {}
-        dummy.puzzles = [{
-            'fen': 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
-            'initial_move': None,
-            'solution': [chess.Move.from_uci("h5f7")],
-            'display_name': "Example Puzzle (Scholar's Mate)",
-            'date': "2026",
-            'event': "No PGN Loaded",
-            'rating': "Easy",
-            'themes': "mateIn1"
-        }]
-        return dummy
-
-    def _load_specific_pgn(self, filename):
-        """ Switches to a new PGN database and starts the first puzzle. """
-        if not os.path.exists(filename):
-            messagebox.showerror("Error", f"File not found: {filename}")
-            return
-        if self.engine:
-            self.engine.save_state()
-        self.engine = PuzzleEngine(filename)
-        self._add_to_recent(filename)
-        self.load_puzzle()
-
-    # --- UI & MENU ---
+        if hasattr(self, 'menubar'): self._setup_menu()
 
     def _setup_menu(self):
-        """ Builds the top navigation menu. """
         self.menubar = tk.Menu(self)
         self.config(menu=self.menubar)
 
-        # File Menu
         file_menu = tk.Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Load PGN...", command=self._menu_load_pgn)
 
-        # Recent Files Submenu
         recent_menu = tk.Menu(file_menu, tearoff=0)
         file_menu.add_cascade(label="Open Recent", menu=recent_menu)
-        recent_list = self.config_data.get("recent_files", [])
-        if not recent_list:
-            recent_menu.add_command(label="No recent files", state=tk.DISABLED)
-        else:
-            for path in recent_list:
-                label = os.path.basename(path)
-                recent_menu.add_command(label=label, command=lambda p=path: self._load_specific_pgn(p))
+        for path in self.config_data.get("recent_files", []):
+            label = os.path.basename(path)
+            recent_menu.add_command(label=label, command=lambda p=path: self._load_specific_pgn(p))
 
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._on_close)
 
-        # View Menu
         view_menu = tk.Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="History", command=self._show_history)
+        view_menu.add_command(label="History", command=lambda: HistoryWindow(self, self.engine, self.piece_images))
 
     def _setup_ui(self):
-        """ Creates labels, board canvas and footer buttons. """
         header = tk.Frame(self, pady=10, bg="#f7f7f7")
         header.pack(fill=tk.X)
         self.lbl_overall = tk.Label(header, text="", font=("Segoe UI", 10), bg="#f7f7f7")
@@ -406,50 +355,44 @@ class ChessPuzzleApp(tk.Toplevel):
         self.lbl_attempts = tk.Label(footer, text="", font=("Segoe UI", 10, "bold"), fg="#e74c3c")
         self.lbl_attempts.pack()
 
-        btn_container = tk.Frame(footer)
-        btn_container.pack()
-        self.btn_hint = ttk.Button(btn_container, text="Hint", command=self._show_hint)
+        self.btn_container = tk.Frame(footer)
+        self.btn_container.pack()
+        self.btn_hint = ttk.Button(self.btn_container, text="Hint", command=self._show_hint)
         self.btn_hint.pack(side=tk.LEFT, padx=5)
         self.btn_hint.pack_forget()
 
-        ttk.Button(btn_container, text="Skip (-5 pts)", command=self._skip).pack(side=tk.LEFT, padx=5)
+        self.btn_analyze = ttk.Button(self.btn_container, text="Analyze on Lichess", command=self._analyze_on_lichess)
+        self.btn_analyze.pack(side=tk.LEFT, padx=5)
+        self.btn_analyze.pack_forget()
+
+        ttk.Button(self.btn_container, text="Skip (-5 pts)", command=self._skip).pack(side=tk.LEFT, padx=5)
 
     # --- BOARD RENDERING ---
 
     def refresh_board(self):
-        """ Redraws board and pieces, handling the 'no active puzzle' state. """
-        if not self.canvas.winfo_exists():
-            return
-
+        if not self.canvas.winfo_exists(): return
         self.canvas.delete("all")
         size = 480 // 8
         has_board = self.board is not None
 
         for r in range(8):
             for c in range(8):
-                # Determine square based on flipping
                 flipped = self.is_flipped if has_board else False
                 f_idx, r_idx = (7 - c, r) if flipped else (c, 7 - r)
                 sq = chess.square(f_idx, r_idx)
-
-                # Base Colors
                 color = "#ebecd0" if (r + c) % 2 == 0 else "#779556"
-                outline = ""
-                width = 1
+                outline, width = "", 1
 
                 if has_board:
                     if sq == self.selected_square:
                         color = "#f6f669"
                     elif sq == self.hint_square:
                         color = "#82e0aa"
-                    if sq in self.last_move_squares:
-                        outline = "#1565c0"
-                        width = 4
+                    if sq in self.last_move_squares: outline, width = "#1565c0", 4
 
-                self.canvas.create_rectangle(c * size, r * size, (c + 1) * size, (r + 1) * size,
-                                             fill=color, outline=outline, width=width)
+                self.canvas.create_rectangle(c * size, r * size, (c + 1) * size, (r + 1) * size, fill=color,
+                                             outline=outline, width=width)
 
-        # Draw Pieces
         if has_board:
             for sq, pc in self.board.piece_map().items():
                 f, r = chess.square_file(sq), chess.square_rank(sq)
@@ -457,41 +400,44 @@ class ChessPuzzleApp(tk.Toplevel):
                 img = self.piece_images.get(pc.symbol())
                 if img: self.canvas.create_image(col * size, row * size, image=img, anchor=tk.NW)
 
-    # --- CORE PUZZLE LOGIC ---
+    # --- CORE LOGIC ---
 
     def load_puzzle(self):
-        """ Fetches the next puzzle and updates UI. Returns False if finished. """
         puzzle = self.engine.get_next_random_puzzle()
         if not puzzle:
-            messagebox.showinfo("Done", "All puzzles in this file are finished!")
+            messagebox.showinfo("Done", "All puzzles finished!")
             self.lbl_event.config(text="No puzzles active")
-            self.lbl_sub.config(text="Please load a new PGN file via File -> Load")
-            self.lbl_turn.config(text="")
+            self.lbl_sub.config(text="Please load a PGN file via File -> Load")
+            self.lbl_turn.config(text="");
             self.lbl_attempts.config(text="")
-            self.btn_hint.pack_forget()
-            self.board = None
+            self.btn_hint.pack_forget();
+            self.btn_analyze.pack_forget()
+            self.board = None;
             self.refresh_board()
             return False
 
         self.board = chess.Board(puzzle['fen'])
-        self.solve_step = 0
+        self.solve_step = 0;
         self.attempts_left = 3
         self.selected_square = self.hint_square = None
-        self.btn_hint.pack_forget()
 
-        # Clean Header text
+        # Header Cleanup
         main_title = (puzzle['display_name'] if puzzle['display_name'] else puzzle['event']).replace("? - ?", "")
-        if puzzle['rating'] and puzzle['rating'] != "N/A":
-            main_title += f" ({puzzle['rating']})"
+        if puzzle['rating'] and puzzle['rating'] != "N/A": main_title += f" ({puzzle['rating']})"
         self.lbl_event.config(text=main_title)
 
         sub_info = []
         if puzzle['themes']: sub_info.append(f"Themes: {puzzle['themes'].replace('_', ' ')}")
-        if puzzle['date'] and puzzle['date'] not in ["", "????", "?.?.?", "????.??.??"]:
-            sub_info.append(f"[{puzzle['date']}]")
+        if puzzle['date'] and puzzle['date'] not in ["", "????", "?.?.?", "????.??.??"]: sub_info.append(
+            f"[{puzzle['date']}]")
         self.lbl_sub.config(text=" | ".join(sub_info))
 
-        # Handle Initial Opponent Move
+        # Lichess Button Logic
+        if puzzle.get('site'):
+            self.btn_analyze.pack(side=tk.LEFT, padx=5)
+        else:
+            self.btn_analyze.pack_forget()
+
         if puzzle['initial_move']:
             self.board.push(puzzle['initial_move'])
             self.last_move_squares = [puzzle['initial_move'].from_square, puzzle['initial_move'].to_square]
@@ -501,35 +447,102 @@ class ChessPuzzleApp(tk.Toplevel):
         self.is_flipped = (self.board.turn == chess.BLACK)
         self.lbl_turn.config(text=f"{'WHITE' if self.board.turn else 'BLACK'} TO MOVE",
                              fg="#2980b9" if self.board.turn else "#2c3e50")
-        self.update_status_display()
+        self.update_status_display();
         self.refresh_board()
         return True
 
+    def _analyze_on_lichess(self):
+        url = self.engine.puzzles[self.engine.current_index].get('site')
+        if url: webbrowser.open(url)
+
     def _show_solution_and_continue(self, status="Failed"):
-        """ Opens the HistoryDetailWindow and waits before loading next puzzle. """
         self.refresh_board()
         p = self.engine.puzzles[self.engine.current_index]
         self.engine.played_history[str(self.engine.current_index)] = status
         self.engine.save_state()
-
         review = HistoryDetailWindow(self, p, self.piece_images)
         self.wait_window(review)
         self.load_puzzle()
 
-    # --- HELPERS ---
+    def _create_fallback_engine(self):
+        dummy = PuzzleEngine.__new__(PuzzleEngine)
+        dummy.save_file = "temp_results.json";
+        dummy.total_score = dummy.total_solved = 0
+        dummy.played_history = {};
+        dummy.puzzles = [{
+            'fen': 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
+            'initial_move': None, 'solution': [chess.Move.from_uci("h5f7")],
+            'display_name': "Example Puzzle", 'date': "2026", 'event': "No PGN Loaded",
+            'site': "", 'rating': "Easy", 'themes': "mateIn1"
+        }];
+        return dummy
+
+    def _load_specific_pgn(self, filename):
+        if not os.path.exists(filename): return
+        if self.engine: self.engine.save_state()
+        self.engine = PuzzleEngine(filename);
+        self._add_to_recent(filename);
+        self.load_puzzle()
 
     def _menu_load_pgn(self):
-        filename = filedialog.askopenfilename(filetypes=(("PGN files", "*.pgn"), ("All files", "*.*")))
-        if filename: self._load_specific_pgn(filename)
+        f = filedialog.askopenfilename(filetypes=(("PGN files", "*.pgn"), ("All files", "*.*")))
+        if f: self._load_specific_pgn(f)
 
-    def _show_history(self):
-        if self.engine: HistoryWindow(self, self.engine, self.piece_images)
+    def _on_click(self, event):
+        if self.board is None: return
+        size = 480 // 8
+        c, r = event.x // size, event.y // size
+        f, r_idx = (7 - c, r) if self.is_flipped else (c, 7 - r)
+        sq = chess.square(f, r_idx)
+        if self.selected_square is None:
+            if self.board.piece_at(sq): self.selected_square = sq; self.refresh_board()
+        else:
+            move = chess.Move(self.selected_square, sq)
+            if self.board.piece_at(self.selected_square) and self.board.piece_at(
+                    self.selected_square).piece_type == chess.PAWN:
+                if (not self.is_flipped and r_idx == 7) or (
+                        self.is_flipped and r_idx == 0): move.promotion = chess.QUEEN
+            self._handle_move(move);
+            self.selected_square = None;
+            self.refresh_board()
 
-    def _on_close(self):
-        """ Cleanup before exiting. """
-        if self.engine: self.engine.save_state()
-        self._save_config()
-        self.master.destroy()
+    def _handle_move(self, move):
+        p = self.engine.puzzles[self.engine.current_index]
+        if move == p['solution'][self.solve_step]:
+            self.btn_hint.pack_forget();
+            self.hint_square = None;
+            self.board.push(move)
+            self.last_move_squares = [move.from_square, move.to_square];
+            self.solve_step += 1
+            if self.solve_step >= len(p['solution']):
+                self.engine.total_score += {3: 10, 2: 5, 1: 2}.get(self.attempts_left, 0);
+                self.engine.total_solved += 1
+                messagebox.showinfo("Correct", "Solved!");
+                self._show_solution_and_continue("Solved")
+            else:
+                self.after(500, lambda: self._opp_move(p['solution'][self.solve_step]))
+        else:
+            self.attempts_left -= 1;
+            self.btn_hint.pack(side=tk.LEFT, padx=5)
+            if self.attempts_left <= 0:
+                messagebox.showerror("Failed", "Out of attempts."); self._show_solution_and_continue("Failed")
+            else:
+                self.update_status_display()
+
+    def _opp_move(self, move):
+        self.board.push(move);
+        self.last_move_squares = [move.from_square, move.to_square]
+        self.solve_step += 1;
+        self.refresh_board()
+
+    def _show_hint(self):
+        self.hint_square = self.engine.puzzles[self.engine.current_index]['solution'][self.solve_step].from_square
+        self.refresh_board()
+
+    def _skip(self):
+        if self.board and messagebox.askyesno("Skip", "View solution? (-5 pts)"):
+            self.engine.total_score -= 5;
+            self._show_solution_and_continue("Skipped")
 
     def update_status_display(self):
         self.lbl_overall.config(text=f"Score: {self.engine.total_score} | Solved: {self.engine.total_solved}")
@@ -545,71 +558,13 @@ class ChessPuzzleApp(tk.Toplevel):
                 img = Image.open(path).resize((60, 60), Image.Resampling.LANCZOS)
                 self.piece_images[s] = ImageTk.PhotoImage(img)
 
-    def _show_hint(self):
-        p = self.engine.puzzles[self.engine.current_index]
-        self.hint_square = p['solution'][self.solve_step].from_square
-        self.refresh_board()
+    def _on_close(self):
+        if self.engine: self.engine.save_state()
+        self._save_config();
+        self.master.destroy()
 
-    def _skip(self):
-        if self.board is None: return
-        if messagebox.askyesno("Skip", "View solution? (-5 pts)"):
-            self.engine.total_score -= 5
-            self._show_solution_and_continue("Skipped")
 
-    def _on_click(self, event):
-        if self.board is None:
-            self.lbl_sub.config(text="Please load a file via the File menu!")
-            return
-        size = 480 // 8
-        c, r = event.x // size, event.y // size
-        f, r_idx = (7 - c, r) if self.is_flipped else (c, 7 - r)
-        sq = chess.square(f, r_idx)
-
-        if self.selected_square is None:
-            if self.board.piece_at(sq):
-                self.selected_square = sq
-                self.refresh_board()
-        else:
-            move = chess.Move(self.selected_square, sq)
-            # Pawn promotion to Queen by default for simplicity
-            if self.board.piece_at(self.selected_square) and self.board.piece_at(
-                    self.selected_square).piece_type == chess.PAWN:
-                if (not self.is_flipped and r_idx == 7) or (self.is_flipped and r_idx == 0):
-                    move.promotion = chess.QUEEN
-            self._handle_move(move)
-            self.selected_square = None
-            self.refresh_board()
-
-    def _handle_move(self, move):
-        p = self.engine.puzzles[self.engine.current_index]
-        if move == p['solution'][self.solve_step]:
-            self.btn_hint.pack_forget()
-            self.hint_square = None
-            self.board.push(move)
-            self.last_move_squares = [move.from_square, move.to_square]
-            self.solve_step += 1
-            if self.solve_step >= len(p['solution']):
-                self.engine.total_score += {3: 10, 2: 5, 1: 2}.get(self.attempts_left, 0)
-                self.engine.total_solved += 1
-                messagebox.showinfo("Correct", "Puzzle Solved!")
-                self._show_solution_and_continue("Solved")
-            else:
-                self.after(500, lambda: self._opp_move(p['solution'][self.solve_step]))
-        else:
-            self.attempts_left -= 1
-            self.btn_hint.pack(side=tk.LEFT, padx=5)
-            if self.attempts_left <= 0:
-                messagebox.showerror("Failed", "Out of attempts.")
-                self._show_solution_and_continue("Failed")
-            else:
-                self.update_status_display()
-
-    def _opp_move(self, move):
-        self.board.push(move)
-        self.last_move_squares = [move.from_square, move.to_square]
-        self.solve_step += 1
-        self.refresh_board()
-
+# --- [HistoryWindow & HistoryDetailWindow classes would follow here] ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('filename', nargs='?', default=None)  # Default is now None
