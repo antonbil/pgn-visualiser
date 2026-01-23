@@ -1837,6 +1837,21 @@ class ChessAnnotatorApp:
             file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
             file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
             file_menu.add_separator()
+        # English: Create a separate menu for the sort options
+        sort_menu = tk.Menu(file_menu, tearoff=0)
+
+        # English: Add the sub-options for sorting
+        # Using lambda to pass the property to the function
+        sort_menu.add_command(label="Date", command=lambda: self.sort_pgn_file("date"))
+        sort_menu.add_command(label="White Player", command=lambda: self.sort_pgn_file("white"))
+        sort_menu.add_command(label="Black Player", command=lambda: self.sort_pgn_file("black"))
+        sort_menu.add_command(label="Site", command=lambda: self.sort_pgn_file("site"))
+        sort_menu.add_command(label="Event", command=lambda: self.sort_pgn_file("event"))
+
+        # English: Add the sort_menu as a cascade to the file_menu
+        file_menu.add_cascade(label="Sort DB by...", menu=sort_menu)
+
+        file_menu.add_separator()
         file_menu.add_command(label="Split DB", command=self.split_pgn_file)
         file_menu.add_command(label="Merge DB", command=self.merge_pgn_file)
         file_menu.add_command(label="Manage DB", command=self.manage_pgn_file)
@@ -2321,6 +2336,43 @@ class ChessAnnotatorApp:
 
         # Start the process from the beginning of the game
         sync_nodes(existing_game, new_game)
+
+    def sort_pgn_file(self, property):
+        """
+        Sorts self.all_games based on the provided property.
+        Handles compound sorting for 'site' and 'event'.
+        """
+        if not hasattr(self, 'all_games') or not self.all_games:
+            return
+
+        # Helper to get header value safely
+        def get_h(game, tag):
+            return game.headers.get(tag, "").strip().lower()
+
+        if property == "date":
+            # Simple date sort (PGN date format YYYY.MM.DD sorts well as string)
+            self.all_games.sort(key=lambda g: get_h(g, "Date"))
+
+        elif property == "white":
+            self.all_games.sort(key=lambda g: get_h(g, "White"))
+
+        elif property == "black":
+            self.all_games.sort(key=lambda g: get_h(g, "Black"))
+
+        elif property == "site":
+            # Sort by Site, then by Date
+            self.all_games.sort(key=lambda g: (get_h(g, "Site"), get_h(g, "Date")))
+
+        elif property == "event":
+            # Sort by Event, then by Date
+            self.all_games.sort(key=lambda g: (get_h(g, "Event"), get_h(g, "Date")))
+
+        # Mark the database as modified
+        self.is_dirty = True
+
+        # Optional: Refresh the UI if a list is visible
+        if hasattr(self, 'update_ui_after_sort'):
+            self.update_ui_after_sort()
 
     def manage_pgn_file(self):
         """
