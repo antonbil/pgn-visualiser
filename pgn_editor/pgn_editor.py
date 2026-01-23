@@ -1837,7 +1837,9 @@ class ChessAnnotatorApp:
             file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
             file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
             file_menu.add_separator()
-        file_menu.add_command(label="Split PGN...", command=self.split_pgn_file)
+        file_menu.add_command(label="Split DB", command=self.split_pgn_file)
+        file_menu.add_command(label="Merge DB", command=self.merge_pgn_file)
+        file_menu.add_command(label="Manage DB", command=self.manage_pgn_file)
         file_menu.add_command(label="Exit", command=master.destroy)
 
         # Game Menu
@@ -2194,8 +2196,247 @@ class ChessAnnotatorApp:
 
     # --- File & Load Logic ---
 
+    def _get_surname(self, name):
+        """
+        Extracts the first part of a name (surname).
+        Handles 'Roebers, Eline' -> 'Roebers' and 'Gukesh D' -> 'Gukesh'.
+        """
+        if not name or name in ["?", ""]:
+            return ""
+        # Replace comma with space to treat them equally, then split
+        parts = name.replace(",", " ").split()
+        return parts[0].strip().lower() if parts else ""
+
+    def merge_pgn_file(self):
+        """
+        Merges games from an external PGN file into the current list, 
+        matching by players and date, then merging comments for duplicates.
+        """
+        if not hasattr(self, 'all_games'):
+            self.all_games = []
+
+        initial_dir = os.path.dirname(self.last_filepath) if hasattr(self, 'last_filepath') else os.getcwd()
+
+        # Present a dialog to choose the png-file
+        file_to_merge = filedialog.askopenfilename(
+            title="Load pgn",
+            initialdir=initial_dir,
+            filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")]
+        )
+
+        if not file_to_merge:
+            return
+
+        # Ask whether to merge comments for duplicates
+        # Using a simple Yes/No dialog
+        do_merge_comments = messagebox.askyesno(
+            "Merge Comments",
+            "Do you want to merge comments for duplicate games?"
+        )
+
+        duplicates_count = 0
+        new_games_count = 0
+
+        try:
+            with open(file_to_merge, 'r', encoding='utf-8', errors='replace') as f:
+                while True:
+                    new_game = chess.pgn.read_game(f)
+                    if new_game is None:
+                        break
+
+                    # Extract keys for comparison
+                    w_new = self._get_surname(new_game.headers.get("White", ""))
+                    b_new = self._get_surname(new_game.headers.get("Black", ""))
+                    d_new = new_game.headers.get("Date", "").strip()
+
+                    # Identify a match using normalized surnames
+                    match = next((g for g in self.all_games if
+                                  self._get_surname(g.headers.get("White", "")) == w_new and
+                                  self._get_surname(g.headers.get("Black", "")) == b_new and
+                                  g.headers.get("Date", "").strip() == d_new), None)
+
+                    if match:
+                        # If duplicate, copy comments from the new game to the existing one
+                        if do_merge_comments:
+                            self._merge_game_comments(match, new_game)
+                        duplicates_count += 1
+                    else:
+                        # New game: add to the list
+                        self.all_games.append(new_game)
+                        new_games_count += 1
+                    self.is_dirty = True
+
+            messagebox.showinfo("Done",
+                                f"Merge complete!\nAdded: {new_games_count}\nMerged comments for: {duplicates_count} duplicates.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to merge PGN: {e}")
+
+    def _merge_game_comments(self, existing_game, new_game):
+        """
+        Recursive helper to merge only descriptive text from comments,
+        filtering out numerical engine evaluations.
+        """
+
+        def clean_comment(comment):
+            """
+            Removes engine scores like '0.35', '+0.17', '(-0.12)' 
+            and double spaces.
+            """
+            if not comment:
+                return ""
+
+            # Regex to find numbers, signs, and scores in parentheses
+            # Matches: 0.35, +1.2, -0.5, (+0.17), (2.19)
+            score_pattern = r"\(?[+-]?\d+[\.,]\d+\s?(\([+-]?\d+[\.,]\d+\))?\)?"
+
+            # Replace the found patterns with an empty string
+            cleaned = re.sub(score_pattern, "", comment)
+
+            # Clean up multiple spaces and leading/trailing whitespace
+            cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+            return cleaned
+
+        def sync_nodes(node_existing, node_new):
+            # Clean the new comment first
+            new_raw_comment = clean_comment(node_new.comment)
+
+            # Only merge if there is actual text left after cleaning
+            if new_raw_comment and new_raw_comment not in node_existing.comment:
+                if node_existing.comment:
+                    # Check if the text isn't already present in a different form
+                    if new_raw_comment not in node_existing.comment:
+                        node_existing.comment += " | " + new_raw_comment
+                else:
+                    node_existing.comment = new_raw_comment
+
+            # Continue recursion for variations and mainline
+            for next_node_new in node_new.variations:
+                move = next_node_new.move
+
+                # Check if the existing game also has this move
+                if node_existing.has_variation(move):
+                    sync_nodes(node_existing.variation(move), next_node_new)
+
+        # Start the process from the beginning of the game
+        sync_nodes(existing_game, new_game)
+
+    def manage_pgn_file(self):
+        """
+        Opens a window to manage the games in self.all_games with checkboxes
+        to remove, keep (leave), or invert selections.
+        """
+        if not hasattr(self, 'all_games') or not self.all_games:
+            messagebox.showwarning("Warning", "No games in database to manage.")
+            return
+
+        # Use board theme colors for consistency
+        bg_color =  self.selected_theme["light"]
+        header_color = self.selected_theme["dark"]
+        text_on_dark = "#ffffff"
+
+        manage_win = tk.Toplevel(self.master)
+        manage_win.title("Manage PGN Database")
+        manage_win.geometry("600x700")
+        manage_win.configure(bg=bg_color)
+        manage_win.grab_set()  # Make window modal
+
+        # Header
+        tk.Label(manage_win, text=f"Total Games: {len(self.all_games)}",
+                 font=("Segoe UI", 12, "bold"), bg=header_color, fg=text_on_dark, pady=10).pack(fill=tk.X)
+
+        # --- Scrollable List Container ---
+        container = tk.Frame(manage_win, bg="white", relief=tk.SOLID, borderwidth=1)
+        container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        canvas = tk.Canvas(container, bg="white", highlightthickness=0)
+        # Using the thick scrollbar style defined earlier
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview, style="Thick.Vertical.TScrollbar")
+        scrollable_frame = tk.Frame(canvas, bg="white")
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas_win = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_win, width=e.width))
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Track checkbox states
+        # Using a list of BooleanVars to link with checkboxes
+        check_vars = []
+
+        for i, game in enumerate(self.all_games):
+            var = tk.BooleanVar(value=False)
+            check_vars.append(var)
+
+            row = tk.Frame(scrollable_frame, bg="white")
+            row.pack(fill=tk.X, pady=2, padx=5)
+
+            # Extract headers for display
+            w = game.headers.get("White", "Unknown")
+            b = game.headers.get("Black", "Unknown")
+            res = game.headers.get("Result", "*")
+
+            lbl_text = f"{i + 1:03d}. {w} - {b} ({res})"
+
+            # Checkbox at the end of the row
+            tk.Label(row, text=lbl_text, bg="white", font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=5)
+            tk.Checkbutton(row, variable=var, bg="white", activebackground="white").pack(side=tk.RIGHT, padx=10)
+
+        # --- Button Actions ---
+        def get_selected_indices():
+            return [i for i, var in enumerate(check_vars) if var.get()]
+
+        def do_remove():
+            indices = get_selected_indices()
+            if not indices: return
+            if messagebox.askyesno("Confirm", f"Remove {len(indices)} selected games?"):
+                # Delete from end to start to avoid index shifts
+                for i in sorted(indices, reverse=True):
+                    self.all_games.pop(i)
+                manage_win.destroy()
+                self._update_after_manage()
+                self.is_dirty = True
+
+        def do_leave():
+            indices = get_selected_indices()
+            if not indices: return
+            if messagebox.askyesno("Confirm", f"Keep only {len(indices)} selected games and remove others?"):
+                # Rebuild list with only selected items
+                self.all_games = [self.all_games[i] for i in indices]
+                manage_win.destroy()
+                self._update_after_manage()
+                self.is_dirty = True
+
+        def do_invert():
+            for var in check_vars:
+                var.set(not var.get())
+
+        # --- Bottom Button Frame ---
+        btn_frame = tk.Frame(manage_win, bg=bg_color)
+        btn_frame.pack(fill=tk.X, pady=20, padx=20)
+
+        # Styling buttons with board theme
+        btn_style = {"bg": header_color, "fg": text_on_dark, "font": ("Segoe UI", 10, "bold"), "pady": 5}
+
+        tk.Button(btn_frame, text="Invert", command=do_invert, **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X,
+                                                                                 padx=5)
+        tk.Button(btn_frame, text="Leave (Keep Selected)", command=do_leave, **btn_style).pack(side=tk.LEFT,
+                                                                                               expand=True, fill=tk.X,
+                                                                                               padx=5)
+        tk.Button(btn_frame, text="Remove Selected", command=do_remove, **btn_style).pack(side=tk.LEFT, expand=True,
+                                                                                          fill=tk.X, padx=5)
+
+    def _update_after_manage(self):
+        """ Helper to refresh the main app state after modifying all_games. """
+        # Hier kun je bijv. de stats herberekenen of de huidige puzzel verversen
+        messagebox.showinfo("Success", "Database updated successfully.")
+        if hasattr(self, 'update_stats'): self.update_stats()
+
     def split_pgn_file(self):
-        # English: Basic check if a file was previously loaded
+        # Basic check if a file was previously loaded
         if not hasattr(self, 'last_filepath') or not self.last_filepath:
             messagebox.showwarning("Warning", "No PGN file loaded to split.")
             return
@@ -2204,7 +2445,7 @@ class ChessAnnotatorApp:
         base_name = os.path.splitext(os.path.basename(self.last_filepath))[0]
 
         # 1. Ask for the number of games per file
-        # English: Defaulting to 20 as requested
+        # Defaulting to 20 as requested
         n = simpledialog.askinteger("Split PGN", "Number of games per file:",
                                     initialvalue=20, minvalue=1)
         if not n: return
@@ -2219,17 +2460,17 @@ class ChessAnnotatorApp:
 
         try:
             with open(self.last_filepath, 'r', encoding='utf-8') as pgn_file:
-                # English: Prepare to write to zip
+                # Prepare to write to zip
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_out:
                     game_count = 0
                     file_index = 1
                     current_batch = []
 
                     while True:
-                        # English: Read game by game
+                        # Read game by game
                         game = chess.pgn.read_game(pgn_file)
                         if game is None:
-                            # English: Handle the last remaining batch
+                            # Handle the last remaining batch
                             if current_batch:
                                 self._write_batch_to_zip(zip_out, current_batch, file_index, base_name)
                             break
@@ -2237,7 +2478,7 @@ class ChessAnnotatorApp:
                         current_batch.append(str(game))
                         game_count += 1
 
-                        # English: If batch is full, write it and reset
+                        # If batch is full, write it and reset
                         if len(current_batch) >= n:
                             self._write_batch_to_zip(zip_out, current_batch, file_index, base_name)
                             current_batch = []
@@ -2250,10 +2491,10 @@ class ChessAnnotatorApp:
 
     def _write_batch_to_zip(self, zip_obj, batch, index, base_name):
         """
-        English: Helper to write a list of games into a single PGN file inside a zip.
+        Helper to write a list of games into a single PGN file inside a zip.
         """
         file_in_zip = f"{base_name}_{index:03d}.pgn"
-        # English: Combine games with double newlines (PGN standard)
+        # Combine games with double newlines (PGN standard)
         content = "\n\n".join(batch)
         zip_obj.writestr(file_in_zip, content)
 
