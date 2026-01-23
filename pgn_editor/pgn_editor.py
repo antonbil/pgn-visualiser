@@ -16,6 +16,7 @@ from io import BytesIO
 from tkinter import ttk
 import traceback
 from pathlib import Path
+import zipfile
 
 PREFERENCES_FILE = "preferences.json"
 
@@ -1836,6 +1837,7 @@ class ChessAnnotatorApp:
             file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
             file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
             file_menu.add_separator()
+        file_menu.add_command(label="Split PGN...", command=self.split_pgn_file)
         file_menu.add_command(label="Exit", command=master.destroy)
 
         # Game Menu
@@ -2191,6 +2193,69 @@ class ChessAnnotatorApp:
         os.execl(python, python, *sys.argv)
 
     # --- File & Load Logic ---
+
+    def split_pgn_file(self):
+        # English: Basic check if a file was previously loaded
+        if not hasattr(self, 'last_filepath') or not self.last_filepath:
+            messagebox.showwarning("Warning", "No PGN file loaded to split.")
+            return
+
+        directory = os.path.dirname(self.last_filepath)
+        base_name = os.path.splitext(os.path.basename(self.last_filepath))[0]
+
+        # 1. Ask for the number of games per file
+        # English: Defaulting to 20 as requested
+        n = simpledialog.askinteger("Split PGN", "Number of games per file:",
+                                    initialvalue=20, minvalue=1)
+        if not n: return
+
+        # 2. Ask for the zip filename
+        zip_name = simpledialog.askstring("Zip Name", "Enter name for the zip file:",
+                                          initialvalue=f"{base_name}_split.zip")
+        if not zip_name: return
+        if not zip_name.endswith('.zip'): zip_name += '.zip'
+
+        zip_path = os.path.join(directory, zip_name)
+
+        try:
+            with open(self.last_filepath, 'r', encoding='utf-8') as pgn_file:
+                # English: Prepare to write to zip
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_out:
+                    game_count = 0
+                    file_index = 1
+                    current_batch = []
+
+                    while True:
+                        # English: Read game by game
+                        game = chess.pgn.read_game(pgn_file)
+                        if game is None:
+                            # English: Handle the last remaining batch
+                            if current_batch:
+                                self._write_batch_to_zip(zip_out, current_batch, file_index, base_name)
+                            break
+
+                        current_batch.append(str(game))
+                        game_count += 1
+
+                        # English: If batch is full, write it and reset
+                        if len(current_batch) >= n:
+                            self._write_batch_to_zip(zip_out, current_batch, file_index, base_name)
+                            current_batch = []
+                            file_index += 1
+
+            messagebox.showinfo("Done", f"Successfully split into {file_index} files inside:\n{zip_path}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to split PGN: {e}")
+
+    def _write_batch_to_zip(self, zip_obj, batch, index, base_name):
+        """
+        English: Helper to write a list of games into a single PGN file inside a zip.
+        """
+        file_in_zip = f"{base_name}_{index:03d}.pgn"
+        # English: Combine games with double newlines (PGN standard)
+        content = "\n\n".join(batch)
+        zip_obj.writestr(file_in_zip, content)
 
     def load_pgn_file(self):
         """
