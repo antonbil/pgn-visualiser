@@ -186,13 +186,15 @@ class AnalysisManager:
     MULTIPV_COUNT = 4
     PAWN_THRESHOLD = 0.5
 
-    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None, depth_limit=17, check_previous = False):
+    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None, depth_limit=17,
+                 check_previous = False, external_progress_ui=None):
         """
         Initialize the analysis manager.
         :param db_info: Optional string info like "Game 3 of 10: Player A vs Player B"
         """
         self.root = root
         self.check_previous = check_previous
+        self.external_progress_ui = external_progress_ui
         self.game = pgn_game
         self.stockfish_path = stockfish_path
         self.on_finished_callback = on_finished_callback
@@ -207,7 +209,18 @@ class AnalysisManager:
 
     def start(self):
         """Creates the UI and starts the background analysis thread."""
-        self._create_progress_window()
+        if not self.external_progress_ui:
+            self._create_progress_window()
+        else:
+            # Koppel de externe UI aan de interne variabelen
+            self.progress_win = self.external_progress_ui['window']
+            self.progress_bar = self.external_progress_ui['progress_bar']
+            self.status_label = self.external_progress_ui['status_label']
+            self.db_label = self.external_progress_ui.get('db_label')
+
+            # Update db_info als dat meegegeven is
+            if self.db_label and self.db_info:
+                self.root.after(0, lambda: self.db_label.config(text=self.db_info))
         analysis_thread = threading.Thread(target=self._run_analysis)
         analysis_thread.daemon = True
         analysis_thread.start()
@@ -264,9 +277,7 @@ class AnalysisManager:
             # Metadata Header
             engine_name = engine.id.get("name", "Stockfish")
             analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}"
-            print("analysis_header", analysis_header)
-            print("self.game.comment", self.game.comment)
-            print("self.check_previous", self.check_previous)
+
             if self.game.comment.startswith(analysis_header) and self.check_previous:
                 return
 
@@ -459,8 +470,11 @@ class AnalysisManager:
 
     def _on_complete(self):
         """Cleanup after successful game analysis."""
-        if self.progress_win: self.progress_win.destroy()
-        if self.on_finished_callback: self.on_finished_callback()
+        if not self.external_progress_ui and self.progress_win:
+            self.progress_win.destroy()
+
+        if self.on_finished_callback:
+            self.on_finished_callback()
 
     def _on_cancel_complete(self):
         """Cleanup and notification after user cancellation."""
@@ -1549,6 +1563,75 @@ class GameChooserDialog(tk.Toplevel):
 
 
 COMPACT_HEIGHT_THRESHOLD = 1000
+
+
+class AnalysisProgressUI:
+    def __init__(self, parent, title="Database Analysis"):
+        self.window = tk.Toplevel(parent)
+        self.window.title(title)
+        self.window.geometry("450x250")
+        self.window.resizable(False, False)
+
+        # English: Ensure the window stays on top and centers relative to parent
+        self.window.transient(parent)
+        self.window.grab_set()
+
+        # English: Styling based on your app's theme could be added here
+        self.window.configure(bg="#f8f9fa")
+
+        # --- Widgets ---
+        # English: Database level progress (e.g., "Game 5 of 100")
+        self.db_label = tk.Label(self.window, text="Preparing...",
+                                 font=("Segoe UI", 10, "bold"), bg="#f8f9fa", fg="#2c3e50")
+        self.db_label.pack(pady=(20, 5))
+
+        # English: Current move/engine status
+        self.status_label = tk.Label(self.window, text="Initializing engine...",
+                                     font=("Segoe UI", 9), bg="#f8f9fa", wraplength=400)
+        self.status_label.pack(pady=10)
+
+        # English: Progress bar for the current game
+        style = ttk.Style()
+        style.configure("TProgressbar", thickness=20)
+        self.progress_bar = ttk.Progressbar(self.window, length=350, mode='determinate', style="TProgressbar")
+        self.progress_bar.pack(pady=10)
+
+        # English: Cancel flag and button
+        self.is_cancelled = False
+        self.cancel_button = tk.Button(self.window, text="Stop All",
+                                       command=self.request_cancel,
+                                       bg="#e74c3c", fg="white", font=("Segoe UI", 9, "bold"),
+                                       activebackground="#c0392b", padx=20)
+        self.cancel_button.pack(pady=20)
+
+    def request_cancel(self):
+        """ English: Callback for the stop button. """
+        if messagebox.askyesno("Confirm", "Stop the entire analysis process?"):
+            self.is_cancelled = True
+            self.status_label.config(text="Stopping... please wait.")
+
+    def update_db_info(self, text):
+        """ English: Update the top-level database info. """
+        self.window.after(0, lambda: self.db_label.config(text=text))
+
+    def update_status(self, text):
+        """ English: Update the current move status. """
+        self.window.after(0, lambda: self.status_label.config(text=text))
+
+    def update_progress(self, value, maximum=None):
+        """ English: Update the progress bar value. """
+
+        def _update():
+            if maximum is not None:
+                self.progress_bar.config(maximum=maximum)
+            self.progress_bar.config(value=value)
+
+        self.window.after(0, _update)
+
+    def destroy(self):
+        """ English: Safely close the window. """
+        self.window.grab_release()
+        self.window.destroy()
 
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75,
@@ -3303,6 +3386,15 @@ class ChessAnnotatorApp:
 
         # We use an index to track which game we are currently analyzing
         self.current_db_analysis_index = 0
+        # English: Create the shared UI once
+        analysis_ui = AnalysisProgressUI(self.master, title="Batch Analysis")
+        # English: Prepare the dictionary for the AnalysisManager
+        ui_bridge = {
+            'window': analysis_ui.window,
+            'db_label': analysis_ui.db_label,
+            'status_label': analysis_ui.status_label,
+            'progress_bar': analysis_ui.progress_bar
+        }
 
         def analyze_next_game():
             """Helper function to analyze the next game in the list."""
@@ -3324,17 +3416,23 @@ class ChessAnnotatorApp:
                     on_finished_callback=go_to_next_game,
                     depth_limit=self.engine_depth,
                     db_info=game_desc  # Pass the game-info,
-                    , check_previous=True
+                    , check_previous=True,external_progress_ui = ui_bridge
                 )
                 self.analyzer.start()
                 self.is_dirty = True
             else:
                 # Everything is finished!
+                analysis_ui.destroy()
                 self.update_state()
                 self._populate_move_listbox()
                 messagebox.showinfo("Analysis Complete", "All games in the database have been analyzed.")
 
         def go_to_next_game():
+            # English: Check if the user pressed 'Stop All' in the UI
+            if self.current_db_analysis_index >= len(self.all_games) or analysis_ui.is_cancelled:
+                analysis_ui.destroy()
+                messagebox.showinfo("Finished", "Analysis process completed or stopped.")
+                return
             """Callback that triggers the next game analysis."""
             self.current_db_analysis_index += 1
             # Use after(100) to give the UI a tiny bit of breathing room between games
