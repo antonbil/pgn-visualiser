@@ -186,12 +186,13 @@ class AnalysisManager:
     MULTIPV_COUNT = 4
     PAWN_THRESHOLD = 0.5
 
-    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None, depth_limit=17):
+    def __init__(self, root, pgn_game, stockfish_path, on_finished_callback=None, db_info=None, depth_limit=17, check_previous = False):
         """
         Initialize the analysis manager.
         :param db_info: Optional string info like "Game 3 of 10: Player A vs Player B"
         """
         self.root = root
+        self.check_previous = check_previous
         self.game = pgn_game
         self.stockfish_path = stockfish_path
         self.on_finished_callback = on_finished_callback
@@ -259,6 +260,15 @@ class AnalysisManager:
         try:
             engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
             engine.configure({"Threads": self.THREADS, "Hash": self.MEMORY_HASH})
+
+            # Metadata Header
+            engine_name = engine.id.get("name", "Stockfish")
+            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}"
+            print("analysis_header", analysis_header)
+            print("self.game.comment", self.game.comment)
+            print("self.check_previous", self.check_previous)
+            if self.game.comment.startswith(analysis_header) and self.check_previous:
+                return
 
             # --- PHASE 1: CALIBRATION ---
             self.root.after(0,
@@ -334,13 +344,10 @@ class AnalysisManager:
             node = self.game
             move_count = 0
 
-            # Metadata Header
-            engine_name = engine.id.get("name", "Stockfish")
-            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}, T={self.PAWN_THRESHOLD:.2f})"
-            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}, T={self.PAWN_THRESHOLD:.2f})"
 
             # Remove any existing "Analysis by..." lines to prevent stacking
             # This looks for any line starting with "Analysis by" until the first "|" or end of line
+            analysis_header = f"Analysis by {engine_name} (Depth {self.depth_limit}, T={self.PAWN_THRESHOLD:.2f})"
             if self.game.comment:
                 # We filter out any previous analysis headers using a regex
                 cleaned_root_comment = re.sub(r'Analysis by .*?(\||\n|$)', '', self.game.comment).strip()
@@ -1836,11 +1843,25 @@ class ChessAnnotatorApp:
         if not self.hide_file_load:
             file_menu.add_command(label="Load PGN...", command=self.load_pgn_file)
             file_menu.add_command(label="Save PGN...", command=self.save_pgn_file)
-            file_menu.add_separator()
-        # English: Create a separate menu for the sort options
-        sort_menu = tk.Menu(file_menu, tearoff=0)
 
-        # English: Add the sub-options for sorting
+        file_menu.add_command(label="Split DB", command=self.split_pgn_file)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=master.destroy)
+        # Game Menu
+        game_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Game", menu=game_menu)
+        game_menu.add_command(label="Previous Game", command=lambda: self.go_game(-1), state=tk.DISABLED, accelerator="Ctrl+Left")
+        game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
+        game_menu.add_command(label="Choose Game", command=self._open_game_chooser)
+        game_menu.add_command(label="Analyse Game", command=self.handle_analyze_button)
+        game_menu.add_command(label="Remove Analysis", command=self._clear_variations_func)
+        game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
+        db_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="DB", menu=db_menu)
+        # Create a separate menu for the sort options
+        sort_menu = tk.Menu(db_menu, tearoff=0)
+
+        # Add the sub-options for sorting
         # Using lambda to pass the property to the function
         sort_menu.add_command(label="Date", command=lambda: self.sort_pgn_file("date"))
         sort_menu.add_command(label="White Player", command=lambda: self.sort_pgn_file("white"))
@@ -1848,25 +1869,14 @@ class ChessAnnotatorApp:
         sort_menu.add_command(label="Site", command=lambda: self.sort_pgn_file("site"))
         sort_menu.add_command(label="Event", command=lambda: self.sort_pgn_file("event"))
 
-        # English: Add the sort_menu as a cascade to the file_menu
-        file_menu.add_cascade(label="Sort DB by...", menu=sort_menu)
+        # Add the sort_menu as a cascade to the file_menu
+        db_menu.add_cascade(label="Sort DB by...", menu=sort_menu)
 
-        file_menu.add_separator()
-        file_menu.add_command(label="Split DB", command=self.split_pgn_file)
-        file_menu.add_command(label="Merge DB", command=self.merge_pgn_file)
-        file_menu.add_command(label="Manage DB", command=self.manage_pgn_file)
-        file_menu.add_command(label="Exit", command=master.destroy)
+        db_menu.add_command(label="Analyse DB", command=self.handle_analyze_db_button)
+        db_menu.add_separator()
+        db_menu.add_command(label="Merge DB", command=self.merge_pgn_file)
+        db_menu.add_command(label="Manage DB", command=self.manage_pgn_file)
 
-        # Game Menu
-        game_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Game", menu=game_menu)
-        game_menu.add_command(label="Previous Game", command=lambda: self.go_game(-1), state=tk.DISABLED, accelerator="Ctrl+Left")
-        game_menu.add_command(label="Next Game", command=lambda: self.go_game(1), state=tk.DISABLED, accelerator="Ctrl+Right")
-        game_menu.add_command(label="Choose Game...", command=self._open_game_chooser)
-        game_menu.add_command(label="Analyse Game...", command=self.handle_analyze_button)
-        game_menu.add_command(label="Analyse DB...", command=self.handle_analyze_db_button)
-        game_menu.add_command(label="Remove Analysis", command=self._clear_variations_func)
-        game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
         variations_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Variations", menu=variations_menu)
         variations_menu.add_command(label="Restore Variation", command=self.restore_variation)
@@ -3313,7 +3323,8 @@ class ChessAnnotatorApp:
                     stockfish_path=self.ENGINE_PATH,
                     on_finished_callback=go_to_next_game,
                     depth_limit=self.engine_depth,
-                    db_info=game_desc  # Pass the game-info
+                    db_info=game_desc  # Pass the game-info,
+                    , check_previous=True
                 )
                 self.analyzer.start()
                 self.is_dirty = True
