@@ -2568,9 +2568,6 @@ class ChessAnnotatorApp:
 
         tk.Button(btn_frame, text="Invert", command=do_invert, **btn_style).pack(side=tk.LEFT, expand=True, fill=tk.X,
                                                                                  padx=5)
-        tk.Button(btn_frame, text="Leave (Keep Selected)", command=do_leave, **btn_style).pack(side=tk.LEFT,
-                                                                                               expand=True, fill=tk.X,
-                                                                                               padx=5)
         tk.Button(btn_frame, text="Remove Selected", command=do_remove, **btn_style).pack(side=tk.LEFT, expand=True,
                                                                                           fill=tk.X, padx=5)
 
