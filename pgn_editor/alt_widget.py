@@ -73,6 +73,8 @@ class TouchMoveList(tk.Text):
                 comment_text = child.comment
                 comment_text = ""
 
+                has_value = False
+                val_str = ""
                 if raw_comment:
                     # Check for valuation (value)
                     val_match = re.match(r"^(\s?[\+\-\d\.\/\|\\=\?]{1,6})", raw_comment)
@@ -83,8 +85,7 @@ class TouchMoveList(tk.Text):
                         comment_text = raw_comment[val_match.end():].replace('\n', ' ').strip()
                     else:
                         comment_text = raw_comment.replace('\n', ' ').strip()
-                has_value = False
-                val_str = ""
+
 
                 if comment_text:
                     val_match = re.match(r"^(\s?[\+\-\d\.\/\|\\=\?]{1,6})", comment_text)
