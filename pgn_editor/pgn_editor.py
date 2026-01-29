@@ -960,34 +960,30 @@ class PrettyMoveList(tk.Text):
         self.tag_bind(unique_id, "<Button-1>", lambda e, n=node, l=label: self._on_move_click(n, l))
 
     def highlight_node(self, node):
-        """
-        Highlights the node and scrolls with display-line awareness.
-        """
+        """ English: Highlights the node and ensures it's fully visible. """
         self.tag_remove("active_move", "1.0", tk.END)
         self.tag_remove("active_line", "1.0", tk.END)
 
         if node in self.node_to_index:
             start, end = self.node_to_index[node]
-
             self.tag_add("active_move", start, end)
 
-            line_num = start.split('.')[0]
-            # English: Apply the background tag to the logical line
+            line_num = int(start.split('.')[0])
             self.tag_add("active_line", f"{line_num}.0", f"{line_num}.end")
 
-            # --- REVISED SCROLL LOGIC ---
+            # --- VERBETERDE SCROLL LOGICA ---
             try:
-                # English: Try to scroll to 2 visual lines above the move for context.
-                # We use the 'index + offset' syntax without extra keywords.
+                # English: 1. First, look at the line BELOW the current move.
+                # This ensures that when scrolling down, the current move
+                # is pushed further up into the visible area.
+                self.see(f"{line_num}.0 + 1 displaylines")
+
+                # English: 2. Then look at the context above the move.
+                # This 'sandwiches' the move into a good visible position.
                 self.see(f"{line_num}.0 - 2 displaylines")
             except tk.TclError:
-                try:
-                    # English: Fallback 1: Scroll exactly to the visual line
-                    self.see(f"{line_num}.0 displayline start")
-                except tk.TclError:
-                    # English: Fallback 2: The most basic scroll to the logical line
-                    # This always works, even if wordwrap is messy.
-                    self.see(f"{line_num}.0")
+                # English: Fallback for older Tcl/Tk versions
+                self.see(f"{line_num}.0")
 
             self.update_idletasks()
 
