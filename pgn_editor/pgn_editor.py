@@ -1959,8 +1959,8 @@ class ChessAnnotatorApp:
         self.hide_file_load = hide_file_load
         self.is_manual = False
         self.selected_square = None
-        #self.move_list_type = "TouchMoveListColor"
-        self.move_list_type = "PrettyMoveList"
+        self.move_list_type = "TouchMoveListColor"
+        #self.move_list_type = "PrettyMoveList"
         self.highlight_item = None
         self.swap_colours = swap_colours
         self.call_back = call_back
@@ -2286,6 +2286,16 @@ class ChessAnnotatorApp:
             settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(),
                                       state=tk.NORMAL)
             settings_menu.add_command(label="Swap Colours", command=lambda: self.swap_colours_func())
+            # English: Add a separator for visual clarity
+            settings_menu.add_separator()
+
+            # English: Add the toggle for the move list type
+            # We use a label that describes the action or the current state
+            settings_menu.add_checkbutton(
+                label="Use Pretty Move List",
+                command=self.toggle_move_list_type,
+                variable=tk.BooleanVar(value=(self.move_list_type == "PrettyMoveList"))
+            )
 
         self.game_menu = game_menu
         self.variations_menu = variations_menu
@@ -2407,6 +2417,31 @@ class ChessAnnotatorApp:
             self.store_pgn_file(param)
             self.call_back(param)
 
+    def toggle_move_list_type(self):
+        """
+        English: Swaps between PrettyMoveList and TouchMoveListColor,
+        then re-initializes the controller and UI.
+        """
+        # English: Toggle the setting
+        if self.move_list_type == "PrettyMoveList":
+            self.move_list_type = "TouchMoveListColor"
+        else:
+            self.move_list_type = "PrettyMoveList"
+
+        # English: Remove the old widget from the screen
+        if hasattr(self, 'move_list_widget') and self.move_list_widget.widget:
+            self.move_list_widget.widget.destroy()
+
+        # English: Re-initialize the correct controller (using the Strategy Pattern classes)
+        if self.move_list_type == "TouchMoveListColor":
+            self.move_list_widget = LegacyMoveListController(self, self.moves_frame, self._on_move_selected)
+        else:
+            self.move_list_widget = PrettyMoveListController(self, self.moves_frame, self._on_pretty_move_selected)
+
+        # English: Pack the new widget and refresh the content
+        self.move_list_widget.widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.move_list_widget.update_view(self.game, self.move_list)
+        self.move_list_widget.set_selection(self.current_move_index, self.game)
     def save_preferences_class(self):
         # 1. Collect data
         preferences_data = {
