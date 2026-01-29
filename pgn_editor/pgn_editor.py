@@ -961,27 +961,34 @@ class PrettyMoveList(tk.Text):
 
     def highlight_node(self, node):
         """
-        Highlights the node with a high-visibility red background.
+        Highlights the node and scrolls with display-line awareness.
         """
-        # Remove old highlights
         self.tag_remove("active_move", "1.0", tk.END)
         self.tag_remove("active_line", "1.0", tk.END)
 
         if node in self.node_to_index:
             start, end = self.node_to_index[node]
 
-            # Apply the prominent red highlight
             self.tag_add("active_move", start, end)
 
-            # Highlight the background of the entire row
             line_num = start.split('.')[0]
+            # English: Apply the background tag to the logical line
             self.tag_add("active_line", f"{line_num}.0", f"{line_num}.end")
 
-            # Center the move in the widget so it's not hidden at the edge
-            # We scroll to the position but with an offset of 2 lines for context
-            self.see(f"{line_num}.0 - 2 lines")
+            # --- REVISED SCROLL LOGIC ---
+            try:
+                # English: Try to scroll to 2 visual lines above the move for context.
+                # We use the 'index + offset' syntax without extra keywords.
+                self.see(f"{line_num}.0 - 2 displaylines")
+            except tk.TclError:
+                try:
+                    # English: Fallback 1: Scroll exactly to the visual line
+                    self.see(f"{line_num}.0 displayline start")
+                except tk.TclError:
+                    # English: Fallback 2: The most basic scroll to the logical line
+                    # This always works, even if wordwrap is messy.
+                    self.see(f"{line_num}.0")
 
-            # Force UI refresh
             self.update_idletasks()
 
     def _on_move_click(self, node, type_label):
