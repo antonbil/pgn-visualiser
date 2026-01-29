@@ -86,6 +86,48 @@ This file is loaded on startup and updated every time relevant settings are chan
     "board": "red"
 }
 ```
+# ♟️ PrettyMoveList (Branch: `prettymovelist`)
+
+This branch implements an advanced PGN viewer utilizing the `python-chess` library for robust move-tree parsing. The display is specifically engineered for high readability and professional chess analysis.
+
+### Key Features
+
+* **Structure-Driven Parsing**: Uses `chess.pgn` nodes instead of fragile regex patterns. This ensures 100% accuracy even with deeply nested variations and complex annotations.
+* **Vertical Move Hierarchy**:
+    * **Regular Moves** (Main Line) always start at the beginning of a new line.
+    * **Valuations (Values)**: Engine evaluations (e.g., `+0.45`) are placed directly beneath the move. Vertical spacing is minimized to create a cohesive visual unit.
+    * **Sanitized Comments**: Unnecessary line breaks within comments are removed, presenting text as a clean block below the valuation.
+* **Compact Variations**:
+    * Side-lines are displayed horizontally within a single pair of parentheses `( )`.
+    * Black move prefixes (`...`) are intelligently omitted unless the continuity is broken by a comment or a sub-variation.
+* **Interactive Highlighting**:
+    * The active move is marked with a **prominent light-red frame** featuring internal padding for a "button-like" appearance.
+    * Integrated auto-scroll (`see`) keeps the current move centered in the viewport.
+
+### Color & Style Schema
+
+| Element | Color | Style |
+| :--- | :--- | :--- |
+| **Main Line** | Black | `#000000`, Bold |
+| **Variations** | Bright Blue | `#0074D9`, Regular |
+| **Sub-variations** | Purple | `#B10DC9`, Regular |
+| **Valuations** | Orange | `#FF851B`, Italic |
+| **Comments** | Green | `#2ECC40`, Regular |
+| **Active Move** | Black on Light-Red | Background `#FFCCCC`, Solid Border |
+
+
+
+### Integration Example
+
+```python
+# Initialize the move list widget
+move_list = TouchMoveList(root_window, width=50)
+move_list.pack()
+
+# Load PGN and synchronize the highlight with the board
+move_list.load_pgn(pgn_content)
+move_list.highlight_node(current_engine_node)
+
 ## 💻 Code Highlights (The Engine of Analysis)
 
 ### `get_all_significant_moves(pgn_string)`

@@ -797,6 +797,199 @@ BOARD_THEMES = [
         "dark": "#696969"  # Dark gray (Sufficient contrast)
     }
 ]
+
+class PrettyMoveList(tk.Text):
+    def __init__(self, master, select_callback=None, **kwargs):
+        # Initialize the text widget with specific styles for chess PGN
+        super().__init__(master, **kwargs)
+        self.master = master
+        self.select_callback = select_callback
+        # Dictionary to map chess nodes to their position in the text
+        self.node_to_index = {}
+
+        # Setup tags and highlight style
+        self.tag_config("active_move",
+                background="#FFCCCC",
+                foreground="black",
+                font=("Consolas", 10, "bold"),
+                relief="solid",         # Border around move
+                borderwidth=1,
+                # We simulate padding by increasing the spacing
+                # around the characters using offset and spacing
+                offset=2)
+        # Increase general line spacing to prevent the border
+        # from touching the moves above or below
+        self.config(spacing1=5, spacing3=5)
+
+        # Let's also add a tag for the current line to make it pop even more
+        self.tag_config("active_line", background="#e6f2ff") # Light blue glow over the line
+        self.config(state="disabled", wrap="word", font=("Consolas", 10), spacing1=2)
+
+        # Define tags for colors and layout
+        self.tag_config("regular", foreground="black", font=("Consolas", 10, "bold"))
+        self.tag_config("variant", foreground="#0074D9")
+        self.tag_config("subvariant", foreground="#B10DC9")
+        self.tag_config("comment", foreground="#2ECC40")
+        self.tag_config("number", foreground="#888888")
+        self.tag_config("value",
+                foreground="#FF851B",
+                font=("Consolas", 9, "italic"),
+                spacing1=0)  # Geen extra ruimte boven de waardering-regel
+
+        # Define a move_row tag to control the spacing after the move
+        self.tag_config("move_row", spacing3=0)
+
+        # Hover effect for clickable moves
+        self.tag_config("clickable", underline=False)
+        self.tag_bind("clickable", "<Enter>", lambda e: self.config(cursor="hand2"))
+        self.tag_bind("clickable", "<Leave>", lambda e: self.config(cursor="arrow"))
+
+    def load_pgn(self, game):
+        # Parse the PGN game using the python-chess library
+        if game:
+            self.node_to_index = {} # Reset de mapping
+            self.config(state="normal")
+            self.delete("1.0", tk.END)
+            self._process_main_line(game)
+            self.config(state="disabled")
+
+    def _process_main_line(self, node):
+        """Handles main line moves with values and comments underneath."""
+        for i, child in enumerate(node.variations):
+            if i == 0: # Main line move
+                board = node.board()
+                san = board.san(child.move)
+                prefix = f"{board.fullmove_number}. " if board.turn == chess.WHITE else f"{board.fullmove_number}... "
+
+                # Add 'move_row' tag to minimize space after this line
+                # Pre-check if there is a valuation (value)
+                raw_comment = child.comment.strip() if child.comment else ""
+                comment_text = child.comment
+                comment_text = ""
+
+                has_value = False
+                val_str = ""
+                if raw_comment:
+                    # Check for valuation (value)
+                    val_match = re.match(r"^(\s?[\+\-\d\.\/\|\\=\?]{1,6})", raw_comment)
+                    if val_match:
+                        has_value = True
+                        val_str = val_match.group(1).strip()
+                        # Take the rest and remove internal newlines
+                        comment_text = raw_comment[val_match.end():].replace('\n', ' ').strip()
+                    else:
+                        comment_text = raw_comment.replace('\n', ' ').strip()
+
+
+                if comment_text:
+                    val_match = re.match(r"^(\s?[\+\-\d\.\/\|\\=\?]{1,6})", comment_text)
+                    if val_match:
+                        has_value = True
+                        val_str = val_match.group(1).strip()
+                        comment_text = comment_text[val_match.end():].strip()
+
+                # Apply 'move_row' (tight spacing) ONLY if a value follows
+                line_tags = ("number",)
+                if has_value:
+                    line_tags = ("number", "move_row")
+
+                self.insert(tk.END, f"\n{prefix}", line_tags)
+                self._add_move_node(san, "regular", "Regulier", child)
+
+                # Add value on a tight line
+                if has_value:
+                    self.insert(tk.END, f"\n  {val_str}", "value")
+
+                # 3. Display remaining comments on separate lines
+                if comment_text:
+                    for line in comment_text.split('\n'):
+                        self.insert(tk.END, f"\n  {line.strip()}", "comment")
+
+                # 4. Display variants of this move below comments, in brackets
+                for j in range(1, len(child.parent.variations)):
+                    self.insert(tk.END, "\n  (", "variant")
+                    self._process_variant_line(child.parent.variations[j], level=1, force_number=True)
+                    self.insert(tk.END, ")", "variant")
+
+                self._process_main_line(child)
+
+    def _process_variant_line(self, node, level, force_number=False):
+        """Handles variant lines compactly: '2. Nf3 d6'."""
+        board = node.parent.board()
+        san = board.san(node.move)
+        tag = "variant" if level == 1 else "subvariant"
+
+        # Number logic: only show for White, or if forced (after comments/brackets)
+        if board.turn == chess.WHITE:
+            self.insert(tk.END, f"{board.fullmove_number}. ", "number")
+            next_force = False
+        else:
+            if force_number:
+                self.insert(tk.END, f"{board.fullmove_number}... ", "number")
+            next_force = False
+
+        self._add_move_node(san, tag, "Variant", node)
+
+        # Handle comments and sub-variations within the variant block
+        if node.comment:
+            self.insert(tk.END, f" {{{node.comment}}} ", "comment")
+            next_force = True
+        else:
+            self.insert(tk.END, " ")
+            next_force = (len(node.variations) > 1)
+
+        for i, var in enumerate(node.variations):
+            if i == 0: # Continue same variant line
+                self._process_variant_line(var, level, force_number=next_force)
+            else: # Nested sub-variation
+                self.insert(tk.END, "(", "subvariant")
+                self._process_variant_line(var, level + 1, force_number=True)
+                self.insert(tk.END, ")", "subvariant")
+                next_force = True
+
+    def _add_move_node(self, text, tag, label, node):
+        # Link the text in the widget to a move click event
+        start = self.index(tk.INSERT)
+        self.insert(tk.END, text, (tag, "clickable"))
+        end = self.index(tk.INSERT)
+
+        # Store the start and end index for this specific chess node
+        self.node_to_index[node] = (start, end)
+        unique_tag = f"m_{start.replace('.', '_')}"
+        self.tag_add(unique_id := unique_tag, start, self.index(tk.INSERT))
+        self.tag_bind(unique_id, "<Button-1>", lambda e, n=node, l=label: self._on_move_click(n, l))
+
+    def highlight_node(self, node):
+        """
+        Highlights the node with a high-visibility red background.
+        """
+        # Remove old highlights
+        self.tag_remove("active_move", "1.0", tk.END)
+        self.tag_remove("active_line", "1.0", tk.END)
+
+        if node in self.node_to_index:
+            start, end = self.node_to_index[node]
+
+            # Apply the prominent red highlight
+            self.tag_add("active_move", start, end)
+
+            # Highlight the background of the entire row
+            line_num = start.split('.')[0]
+            self.tag_add("active_line", f"{line_num}.0", f"{line_num}.end")
+
+            # Center the move in the widget so it's not hidden at the edge
+            # We scroll to the position but with an offset of 2 lines for context
+            self.see(f"{line_num}.0 - 2 lines")
+
+            # Force UI refresh
+            self.update_idletasks()
+
+    def _on_move_click(self, node, type_label):
+        # Handle the click and print details as requested
+        print(f"KLIK -> Type: {type_label:15} | Zet: {node.san()}")
+        self.select_callback(node, type_label)
+
+
 class TouchMoveListColor(tk.Frame):
     """
     A touch-friendly replacement for tk.Listbox using a tk.Text widget.
@@ -1572,31 +1765,31 @@ class AnalysisProgressUI:
         self.window.geometry("450x250")
         self.window.resizable(False, False)
 
-        # English: Ensure the window stays on top and centers relative to parent
+        # Ensure the window stays on top and centers relative to parent
         self.window.transient(parent)
         self.window.grab_set()
 
-        # English: Styling based on your app's theme could be added here
+        # Styling based on your app's theme could be added here
         self.window.configure(bg="#f8f9fa")
 
         # --- Widgets ---
-        # English: Database level progress (e.g., "Game 5 of 100")
+        # Database level progress (e.g., "Game 5 of 100")
         self.db_label = tk.Label(self.window, text="Preparing...",
                                  font=("Segoe UI", 10, "bold"), bg="#f8f9fa", fg="#2c3e50")
         self.db_label.pack(pady=(20, 5))
 
-        # English: Current move/engine status
+        # Current move/engine status
         self.status_label = tk.Label(self.window, text="Initializing engine...",
                                      font=("Segoe UI", 9), bg="#f8f9fa", wraplength=400)
         self.status_label.pack(pady=10)
 
-        # English: Progress bar for the current game
+        # Progress bar for the current game
         style = ttk.Style()
         style.configure("TProgressbar", thickness=20)
         self.progress_bar = ttk.Progressbar(self.window, length=350, mode='determinate', style="TProgressbar")
         self.progress_bar.pack(pady=10)
 
-        # English: Cancel flag and button
+        # Cancel flag and button
         self.is_cancelled = False
         self.cancel_button = tk.Button(self.window, text="Stop All",
                                        command=self.request_cancel,
@@ -1605,21 +1798,21 @@ class AnalysisProgressUI:
         self.cancel_button.pack(pady=20)
 
     def request_cancel(self):
-        """ English: Callback for the stop button. """
+        """ Callback for the stop button. """
         if messagebox.askyesno("Confirm", "Stop the entire analysis process?"):
             self.is_cancelled = True
             self.status_label.config(text="Stopping... please wait.")
 
     def update_db_info(self, text):
-        """ English: Update the top-level database info. """
+        """ Update the top-level database info. """
         self.window.after(0, lambda: self.db_label.config(text=text))
 
     def update_status(self, text):
-        """ English: Update the current move status. """
+        """ Update the current move status. """
         self.window.after(0, lambda: self.status_label.config(text=text))
 
     def update_progress(self, value, maximum=None):
-        """ English: Update the progress bar value. """
+        """ Update the progress bar value. """
 
         def _update():
             if maximum is not None:
@@ -1629,7 +1822,7 @@ class AnalysisProgressUI:
         self.window.after(0, _update)
 
     def destroy(self):
-        """ English: Safely close the window. """
+        """ Safely close the window. """
         self.window.grab_release()
         self.window.destroy()
 
@@ -1648,6 +1841,8 @@ class ChessAnnotatorApp:
         self.hide_file_load = hide_file_load
         self.is_manual = False
         self.selected_square = None
+        #self.move_list_type = "TouchMoveListColor"
+        self.move_list_type = "PrettyMoveList"
         self.highlight_item = None
         self.swap_colours = swap_colours
         self.call_back = call_back
@@ -3022,15 +3217,100 @@ class ChessAnnotatorApp:
         self.move_list_label.pack(side=tk.LEFT, padx=(5, 0))
 
         # The callback 'self._on_move_selected' will be created in the next step
-        self.move_list_widget = TouchMoveListColor(moves_frame, select_callback=self._on_move_selected)
-        self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.move_list_widget.set_font_size(12)
+        if self.move_list_type=="TouchMoveListColor":
+            self.move_list_widget = TouchMoveListColor(moves_frame, select_callback=self._on_move_selected)
+            self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self.move_list_widget.set_font_size(12)
+        else:
+            self.move_list_widget = PrettyMoveList(
+                moves_frame, select_callback=self._on_pretty_move_selected
+            )
+            self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def _on_move_selected(self, index):
         """ Callback for the TouchMoveListColor widget. """
         if self.current_move_index != index:
             self.current_move_index = index
             self.update_state()  # Updates your board and logic
+
+    def _on_pretty_move_selected(self, node, type_label):
+        """ Callback for the PrettyMoveListColor widget. """
+        if type_label == "Regulier":
+            # English: A chess ply is the count of half-moves.
+            # If your index starts at 0 for move 1. e4, we subtract 1 from the ply.
+            move_index = node.ply() - 1
+
+            if self.current_move_index != move_index:
+                self.current_move_index = move_index
+                self.update_state()  # English: Board updates to this specific position
+
+
+
+        elif type_label == "Variant":
+
+            # English: Iterate upwards to find the first node that is a direct
+
+            # variation of the main line.
+
+            current = node
+
+            # English: We climb up the tree as long as our parent's primary
+
+            # variation (index 0) is NOT us.
+
+            while current.parent and current.parent.variations[0] != current:
+
+                # English: If the grandparent exists and the parent is already
+
+                # part of the main line, we've found our 'split node'.
+
+                if current.parent.parent and current.parent.parent.variations[0] == current.parent:
+                    break
+
+                current = current.parent
+
+            # English: 'current' is now the node that needs to be promoted
+
+            # to change the main line.
+
+            split_node = current
+
+            parent_of_split = split_node.parent
+
+            if parent_of_split:
+
+                try:
+
+                    # English: Find 'i' for your follow_variation method
+
+                    variation_index = parent_of_split.variations.index(split_node)
+
+                    # English: The index in the move list where the split occurs
+
+                    split_move_index = parent_of_split.ply()
+
+                    # English: Call your existing logic with the correct split point
+
+                    self.select_variation(parent_of_split, split_move_index, split_node)
+
+                    # English: After promotion, we need to update our current_move_index
+
+                    # to the actual move clicked (the 'node')
+
+                    self.current_move_index = node.ply() - 1
+
+                    # English: Refresh the visual list and board
+
+                    self.move_list_widget.load_pgn(self.game)
+
+                    self.update_state()
+
+                    self.move_list_widget.highlight_node(node)
+
+
+                except (ValueError, AttributeError) as e:
+
+                    print(f"Error during promotion: {e}")
 
     def show_clear_variation_button(self):
         """
@@ -3053,6 +3333,9 @@ class ChessAnnotatorApp:
         """
         Refactored to use the TouchMoveListColor widget.
         """
+        if not self.move_list_type == "TouchMoveListColor":
+            self.move_list_widget.load_pgn(self.game)
+            return
         # Clear the existing list
         self.move_list_widget.delete(0, tk.END)
 
@@ -3100,10 +3383,29 @@ class ChessAnnotatorApp:
         """
         Synchronizes the widget selection with the current move index.
         """
-        if 0 <= self.current_move_index < self.move_list_widget.size():
-            self.move_list_widget.selection_set(self.current_move_index)
+        if self.move_list_type == "TouchMoveListColor":
+            if 0 <= self.current_move_index < self.move_list_widget.size():
+                self.move_list_widget.selection_set(self.current_move_index)
+            else:
+                self.move_list_widget.selection_clear()
         else:
-            self.move_list_widget.selection_clear()
+            #get move self.current_move_index from self.game
+            #pass this move to self.move_list_widget.highlight_node(node)
+            # Start at the beginning of the game
+            current_node = self.game
+
+            # Traverse the main line until reaching the target index
+            # Note: ply 1 is the first move, current_move_index is likely 0-based
+            for _ in range(self.current_move_index + 1):
+                next_node = current_node.next()
+                if next_node is not None:
+                    current_node = next_node
+                else:
+                    # Stop if the game is shorter than the index
+                    break
+
+            # Pass the found node to your new highlight method
+            self.move_list_widget.highlight_node(current_node)
 
 
     def _get_board_at_index(self, index):
@@ -3383,9 +3685,9 @@ class ChessAnnotatorApp:
 
         # We use an index to track which game we are currently analyzing
         self.current_db_analysis_index = 0
-        # English: Create the shared UI once
+        # Create the shared UI once
         analysis_ui = AnalysisProgressUI(self.master, title="Batch Analysis")
-        # English: Prepare the dictionary for the AnalysisManager
+        # Prepare the dictionary for the AnalysisManager
         ui_bridge = {
             'window': analysis_ui.window,
             'db_label': analysis_ui.db_label,
@@ -3425,7 +3727,7 @@ class ChessAnnotatorApp:
                 messagebox.showinfo("Analysis Complete", "All games in the database have been analyzed.")
 
         def go_to_next_game():
-            # English: Check if the user pressed 'Stop All' in the UI
+            # Check if the user pressed 'Stop All' in the UI
             if self.current_db_analysis_index >= len(self.all_games) or analysis_ui.is_cancelled:
                 analysis_ui.destroy()
                 messagebox.showinfo("Finished", "Analysis process completed or stopped.")
