@@ -622,6 +622,8 @@ class SettingsDialog(tk.Toplevel):
 
         # Board Kleur (Standaard: red)
         self.board_var = tk.StringVar(value=self.current_config.get("board", "Standard"))
+        # Board Kleur (Standaard: red)
+        self.move_list_type = tk.StringVar(value=self.current_config.get("move_list_type", "Standard"))
 
     def _create_widgets(self):
         """Maakt en plaatst de GUI-elementen in het dialoogvenster."""
@@ -728,7 +730,8 @@ class SettingsDialog(tk.Toplevel):
             self.piece_set_var.get(),
             self.square_size_var.get(),
             self.board_var.get(),
-            self.engine_depth_var.get()# Sends the selected name (e.g., "Red")
+            self.engine_depth_var.get(),# Sends the selected name (e.g., "Red")
+            self.move_list_type
         )
 
         self.result = True
@@ -2420,11 +2423,13 @@ class ChessAnnotatorApp:
             self.store_pgn_file(param)
             self.call_back(param)
 
-    def toggle_move_list_type(self):
+    def toggle_move_list_type(self, force_type=None):
         """
         English: Swaps between PrettyMoveList and TouchMoveListColor,
         then re-initializes the controller and UI.
         """
+        if force_type:
+            self.move_list_type = force_type
         # English: Toggle the setting
         if self.move_list_type == "PrettyMoveList":
             self.move_list_type = "TouchMoveListColor"
@@ -2455,7 +2460,9 @@ class ChessAnnotatorApp:
             "square_size": self.square_size + 5,
             "piece_set": self.piece_set,
             "engine_depth": self.engine_depth,
-            "board": self.theme_name
+            "board": self.theme_name,
+        "move_list_type": self.move_list_type
+
             # More items can be added here later, such as last used engine, etc.
         }
 
@@ -2566,7 +2573,8 @@ class ChessAnnotatorApp:
             "piece_set": self.piece_set,
             "engine_depth": self.engine_depth,
             "square_size": self.square_size,
-            "board": self.theme_name
+            "board": self.theme_name,
+        "move_list_type": self.move_list_type
         }
 
 
@@ -2586,6 +2594,13 @@ class ChessAnnotatorApp:
         self.theme_name = args[5]
         self.set_theme()
         self.engine_depth = int(args[6])
+        new_move_list_type = args[7]
+        if new_move_list_type != self.move_list_type:
+            self.move_list_type = new_move_list_type
+            # Gebruik de methode die we eerder maakten om de widget te swappen
+            self.toggle_move_list_type(force_type=self.move_list_type)
+
+        self.save_preferences_class()
         self.save_preferences_class()
         if piece_set_changed:
             self.force_restart()
