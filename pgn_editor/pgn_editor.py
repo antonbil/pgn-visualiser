@@ -3236,81 +3236,45 @@ class ChessAnnotatorApp:
     def _on_pretty_move_selected(self, node, type_label):
         """ Callback for the PrettyMoveListColor widget. """
         if type_label == "Regulier":
-            # English: A chess ply is the count of half-moves.
+            # A chess ply is the count of half-moves.
             # If your index starts at 0 for move 1. e4, we subtract 1 from the ply.
             move_index = node.ply() - 1
 
             if self.current_move_index != move_index:
                 self.current_move_index = move_index
-                self.update_state()  # English: Board updates to this specific position
-
-
-
+                self.update_state()  # Board updates to this specific position
         elif type_label == "Variant":
-
-            # English: Iterate upwards to find the first node that is a direct
-
-            # variation of the main line.
-
+            # Step 1 - Identify all nodes in the chain that need promotion
+            promotion_path = []
             current = node
-
-            # English: We climb up the tree as long as our parent's primary
-
-            # variation (index 0) is NOT us.
-
-            while current.parent and current.parent.variations[0] != current:
-
-                # English: If the grandparent exists and the parent is already
-
-                # part of the main line, we've found our 'split node'.
-
-                if current.parent.parent and current.parent.parent.variations[0] == current.parent:
-                    break
-
+            # Climb up to the root, collecting nodes that are not
+            # yet the primary variation (index 0).
+            while current and current.parent:
+                if current.parent.variations[0] != current:
+                    # This node is a variation, it needs to be promoted
+                    promotion_path.append(current)
                 current = current.parent
-
-            # English: 'current' is now the node that needs to be promoted
-
-            # to change the main line.
-
-            split_node = current
-
-            parent_of_split = split_node.parent
-
-            if parent_of_split:
-
+            # Step 2 - Reverse the path!
+            # We must promote the highest ancestor first so the history stack
+            # (stored_moves) is built in the correct chronological order.
+            promotion_path.reverse()
+            # Step 3 - Execute the promotions using your existing logic
+            for branch_node in promotion_path:
+                parent = branch_node.parent
                 try:
-
-                    # English: Find 'i' for your follow_variation method
-
-                    variation_index = parent_of_split.variations.index(split_node)
-
-                    # English: The index in the move list where the split occurs
-
-                    split_move_index = parent_of_split.ply()
-
-                    # English: Call your existing logic with the correct split point
-
-                    self.select_variation(parent_of_split, split_move_index, split_node)
-
-                    # English: After promotion, we need to update our current_move_index
-
-                    # to the actual move clicked (the 'node')
-
-                    self.current_move_index = node.ply() - 1
-
-                    # English: Refresh the visual list and board
-
-                    self.move_list_widget.load_pgn(self.game)
-
-                    self.update_state()
-
-                    self.move_list_widget.highlight_node(node)
-
-
-                except (ValueError, AttributeError) as e:
-
-                    print(f"Error during promotion: {e}")
+                    var_index = parent.variations.index(branch_node)
+                    split_ply = parent.ply()
+                    # Call your logic for each level of the nesting
+                    self.select_variation(parent, split_ply, branch_node)
+                except (ValueError, AttributeError):
+                    continue
+            # Step 4 - Finalize the state
+            # Now the clicked node is guaranteed to be on the main line.
+            self.current_move_index = node.ply() - 1
+            # Refresh UI
+            self.move_list_widget.load_pgn(self.game)
+            self.update_state()
+            self.move_list_widget.highlight_node(node)
 
     def show_clear_variation_button(self):
         """
