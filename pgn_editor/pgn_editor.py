@@ -1300,6 +1300,124 @@ class TouchMoveListColor(tk.Frame):
         self.text_area.tag_configure("comment", font=normal_font)
 
 
+# English: Base Strategy Class
+class MoveListController:
+    """
+    English: Abstract base class to ensure a consistent interface for
+    different move list implementations.
+    """
+
+    def __init__(self, master, select_callback):
+        self.widget = None
+        self.master = master
+        self.select_callback = select_callback
+
+    def update_view(self, game, move_list):
+        raise NotImplementedError
+
+    def set_selection(self, index, game):
+        raise NotImplementedError
+
+
+# English: Concrete Strategy for the Legacy Listbox
+class LegacyMoveListController(MoveListController):
+    def __init__(self, app, master, select_callback):
+        super().__init__(master, select_callback)
+        # English: Initialization logic moved here
+        self.widget = TouchMoveListColor(master, select_callback=self.select_callback)
+        self.widget.set_font_size(12)
+        self.master = master
+        self.app = app
+
+    def update_view(self, game, move_list):
+        # Clear the existing list
+        self.widget.delete(0, tk.END)
+
+        if not self.app.game:
+            return
+        self.app.move_tags = []
+        for i, node in enumerate(self.app.move_list):
+            prev_board = node.parent.board()
+            move_num = (i // 2) + 1
+
+            # Build the string for the Regex to parse
+            if prev_board.turn == chess.WHITE:
+                prefix = f"{move_num}. "
+            else:
+                # Check if we need '...' for black's first move in a list
+                if i == 0 or self.app.move_list[i - 1].parent.board().turn == chess.WHITE:
+                    prefix = f"{move_num}... "
+                else:
+                    prefix = "    "  # Space for alignment
+
+            san_move = prev_board.san(node.move)
+            new_comment = node.comment.strip().replace('\n', ' ')
+
+            new_comment = new_comment[:6] + new_comment[6:40].replace(" ", "\u00A0")
+            # Format comments for our Regex: {Comment}
+            comment_text = f"{{{new_comment}}}" if node.comment and node.comment.strip() else ""
+
+            # Variation indicators (can be colored as variations using parentheses)
+            variation_text = f"({len(node.variations) - 1})" if len(node.variations) > 1 else ""
+
+            full_line = f"{prefix}{san_move}{variation_text}{comment_text}"
+
+            # Insert into the new widget - it handles the tags/colors!
+            # Determine the tag based on whose turn it was
+            current_tag = "" if prev_board.turn == chess.WHITE else "line_grey"
+            if i in self.app.top_5_major_set:
+                current_tag = "line_major"
+            if i in self.app.top_5_minor_set:
+                current_tag = "line_minor"
+            # The widget's insert method now uses this tag to color the move
+            self.app.move_tags.append(current_tag)
+            self.widget.insert(tk.END, full_line, tag_override=current_tag)
+
+    def set_selection(self, index, game):
+        if 0 <= index < self.widget.size():
+            self.widget.selection_set(index)
+        else:
+            self.widget.selection_clear()
+
+
+# English: Concrete Strategy for the New PrettyMoveList
+class PrettyMoveListController(MoveListController):
+    def __init__(self, app, master, select_callback):
+        super().__init__(master, select_callback)
+        # English: Initialization logic for the tree-based widget
+        self.widget = PrettyMoveList(master, select_callback=self.select_callback)
+        self.app = app
+
+    def update_view(self, game, move_list):
+        # English: The tree widget handles everything via the game object
+        self.widget.load_pgn(game)
+
+    def set_selection(self, index, game):
+        # get move self.current_move_index from self.game
+        # pass this move to self.move_list_widget.highlight_node(node)
+        # Start at the beginning of the game
+        current_node = self.app.game
+
+        # Traverse the main line until reaching the target index
+        # Note: ply 1 is the first move, current_move_index is likely 0-based
+        for _ in range(self.app.current_move_index + 1):
+            next_node = current_node.next()
+            if next_node is not None:
+                current_node = next_node
+            else:
+                # Stop if the game is shorter than the index
+                break
+
+        # English: Traverse the tree to find the correct node for highlighting
+        current_node = game
+        for _ in range(index + 1):
+            next_node = current_node.next()
+            if next_node:
+                current_node = next_node
+            else:
+                break
+        self.widget.highlight_node(current_node)
+
 class TouchFileDialog(tk.Toplevel):
     def __init__(self, parent, initialdir=".", file_extension=".pgn", title="PGN Browser"):
         super().__init__(parent)
@@ -3217,15 +3335,14 @@ class ChessAnnotatorApp:
         self.move_list_label.pack(side=tk.LEFT, padx=(5, 0))
 
         # The callback 'self._on_move_selected' will be created in the next step
-        if self.move_list_type=="TouchMoveListColor":
-            self.move_list_widget = TouchMoveListColor(moves_frame, select_callback=self._on_move_selected)
-            self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            self.move_list_widget.set_font_size(12)
+        # English: Decide which strategy to use once
+        if self.move_list_type == "TouchMoveListColor":
+            self.move_list_widget = LegacyMoveListController(self, moves_frame, self._on_move_selected)
         else:
-            self.move_list_widget = PrettyMoveList(
-                moves_frame, select_callback=self._on_pretty_move_selected
-            )
-            self.move_list_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self.move_list_widget = PrettyMoveListController(self, moves_frame, self._on_pretty_move_selected)
+
+        # English: The widget is accessible through the controller for layout
+        self.move_list_widget.widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def _on_move_selected(self, index):
         """ Callback for the TouchMoveListColor widget. """
@@ -3272,6 +3389,8 @@ class ChessAnnotatorApp:
             # Now the clicked node is guaranteed to be on the main line.
             self.current_move_index = node.ply() - 1
             # Refresh UI
+            self.move_list_widget.update_view(self.game, self.move_list)
+            return
             self.move_list_widget.load_pgn(self.game)
             self.update_state()
             self.move_list_widget.highlight_node(node)
@@ -3297,6 +3416,8 @@ class ChessAnnotatorApp:
         """
         Refactored to use the TouchMoveListColor widget.
         """
+        self.move_list_widget.update_view(self.game, self.move_list)
+        return
         if not self.move_list_type == "TouchMoveListColor":
             self.move_list_widget.load_pgn(self.game)
             return
@@ -3347,6 +3468,8 @@ class ChessAnnotatorApp:
         """
         Synchronizes the widget selection with the current move index.
         """
+        self.move_list_widget.set_selection(self.current_move_index, self.game)
+        return
         if self.move_list_type == "TouchMoveListColor":
             if 0 <= self.current_move_index < self.move_list_widget.size():
                 self.move_list_widget.selection_set(self.current_move_index)
