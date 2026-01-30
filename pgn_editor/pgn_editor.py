@@ -809,6 +809,13 @@ class PrettyMoveList(tk.Text):
         self.select_callback = select_callback
         # Dictionary to map chess nodes to their position in the text
         self.node_to_index = {}
+        # English: Configure background colors for the entire row
+        self.tag_configure("bg_major", background="#f8d7da")  # English: Very light blue
+        self.tag_configure("bg_minor", background="#fff3cd")  # English: Very light green
+
+        # English: Ensure they stay below the 'active_move' highlight
+        self.tag_lower("bg_major")
+        self.tag_lower("bg_minor")
 
         # Setup tags and highlight style
         self.tag_config("active_move",
@@ -846,6 +853,14 @@ class PrettyMoveList(tk.Text):
         self.tag_config("clickable", underline=False)
         self.tag_bind("clickable", "<Enter>", lambda e: self.config(cursor="hand2"))
         self.tag_bind("clickable", "<Leave>", lambda e: self.config(cursor="arrow"))
+
+    def set_highlights(self, major_set, minor_set):
+        self.major_set = major_set
+        self.minor_set = minor_set
+        # English: This ensures the background color extends to the full width
+        # In some Tkinter versions, you need to ensure no margins are blocking it.
+        self.tag_configure("bg_major", lmargin1=0, lmargin2=0, rmargin=0)
+        self.tag_configure("bg_minor", lmargin1=0, lmargin2=0, rmargin=0)
 
     def load_pgn(self, game):
         # Parse the PGN game using the python-chess library
@@ -950,20 +965,44 @@ class PrettyMoveList(tk.Text):
                 self.insert(tk.END, ")", "subvariant")
                 next_force = True
 
-    def _add_move_node(self, text, tag, label, node):
-        # Link the text in the widget to a move click event
-        start = self.index(tk.INSERT)
-        self.insert(tk.END, text, (tag, "clickable"))
-        end = self.index(tk.INSERT)
+    def _add_move_node(self, san, tag, type_label, node):
+        """ English: Only apply major/minor colors to regular (mainline) moves. """
+        unique_id = f"node_{id(node)}"
+        tags = [unique_id, tag]
 
-        # Store the start and end index for this specific chess node
-        self.node_to_index[node] = (start, end)
-        unique_tag = f"m_{start.replace('.', '_')}"
-        self.tag_add(unique_id := unique_tag, start, self.index(tk.INSERT))
-        self.tag_bind(unique_id, "<Button-1>", lambda e, n=node, l=label: self._on_move_click(n, l))
+        # English: Step 1 - Determine if this node should get an analysis background
+        is_major = False
+        is_minor = False
+
+        # English: ONLY check the sets if it's a regular mainline move
+        if type_label == "Regulier":
+            idx = node.ply() - 1
+            is_major = hasattr(self, 'major_set') and idx in self.major_set
+            is_minor = hasattr(self, 'minor_set') and idx in self.minor_set
+
+        # 4. Insert the text
+        start_index = self.index(tk.INSERT)
+        self.insert(tk.INSERT, san, tuple(tags))
+        end_index = self.index(tk.INSERT)
+
+        # 5. Apply row background color ONLY for the identified mainline moves
+        line_num = start_index.split('.')[0]
+        if is_major:
+            # English: Adding '+ 1 chars' to '.end' includes the newline,
+            # which colors the entire width of the widget.
+            self.tag_add("bg_major", f"{line_num}.0", f"{line_num}.end + 1 chars")
+        elif is_minor:
+            self.tag_add("bg_minor", f"{line_num}.0", f"{line_num}.end + 1 chars")
+
+        # 6. Bindings (events blijven voor alle zetten gelijk)
+        self.tag_bind(unique_id, "<Button-1>", lambda e, n=node, l=type_label: self._on_move_click(n, l))
+        self.tag_bind(unique_id, "<Enter>", lambda e: self.config(cursor="hand2"))
+        self.tag_bind(unique_id, "<Leave>", lambda e: self.config(cursor=""))
+
+        self.node_to_index[node] = (start_index, end_index)
 
     def highlight_node(self, node):
-        """ English: Highlights the node and ensures it's fully visible. """
+        """ Highlights the node and ensures it's fully visible. """
         self.tag_remove("active_move", "1.0", tk.END)
         self.tag_remove("active_line", "1.0", tk.END)
 
@@ -976,16 +1015,16 @@ class PrettyMoveList(tk.Text):
 
             # --- VERBETERDE SCROLL LOGICA ---
             try:
-                # English: 1. First, look at the line BELOW the current move.
+                # 1. First, look at the line BELOW the current move.
                 # This ensures that when scrolling down, the current move
                 # is pushed further up into the visible area.
                 self.see(f"{line_num}.0 + 1 displaylines")
 
-                # English: 2. Then look at the context above the move.
+                # 2. Then look at the context above the move.
                 # This 'sandwiches' the move into a good visible position.
                 self.see(f"{line_num}.0 - 2 displaylines")
             except tk.TclError:
-                # English: Fallback for older Tcl/Tk versions
+                # Fallback for older Tcl/Tk versions
                 self.see(f"{line_num}.0")
 
             self.update_idletasks()
@@ -1306,10 +1345,10 @@ class TouchMoveListColor(tk.Frame):
         self.text_area.tag_configure("comment", font=normal_font)
 
 
-# English: Base Strategy Class
+# Base Strategy Class
 class MoveListController:
     """
-    English: Abstract base class to ensure a consistent interface for
+    Abstract base class to ensure a consistent interface for
     different move list implementations.
     """
 
@@ -1325,11 +1364,11 @@ class MoveListController:
         raise NotImplementedError
 
 
-# English: Concrete Strategy for the Legacy Listbox
+# Concrete Strategy for the Legacy Listbox
 class LegacyMoveListController(MoveListController):
     def __init__(self, app, master, select_callback):
         super().__init__(master, select_callback)
-        # English: Initialization logic moved here
+        # Initialization logic moved here
         self.widget = TouchMoveListColor(master, select_callback=self.select_callback)
         self.widget.set_font_size(12)
         self.master = master
@@ -1386,16 +1425,18 @@ class LegacyMoveListController(MoveListController):
             self.widget.selection_clear()
 
 
-# English: Concrete Strategy for the New PrettyMoveList
+# Concrete Strategy for the New PrettyMoveList
 class PrettyMoveListController(MoveListController):
     def __init__(self, app, master, select_callback):
         super().__init__(master, select_callback)
-        # English: Initialization logic for the tree-based widget
+        # Initialization logic for the tree-based widget
         self.widget = PrettyMoveList(master, select_callback=self.select_callback)
         self.app = app
 
     def update_view(self, game, move_list):
-        # English: The tree widget handles everything via the game object
+        # The tree widget handles everything via the game object
+        # English: We pass the sets to the widget so it knows which moves to color
+        self.widget.set_highlights(self.app.top_5_major_set, self.app.top_5_minor_set)
         self.widget.load_pgn(game)
 
     def set_selection(self, index, game):
@@ -1414,7 +1455,7 @@ class PrettyMoveListController(MoveListController):
                 # Stop if the game is shorter than the index
                 break
 
-        # English: Traverse the tree to find the correct node for highlighting
+        # Traverse the tree to find the correct node for highlighting
         current_node = game
         for _ in range(index + 1):
             next_node = current_node.next()
@@ -1953,9 +1994,9 @@ class AnalysisProgressUI:
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75,
                  current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None,
-                 engine_depth=17):
+                 engine_depth=17, config={}):
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
-
+        self.config = config  # Keep a reference to the config
         self.theme_name=board
         self.master = master
         self.piece_set = piece_set
@@ -1965,7 +2006,8 @@ class ChessAnnotatorApp:
         self.hide_file_load = hide_file_load
         self.is_manual = False
         self.selected_square = None
-        self.move_list_type = "TouchMoveListColor"
+        self.move_list_type = config.get("move_list_type", "PrettyMoveList")
+        #self.move_list_type = "TouchMoveListColor"
         #self.move_list_type = "PrettyMoveList"
         self.highlight_item = None
         self.swap_colours = swap_colours
@@ -2292,10 +2334,10 @@ class ChessAnnotatorApp:
             settings_menu.add_command(label="Modify json-settings", command=lambda: self.show_settings_dialog(),
                                       state=tk.NORMAL)
             settings_menu.add_command(label="Swap Colours", command=lambda: self.swap_colours_func())
-            # English: Add a separator for visual clarity
+            # Add a separator for visual clarity
             settings_menu.add_separator()
 
-            # English: Add the toggle for the move list type
+            # Add the toggle for the move list type
             # We use a label that describes the action or the current state
             settings_menu.add_checkbutton(
                 label="Use Pretty Move List",
@@ -2425,28 +2467,28 @@ class ChessAnnotatorApp:
 
     def toggle_move_list_type(self, force_type=None):
         """
-        English: Swaps between PrettyMoveList and TouchMoveListColor,
+        Swaps between PrettyMoveList and TouchMoveListColor,
         then re-initializes the controller and UI.
         """
         if force_type:
             self.move_list_type = force_type
-        # English: Toggle the setting
+        # Toggle the setting
         if self.move_list_type == "PrettyMoveList":
             self.move_list_type = "TouchMoveListColor"
         else:
             self.move_list_type = "PrettyMoveList"
 
-        # English: Remove the old widget from the screen
+        # Remove the old widget from the screen
         if hasattr(self, 'move_list_widget') and self.move_list_widget.widget:
             self.move_list_widget.widget.destroy()
 
-        # English: Re-initialize the correct controller (using the Strategy Pattern classes)
+        # Re-initialize the correct controller (using the Strategy Pattern classes)
         if self.move_list_type == "TouchMoveListColor":
             self.move_list_widget = LegacyMoveListController(self, self.moves_frame, self._on_move_selected)
         else:
             self.move_list_widget = PrettyMoveListController(self, self.moves_frame, self._on_pretty_move_selected)
 
-        # English: Pack the new widget and refresh the content
+        # Pack the new widget and refresh the content
         self.move_list_widget.widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.move_list_widget.update_view(self.game, self.move_list)
         self.move_list_widget.set_selection(self.current_move_index, self.game)
@@ -3388,13 +3430,13 @@ class ChessAnnotatorApp:
         self.move_list_label.pack(side=tk.LEFT, padx=(5, 0))
 
         # The callback 'self._on_move_selected' will be created in the next step
-        # English: Decide which strategy to use once
+        # Decide which strategy to use once
         if self.move_list_type == "TouchMoveListColor":
             self.move_list_widget = LegacyMoveListController(self, moves_frame, self._on_move_selected)
         else:
             self.move_list_widget = PrettyMoveListController(self, moves_frame, self._on_pretty_move_selected)
 
-        # English: The widget is accessible through the controller for layout
+        # The widget is accessible through the controller for layout
         self.move_list_widget.widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def _on_move_selected(self, index):
@@ -4885,11 +4927,23 @@ if __name__ == "__main__":
     board = args.board if args.board else board1
     IMAGE_DIRECTORY = "Images/piece"
     SQUARE_SIZE = args.square_size if args.square_size else square_size # Size of the squares in pixels
+    # Create a single config dictionary.
+    # Args overwrite preferences if they are provided.
+    config = {
+        "last_pgn_filepath": args.pgn_game or preferences.get("last_pgn_filepath", ""),
+        "engine": args.engine_name or preferences.get("engine", ""),
+        "piece_set": args.piece_set or preferences.get("piece_set", "staunty"),
+        "board": args.board or preferences.get("board", "red"),
+        "square_size": args.square_size or preferences.get("square_size", 80),
+        "engine_depth": preferences.get("engine_depth", 17),
+        "current_game_index": preferences.get("current_game_index", ""),
+        "move_list_type": preferences.get("move_list_type", "PrettyMoveList")  # Default naar de nieuwe list
+    }
     # 2. Initialize the Asset Manager (LOADS IMAGES ONCE)
     # If this fails (e.g., FileNotFoundError), the program stops here.
     root = tk.Tk()
     asset_manager = PieceImageManager1(SQUARE_SIZE, IMAGE_DIRECTORY, piece_set)
-    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board, engine_depth=engine_depth)
+    app = ChessAnnotatorApp(root, pgn_game, engine_name, image_manager = asset_manager, square_size = SQUARE_SIZE-5, current_game_index = current_game_index, piece_set = piece_set, board=board, engine_depth=engine_depth, config=config)
 
     root.mainloop()
 #example call
