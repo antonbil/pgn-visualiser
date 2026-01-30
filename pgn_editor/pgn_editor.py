@@ -847,7 +847,18 @@ class PrettyMoveList(tk.Text):
                 spacing1=0)  # Geen extra ruimte boven de waardering-regel
 
         # Define a move_row tag to control the spacing after the move
-        self.tag_config("move_row", spacing3=0)
+        # English: Create specific figurine tags for each move category
+        # Mainline (Regular)
+        self.tag_config("fig_regular", font=("Consolas", 15, "bold"), foreground="black")
+        # Variants
+        self.tag_config("fig_variant", font=("Consolas", 15, "bold"), foreground="#0074D9")
+        # Subvariants
+        self.tag_config("fig_subvariant", font=("Consolas", 15, "bold"), foreground="#B10DC9")
+
+        # English: Make sure these always stay on top
+        self.tag_raise("fig_regular")
+        self.tag_raise("fig_variant")
+        self.tag_raise("fig_subvariant")
 
         # Hover effect for clickable moves
         self.tag_config("clickable", underline=False)
@@ -862,13 +873,36 @@ class PrettyMoveList(tk.Text):
         self.tag_configure("bg_major", lmargin1=0, lmargin2=0, rmargin=0)
         self.tag_configure("bg_minor", lmargin1=0, lmargin2=0, rmargin=0)
 
+    def _san_to_figurine(self, san, turn):
+        """ English: Replace SAN letters with Unicode chess pieces. """
+        # Define mapping for white and black pieces if you want specific colors,
+        # but usually, a single set of symbols is clearer in text.
+        pieces = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘'
+        }
+
+        # English: We only replace the first character if it's a piece letter
+        #if san and san[0] in pieces:
+        #    return pieces[san[0]] + san[1:]
+        return san
+
+
     def load_pgn(self, game):
         # Parse the PGN game using the python-chess library
         if game:
-            self.node_to_index = {} # Reset de mapping
+            self.node_to_index = {}
             self.config(state="normal")
             self.delete("1.0", tk.END)
+
+            # English: High-priority configuration before we start inserting text
+            # We add 'offset' to help with vertical alignment of larger symbols
+            self.tag_configure("figurine", font=("Consolas", 16, "bold"), offset=0)
+            self.tag_raise("figurine")
+
             self._process_main_line(game)
+
+            # English: Final sweep to ensure the tag is on top of everything
+            self.tag_raise("figurine")
             self.config(state="disabled")
 
     def _process_main_line(self, node):
@@ -975,14 +1009,39 @@ class PrettyMoveList(tk.Text):
         is_minor = False
 
         # English: ONLY check the sets if it's a regular mainline move
+        # English: Logic to separate the piece symbol from the squares/coords
+        pieces = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘'}
+
+        # English: Map the incoming style tag to the corresponding figurine tag
+        fig_tag_map = {
+            "regular": "fig_regular",
+            "variant": "fig_variant",
+            "subvariant": "fig_subvariant"
+        }
+        # Fallback to 'fig_regular' if the tag isn't in our map
+        fig_style = fig_tag_map.get(tag, "fig_regular")
+
+        start_index = self.index(tk.INSERT)
+
         if type_label == "Regulier":
             idx = node.ply() - 1
             is_major = hasattr(self, 'major_set') and idx in self.major_set
             is_minor = hasattr(self, 'minor_set') and idx in self.minor_set
+            #san = san+" " * 200
 
         # 4. Insert the text
-        start_index = self.index(tk.INSERT)
-        self.insert(tk.INSERT, san+" " * 200, tuple(tags))
+        # English: Check if the first character is a piece letter
+        if san and san[0] in pieces:
+            symbol = pieces[san[0]]
+            remainder = san[1:]
+
+            # Insert symbol larger, then the rest normal size
+            # English: We give both the unique_id so the whole thing is clickable
+            self.insert(tk.INSERT, symbol, (unique_id, tag, fig_style))
+            self.insert(tk.INSERT, remainder, (unique_id, tag))
+        else:
+            # English: Pawn moves or O-O
+            self.insert(tk.INSERT, san, (unique_id, tag))
         end_index = self.index(tk.INSERT)
 
         # 5. Apply row background color ONLY for the identified mainline moves
@@ -1152,6 +1211,7 @@ class TouchMoveListColor(tk.Frame):
         """ Records the start of a click/drag. """
         self.drag_start_y = event.y
         self.scrolled_too_far = False
+
 
     def _on_drag_start(self, event):
         """ Capture start and cancel any existing momentum. """
