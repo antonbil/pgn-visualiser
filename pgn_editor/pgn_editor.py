@@ -982,7 +982,7 @@ class PrettyMoveList(tk.Text):
 
         # 4. Insert the text
         start_index = self.index(tk.INSERT)
-        self.insert(tk.INSERT, san, tuple(tags))
+        self.insert(tk.INSERT, san+" " * 200, tuple(tags))
         end_index = self.index(tk.INSERT)
 
         # 5. Apply row background color ONLY for the identified mainline moves
