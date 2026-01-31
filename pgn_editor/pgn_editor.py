@@ -809,6 +809,7 @@ class PrettyMoveList(tk.Text):
         self.select_callback = select_callback
         # Dictionary to map chess nodes to their position in the text
         self.node_to_index = {}
+        self.is_variant = False
         # English: Configure background colors for the entire row
         self.tag_configure("bg_major", background="#f8d7da")  # English: Very light blue
         self.tag_configure("bg_minor", background="#fff3cd")  # English: Very light green
@@ -890,6 +891,8 @@ class PrettyMoveList(tk.Text):
     def load_pgn(self, game):
         # Parse the PGN game using the python-chess library
         if game:
+            if self.is_variant:
+                return
             self.node_to_index = {}
             self.config(state="normal")
             self.delete("1.0", tk.END)
@@ -1090,7 +1093,10 @@ class PrettyMoveList(tk.Text):
 
     def _on_move_click(self, node, type_label):
         # Handle the click and print details as requested
-        print(f"KLIK -> Type: {type_label:15} | Zet: {node.san()}")
+        message = f"KLIK -> Type: {type_label:15} | Zet: {node.san()}"
+        if "Variant" in message:
+            self.is_variant = True
+        print(message)
         self.select_callback(node, type_label)
 
 
@@ -3562,6 +3568,7 @@ class ChessAnnotatorApp:
         else:
             # Hide the button
             self.clear_variation_button.pack_forget()
+            self.move_list_widget.is_variant = False
             # Restore the label
             self.move_list_label.config(text="Moves (Main Line)")
 
