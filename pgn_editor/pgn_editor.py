@@ -865,23 +865,35 @@ class PrettyMoveList(tk.Text):
         self.tag_config("clickable", underline=False)
         self.tag_bind("clickable", "<Enter>", lambda e: self.config(cursor="hand2"))
         self.tag_bind("clickable", "<Leave>", lambda e: self.config(cursor="arrow"))
-        # --- Touch & Swipe Support ---
-        # English: Bind mouse wheel and touchpad swipe (common on Linux/Pi)
+        # English: Specific bindings for touch-scrolling.
+        # We use 'add="+"' only where we don't want to break existing logic.
+        self.bind("<Button-1>", self._on_drag_start, add="+")
+        self.bind("<B1-Motion>", self._on_drag_motion)  # No '+' here to block selection
+        self.bind("<ButtonRelease-1>", self._on_drag_stop, add="+")
+
+        # Linux scroll-wheel/touchpad support
         self.bind("<Button-4>", lambda e: self.yview_scroll(-1, "units"))
         self.bind("<Button-5>", lambda e: self.yview_scroll(1, "units"))
 
-        # English: Bind real touch-drag scrolling
-        self.bind("<Button-1>", self._on_drag_start, add="+")
-        self.bind("<B1-Motion>", self._on_drag_motion, add="+")
-
     def _on_drag_start(self, event):
-        """ English: Record the starting Y position of a touch/click. """
+        # English: Record start position and mark for scanning
+        self.start_y = event.y
+        self.is_dragging = False
         self.scan_mark(event.x, event.y)
+        # English: We don't return "break" here so the click event can still start
 
     def _on_drag_motion(self, event):
-        """ English: Scroll the widget based on the distance moved. """
-        # 'gain' controls the sensitivity. 10 is usually good for fingers.
-        self.scan_dragto(event.x, event.y, gain=10)
+        # English: Calculate movement distance to distinguish between tap and swipe
+        if abs(event.y - self.start_y) > 5:
+            self.is_dragging = True
+            # English: Text.scan_dragto only accepts x and y, no gain argument.
+            self.scan_dragto(event.x, event.y)
+            return "break"  # English: Prevents text selection while swiping
+
+    def _on_drag_stop(self, event):
+        # English: If we were dragging, prevent the 'click' event from firing
+        if getattr(self, 'is_dragging', False):
+            return "break"
 
     def set_highlights(self, major_set, minor_set):
         self.major_set = major_set
