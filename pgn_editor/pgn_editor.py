@@ -3149,7 +3149,7 @@ class ChessAnnotatorApp:
         Opens a dialog to select a PGN file and loads all games from it.
         """
         initial_dir = None
-        directory = None
+        directory = os.getcwd()
         if self.last_filepath is None:
             self.last_filepath = os.getcwd()
         if hasattr(self, 'last_filepath') and self.last_filepath:
