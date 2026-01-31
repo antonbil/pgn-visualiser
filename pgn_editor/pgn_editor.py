@@ -2090,6 +2090,7 @@ class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75,
                  current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None,
                  engine_depth=17, config={}):
+        self.last_filepath = None
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.config = config  # Keep a reference to the config
         self.theme_name=board
@@ -3149,6 +3150,8 @@ class ChessAnnotatorApp:
         """
         initial_dir = None
         directory = None
+        if self.last_filepath is None:
+            self.last_filepath = os.getcwd()
         if hasattr(self, 'last_filepath') and self.last_filepath:
             # Extract the directory from the path
             directory = os.path.dirname(self.last_filepath)
