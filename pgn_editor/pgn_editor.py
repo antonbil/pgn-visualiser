@@ -865,6 +865,23 @@ class PrettyMoveList(tk.Text):
         self.tag_config("clickable", underline=False)
         self.tag_bind("clickable", "<Enter>", lambda e: self.config(cursor="hand2"))
         self.tag_bind("clickable", "<Leave>", lambda e: self.config(cursor="arrow"))
+        # --- Touch & Swipe Support ---
+        # English: Bind mouse wheel and touchpad swipe (common on Linux/Pi)
+        self.bind("<Button-4>", lambda e: self.yview_scroll(-1, "units"))
+        self.bind("<Button-5>", lambda e: self.yview_scroll(1, "units"))
+
+        # English: Bind real touch-drag scrolling
+        self.bind("<Button-1>", self._on_drag_start, add="+")
+        self.bind("<B1-Motion>", self._on_drag_motion, add="+")
+
+    def _on_drag_start(self, event):
+        """ English: Record the starting Y position of a touch/click. """
+        self.scan_mark(event.x, event.y)
+
+    def _on_drag_motion(self, event):
+        """ English: Scroll the widget based on the distance moved. """
+        # 'gain' controls the sensitivity. 10 is usually good for fingers.
+        self.scan_dragto(event.x, event.y, gain=10)
 
     def set_highlights(self, major_set, minor_set):
         self.major_set = major_set
