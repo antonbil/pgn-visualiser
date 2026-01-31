@@ -827,10 +827,10 @@ class PrettyMoveList(tk.Text):
                 borderwidth=1,
                 # We simulate padding by increasing the spacing
                 # around the characters using offset and spacing
-                offset=2)
+                offset=0)
         # Increase general line spacing to prevent the border
         # from touching the moves above or below
-        self.config(spacing1=5, spacing3=5)
+        self.config(spacing1=2, spacing3=2)
 
         # Let's also add a tag for the current line to make it pop even more
         self.tag_config("active_line", background="#e6f2ff") # Light blue glow over the line
@@ -850,11 +850,11 @@ class PrettyMoveList(tk.Text):
         # Define a move_row tag to control the spacing after the move
         # English: Create specific figurine tags for each move category
         # Mainline (Regular)
-        self.tag_config("fig_regular", font=("Consolas", 15, "bold"), foreground="black")
+        self.tag_config("fig_regular", font=("Consolas", 15, "bold"), foreground="black", offset=-1)
         # Variants
-        self.tag_config("fig_variant", font=("Consolas", 15, "bold"), foreground="#0074D9")
+        self.tag_config("fig_variant", font=("Consolas", 15, "bold"), foreground="#0074D9", offset=-1)
         # Subvariants
-        self.tag_config("fig_subvariant", font=("Consolas", 15, "bold"), foreground="#B10DC9")
+        self.tag_config("fig_subvariant", font=("Consolas", 15, "bold"), foreground="#B10DC9", offset=-1)
 
         # English: Make sure these always stay on top
         self.tag_raise("fig_regular")
