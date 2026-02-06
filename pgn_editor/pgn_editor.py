@@ -810,11 +810,11 @@ class PrettyMoveList(tk.Text):
         # Dictionary to map chess nodes to their position in the text
         self.node_to_index = {}
         self.is_variant = False
-        # English: Configure background colors for the entire row
-        self.tag_configure("bg_major", background="#f8d7da")  # English: Very light blue
-        self.tag_configure("bg_minor", background="#fff3cd")  # English: Very light green
+        #  Configure background colors for the entire row
+        self.tag_configure("bg_major", background="#f8d7da")  #  Very light blue
+        self.tag_configure("bg_minor", background="#fff3cd")  #  Very light green
 
-        # English: Ensure they stay below the 'active_move' highlight
+        #  Ensure they stay below the 'active_move' highlight
         self.tag_lower("bg_major")
         self.tag_lower("bg_minor")
 
@@ -848,7 +848,7 @@ class PrettyMoveList(tk.Text):
                 spacing1=0)  # Geen extra ruimte boven de waardering-regel
 
         # Define a move_row tag to control the spacing after the move
-        # English: Create specific figurine tags for each move category
+        #  Create specific figurine tags for each move category
         # Mainline (Regular)
         self.tag_config("fig_regular", font=("Consolas", 15, "bold"), foreground="black", offset=-1)
         # Variants
@@ -856,7 +856,7 @@ class PrettyMoveList(tk.Text):
         # Subvariants
         self.tag_config("fig_subvariant", font=("Consolas", 15, "bold"), foreground="#B10DC9", offset=-1)
 
-        # English: Make sure these always stay on top
+        #  Make sure these always stay on top
         self.tag_raise("fig_regular")
         self.tag_raise("fig_variant")
         self.tag_raise("fig_subvariant")
@@ -865,7 +865,7 @@ class PrettyMoveList(tk.Text):
         self.tag_config("clickable", underline=False)
         self.tag_bind("clickable", "<Enter>", lambda e: self.config(cursor="hand2"))
         self.tag_bind("clickable", "<Leave>", lambda e: self.config(cursor="arrow"))
-        # English: Specific bindings for touch-scrolling.
+        #  Specific bindings for touch-scrolling.
         # We use 'add="+"' only where we don't want to break existing logic.
         self.bind("<Button-1>", self._on_drag_start, add="+")
         self.bind("<B1-Motion>", self._on_drag_motion)  # No '+' here to block selection
@@ -876,42 +876,42 @@ class PrettyMoveList(tk.Text):
         self.bind("<Button-5>", lambda e: self.yview_scroll(1, "units"))
 
     def _on_drag_start(self, event):
-        # English: Record start position and mark for scanning
+        #  Record start position and mark for scanning
         self.start_y = event.y
         self.is_dragging = False
         self.scan_mark(event.x, event.y)
-        # English: We don't return "break" here so the click event can still start
+        #  We don't return "break" here so the click event can still start
 
     def _on_drag_motion(self, event):
-        # English: Calculate movement distance to distinguish between tap and swipe
+        #  Calculate movement distance to distinguish between tap and swipe
         if abs(event.y - self.start_y) > 5:
             self.is_dragging = True
-            # English: Text.scan_dragto only accepts x and y, no gain argument.
+            #  Text.scan_dragto only accepts x and y, no gain argument.
             self.scan_dragto(event.x, event.y)
-            return "break"  # English: Prevents text selection while swiping
+            return "break"  #  Prevents text selection while swiping
 
     def _on_drag_stop(self, event):
-        # English: If we were dragging, prevent the 'click' event from firing
+        #  If we were dragging, prevent the 'click' event from firing
         if getattr(self, 'is_dragging', False):
             return "break"
 
     def set_highlights(self, major_set, minor_set):
         self.major_set = major_set
         self.minor_set = minor_set
-        # English: This ensures the background color extends to the full width
+        #  This ensures the background color extends to the full width
         # In some Tkinter versions, you need to ensure no margins are blocking it.
         self.tag_configure("bg_major", lmargin1=0, lmargin2=0, rmargin=0)
         self.tag_configure("bg_minor", lmargin1=0, lmargin2=0, rmargin=0)
 
     def _san_to_figurine(self, san, turn):
-        """ English: Replace SAN letters with Unicode chess pieces. """
+        """  Replace SAN letters with Unicode chess pieces. """
         # Define mapping for white and black pieces if you want specific colors,
         # but usually, a single set of symbols is clearer in text.
         pieces = {
             'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘'
         }
 
-        # English: We only replace the first character if it's a piece letter
+        #  We only replace the first character if it's a piece letter
         #if san and san[0] in pieces:
         #    return pieces[san[0]] + san[1:]
         return san
@@ -926,14 +926,14 @@ class PrettyMoveList(tk.Text):
             self.config(state="normal")
             self.delete("1.0", tk.END)
 
-            # English: High-priority configuration before we start inserting text
+            #  High-priority configuration before we start inserting text
             # We add 'offset' to help with vertical alignment of larger symbols
             self.tag_configure("figurine", font=("Consolas", 16, "bold"), offset=0)
             self.tag_raise("figurine")
 
             self._process_main_line(game)
 
-            # English: Final sweep to ensure the tag is on top of everything
+            #  Final sweep to ensure the tag is on top of everything
             self.tag_raise("figurine")
             self.config(state="disabled")
 
@@ -1032,19 +1032,19 @@ class PrettyMoveList(tk.Text):
                 next_force = True
 
     def _add_move_node(self, san, tag, type_label, node):
-        """ English: Only apply major/minor colors to regular (mainline) moves. """
+        """  Only apply major/minor colors to regular (mainline) moves. """
         unique_id = f"node_{id(node)}"
         tags = [unique_id, tag]
 
-        # English: Step 1 - Determine if this node should get an analysis background
+        #  Step 1 - Determine if this node should get an analysis background
         is_major = False
         is_minor = False
 
-        # English: ONLY check the sets if it's a regular mainline move
-        # English: Logic to separate the piece symbol from the squares/coords
+        #  ONLY check the sets if it's a regular mainline move
+        #  Logic to separate the piece symbol from the squares/coords
         pieces = {'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘'}
 
-        # English: Map the incoming style tag to the corresponding figurine tag
+        #  Map the incoming style tag to the corresponding figurine tag
         fig_tag_map = {
             "regular": "fig_regular",
             "variant": "fig_variant",
@@ -1062,24 +1062,24 @@ class PrettyMoveList(tk.Text):
             #san = san+" " * 200
 
         # 4. Insert the text
-        # English: Check if the first character is a piece letter
+        #  Check if the first character is a piece letter
         if san and san[0] in pieces:
             symbol = pieces[san[0]]
             remainder = san[1:]
 
             # Insert symbol larger, then the rest normal size
-            # English: We give both the unique_id so the whole thing is clickable
+            #  We give both the unique_id so the whole thing is clickable
             self.insert(tk.INSERT, symbol, (unique_id, tag, fig_style))
             self.insert(tk.INSERT, remainder, (unique_id, tag))
         else:
-            # English: Pawn moves or O-O
+            #  Pawn moves or O-O
             self.insert(tk.INSERT, san, (unique_id, tag))
         end_index = self.index(tk.INSERT)
 
         # 5. Apply row background color ONLY for the identified mainline moves
         line_num = start_index.split('.')[0]
         if is_major:
-            # English: Adding '+ 1 chars' to '.end' includes the newline,
+            #  Adding '+ 1 chars' to '.end' includes the newline,
             # which colors the entire width of the widget.
             self.tag_add("bg_major", f"{line_num}.0", f"{line_num}.end + 1 chars")
         elif is_minor:
@@ -1530,7 +1530,7 @@ class PrettyMoveListController(MoveListController):
 
     def update_view(self, game, move_list):
         # The tree widget handles everything via the game object
-        # English: We pass the sets to the widget so it knows which moves to color
+        #  We pass the sets to the widget so it knows which moves to color
         self.widget.set_highlights(self.app.top_5_major_set, self.app.top_5_minor_set)
         self.widget.load_pgn(game)
 
@@ -2086,11 +2086,206 @@ class AnalysisProgressUI:
         self.window.grab_release()
         self.window.destroy()
 
+
+class MergeSettingsDialog(tk.Toplevel):
+    def __init__(self, parent):
+        """
+        Custom modal dialog to gather all merge and filter criteria in one place.
+        Includes options for draw exclusion, Elo thresholds, and comment merging.
+        """
+        super().__init__(parent)
+        self.title("Merge & Filter Settings")
+        self.result = None
+        self.geometry("380x340")  #  Slightly taller to accommodate new options
+        self.resizable(False, False)
+
+        #  Variables for Filter criteria
+        self.include_draws = tk.BooleanVar(value=True)
+        self.use_elo_filter = tk.BooleanVar(value=False)
+        self.min_elo = tk.StringVar(value="2000")
+
+        #  Variable for Duplicate handling (The new merge comments option)
+        self.merge_comments = tk.BooleanVar(value=True)
+
+        # --- Section: Filters ---
+        tk.Label(self, text="Step 1: Filter Criteria", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
+
+        tk.Checkbutton(self, text="Include Draw games (1/2-1/2)",
+                       variable=self.include_draws).pack(anchor=tk.W, padx=40)
+
+        tk.Checkbutton(self, text="Enable Minimum Elo Filter",
+                       variable=self.use_elo_filter).pack(anchor=tk.W, padx=40)
+
+        elo_frame = tk.Frame(self)
+        elo_frame.pack(fill=tk.X, padx=65, pady=5)
+        tk.Label(elo_frame, text="Min Elo:").pack(side=tk.LEFT)
+        tk.Entry(elo_frame, textvariable=self.min_elo, width=8).pack(side=tk.LEFT, padx=10)
+
+        #  Visual separator
+        tk.Frame(self, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, padx=20, pady=15)
+
+        # --- Section: Duplicate Handling ---
+        tk.Label(self, text="Step 2: Duplicate Handling", font=('Arial', 10, 'bold')).pack(pady=(0, 5))
+
+        tk.Checkbutton(self,
+                       text="Merge comments into existing games if duplicate",
+                       variable=self.merge_comments,
+                       wraplength=280, justify=tk.LEFT).pack(anchor=tk.W, padx=40)
+
+        # --- Action Buttons ---
+        btn_frame = tk.Frame(self)
+        btn_frame.pack(side=tk.BOTTOM, pady=20)
+
+        tk.Button(btn_frame, text="Proceed to File", width=15, bg="#e8f5e9",
+                  command=self._on_ok).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Cancel", width=12,
+                  command=self.destroy).pack(side=tk.LEFT, padx=10)
+
+        self.transient(parent)
+        self.grab_set()
+        self.wait_window()
+
+    def _on_ok(self):
+        """ Validates Elo input and returns the full settings dictionary. """
+        try:
+            elo_val = int(self.min_elo.get()) if self.min_elo.get().strip() else 0
+        except ValueError:
+            messagebox.showwarning("Input Error", "Elo threshold must be a number.")
+            return
+
+        self.result = {
+            "draws": self.include_draws.get(),
+            "use_elo": self.use_elo_filter.get(),
+            "min_elo": elo_val,
+            "merge_comments": self.merge_comments.get()  #  Added this new key
+        }
+        self.destroy()
+
+
+class OpeningAnalyzer:
+    # English: 3 moves = 6 plies. 10 moves = 20 plies.
+    OPENING_LIMIT_PLY = 3
+    ANALYSIS_DEPTH_PLY = 20
+
+    def __init__(self, current_game, last_filepath):
+        self.current_game = current_game
+        self.last_filepath = last_filepath
+        self.target_dir = os.path.dirname(os.path.abspath(last_filepath))
+        self.output_path = "opening-analysis.pgn"
+
+    def run(self):
+        """
+        English: Entry point. Processes the base game and merges variations from local PGNs.
+        """
+        # 1. English: Build the backbone (first 10 moves of current game)
+        analysis_game = self._prepare_base_game()
+        if not analysis_game:
+            print("Error: Current game too short for 6-ply analysis.")
+            return
+
+        # 2. English: Get the exact move sequence for filtering (plies 1-6)
+        filter_moves = [node.san() for node in self.current_game.mainline()][1:self.OPENING_LIMIT_PLY + 1]
+        #print("filter_moves", filter_moves)
+
+        # 3. English: Scan directory
+        for filename in os.listdir(self.target_dir):
+            if filename.endswith(".pgn") and filename != self.output_path:
+                self._scan_pgn_file(filename, analysis_game, filter_moves)
+
+        # 4. English: Final Write
+        with open(self.output_path, "w", encoding="utf-8") as f:
+            f.write(str(analysis_game) + "\n")
+
+        print(f"Opening analysis exported to {self.output_path}")
+
+    def _prepare_base_game(self):
+        """
+        English: Copies the first 10 moves of the current game into a new PGN object.
+        """
+        new_game = chess.pgn.Game()
+        new_game.headers["Event"] = "Opening Analysis"
+        new_game.headers["Site"] = "Local Database"
+
+        main_moves = list(self.current_game.mainline_moves())
+        if len(main_moves) < (self.OPENING_LIMIT_PLY // 2):
+            return None
+
+        node = new_game
+        # English: Build the main line up to 10 moves (20 plies)
+        for move in main_moves[:self.ANALYSIS_DEPTH_PLY // 2]:
+            node = node.add_main_variation(move)
+        return new_game
+
+    def _scan_pgn_file(self, filename, analysis_game, filter_moves):
+        """
+        English: Iterates through games in a file and filters by the 6-ply opening.
+        """
+        path = os.path.join(self.target_dir, filename)
+        for enc in ['utf-8-sig', 'latin-1']:
+            try:
+                print("analyse:", path)
+                with open(path, "r", encoding=enc) as pgn_in:
+                    while True:
+                        game = chess.pgn.read_game(pgn_in)
+                        if game is None: break
+
+                        # English: Extract first 6 plies for comparison
+                        game_opening = [n.san() for n in game.mainline()][1:self.OPENING_LIMIT_PLY + 1]
+                        #print("game_opening", game_opening)
+                        if len(game_opening) == self.OPENING_LIMIT_PLY and game_opening == filter_moves:
+                            print("found game")
+                            self._merge_into_tree(analysis_game, game)
+                break
+            except UnicodeDecodeError:
+                continue
+
+    def _merge_into_tree(self, analysis_game, source_game):
+        """
+        English: Navigates to ply 6, then merges plies 7-20 into the existing tree.
+        """
+        target = analysis_game
+        source = source_game
+
+        # Step A: English: Navigate both to the end of the 6-ply opening
+        for _ in range(self.OPENING_LIMIT_PLY):
+            if not source.variations: return
+            move = source.variation(0).move
+            source = source.variation(0)
+            # English: Follow existing move in target or create if missing
+            target = self._get_or_add_node(target, move)
+
+        # Step B: English: Merge plies 7 to 20
+        has_moved = False
+        for ply in range(self.OPENING_LIMIT_PLY + 1, self.ANALYSIS_DEPTH_PLY + 1):
+            if not source.variations: break
+
+            move = source.variation(0).move
+            source = source.variation(0)
+            target = self._get_or_add_node(target, move)
+            has_moved = True
+
+        # Step C: English: Annotate the leaf node with the source game info
+        if has_moved:
+            label = f"{source_game.headers.get('White', '?')} - {source_game.headers.get('Black', '?')}"
+            if not target.comment:
+                target.comment = label
+            elif label not in target.comment:
+                target.comment += f" | {label}"
+
+    def _get_or_add_node(self, parent_node, move):
+        """
+        English: Helper to merge: returns existing node for a move, or creates one.
+        """
+        for var in parent_node.variations:
+            if var.move == move:
+                return var
+        return parent_node.add_variation(move)
+
 class ChessAnnotatorApp:
     def __init__(self, master, pgn_game, engine_name, hide_file_load = False, image_manager = None, square_size = 75,
                  current_game_index = -1, piece_set = "", board="Standard", swap_colours = False, call_back = None,
                  engine_depth=17, config={}):
-        self.last_filepath = None
+        self.last_filepath = pgn_game
         print("parameters:",pgn_game, engine_name, hide_file_load, image_manager, square_size, current_game_index, piece_set, board)
         self.config = config  # Keep a reference to the config
         self.theme_name=board
@@ -2193,6 +2388,17 @@ class ChessAnnotatorApp:
             # Initialize UI status with the sample game
             self._load_game_from_content(self.sample_pgn)
         self._setup_canvas_bindings()
+
+    def opening_analysis(self):
+        """
+        Bridge method to trigger the OpeningAnalyzer from the main app.
+        """
+        if not self.game or not self.last_filepath:
+            print("Analysis failed: No game loaded or file path unknown.")
+            return
+
+        # English: One-liner to initialize and run the analyzer
+        OpeningAnalyzer(self.game, self.last_filepath).run()
 
     def set_filepath(self, pgn_game):
         self.last_filepath = pgn_game
@@ -2396,6 +2602,7 @@ class ChessAnnotatorApp:
         game_menu.add_command(label="Analyse Game", command=self.handle_analyze_button)
         game_menu.add_command(label="Remove Analysis", command=self._clear_variations_func)
         game_menu.add_command(label="Classify Opening", command=self.handle_classify_opening_button)
+        game_menu.add_command(label="Opening Analysis", command=self.opening_analysis)
         db_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="DB", menu=db_menu)
         # Create a separate menu for the sort options
@@ -2821,17 +3028,19 @@ class ChessAnnotatorApp:
 
     def merge_pgn_file(self):
         """
-        Merges games from an external PGN file into the current list, 
-        matching by players and date, then merging comments for duplicates.
+        Merges games from an external PGN file into the current list.
+        Supports filtering by result (draws) and Elo rating before processing.
+        Matches duplicates by player surnames and date to merge comments.
         """
+        #  Ensure the game list exists
         if not hasattr(self, 'all_games'):
             self.all_games = []
 
-        initial_dir = os.path.dirname(self.last_filepath) if hasattr(self, 'last_filepath') else os.getcwd()
 
-        # Present a dialog to choose the png-file
+            #  2. File Selection Dialog
+        initial_dir = os.path.dirname(self.last_filepath) if hasattr(self, 'last_filepath') else os.getcwd()
         file_to_merge = filedialog.askopenfilename(
-            title="Load pgn",
+            title="Select PGN File to Merge",
             initialdir=initial_dir,
             filetypes=[("PGN files", "*.pgn"), ("All files", "*.*")]
         )
@@ -2839,50 +3048,87 @@ class ChessAnnotatorApp:
         if not file_to_merge:
             return
 
-        # Ask whether to merge comments for duplicates
-        # Using a simple Yes/No dialog
-        do_merge_comments = messagebox.askyesno(
-            "Merge Comments",
-            "Do you want to merge comments for duplicate games?"
-        )
+        #  1. Launch the settings dialog to determine filter criteria
+        settings = MergeSettingsDialog(self.master)
+        if not settings.result:
+            # User cancelled the dialog, abort the merge process
+            return
 
         duplicates_count = 0
         new_games_count = 0
+        skipped_count = 0
 
         try:
+            #  Open the file with 'replace' error handling to avoid crashes on corrupt PGNs
             with open(file_to_merge, 'r', encoding='utf-8', errors='replace') as f:
                 while True:
                     new_game = chess.pgn.read_game(f)
                     if new_game is None:
+                        # End of file reached
                         break
 
-                    # Extract keys for comparison
+                    # --- START OF FILTER LOGIC ---
+
+                    # A. Result Filter: Skip draws if the user disabled them
+                    # PGN results are typically "1-0", "0-1", or "1/2-1/2"
+                    game_result = new_game.headers.get("Result", "*")
+                    if not settings.result["draws"] and game_result in ["1/2-1/2", "draw"]:
+                        skipped_count += 1
+                        continue
+
+                    # B. Elo Filter: Skip games where both players are below the threshold
+                    if settings.result["use_elo"]:
+                        #  Clean Elo strings (remove '?' often used for estimates)
+                        w_elo_str = new_game.headers.get("WhiteElo", "0").replace("?", "")
+                        b_elo_str = new_game.headers.get("BlackElo", "0").replace("?", "")
+
+                        #  Convert to int, fallback to 0 if parsing fails
+                        w_elo = int(w_elo_str) if w_elo_str.isdigit() else 0
+                        b_elo = int(b_elo_str) if b_elo_str.isdigit() else 0
+
+                        #  If both players are weaker than the min_elo, skip the game
+                        if w_elo < settings.result["min_elo"] and b_elo < settings.result["min_elo"]:
+                            skipped_count += 1
+                            continue
+
+                    # --- END OF FILTER LOGIC ---
+
+                    #  Normalize names and date for duplicate detection
                     w_new = self._get_surname(new_game.headers.get("White", ""))
                     b_new = self._get_surname(new_game.headers.get("Black", ""))
                     d_new = new_game.headers.get("Date", "").strip()
 
-                    # Identify a match using normalized surnames
+                    #  Check if this game already exists in the current session
                     match = next((g for g in self.all_games if
                                   self._get_surname(g.headers.get("White", "")) == w_new and
                                   self._get_surname(g.headers.get("Black", "")) == b_new and
                                   g.headers.get("Date", "").strip() == d_new), None)
 
                     if match:
-                        # If duplicate, copy comments from the new game to the existing one
-                        if do_merge_comments:
+                        #  Duplicate found - perform comment merge if requested
+                        if settings.result["merge_comments"]:
                             self._merge_game_comments(match, new_game)
                         duplicates_count += 1
                     else:
-                        # New game: add to the list
+                        #  New unique game - add to collection
                         self.all_games.append(new_game)
                         new_games_count += 1
+
+                    #  Mark session as unsaved
                     self.is_dirty = True
 
-            messagebox.showinfo("Done",
-                                f"Merge complete!\nAdded: {new_games_count}\nMerged comments for: {duplicates_count} duplicates.")
+            #  Final status update to the user
+            summary_msg = (
+                f"Merge process finished successfully!\n\n"
+                f"New games added: {new_games_count}\n"
+                f"Duplicate games handled: {duplicates_count}\n"
+                f"Games filtered out: {skipped_count}"
+            )
+            messagebox.showinfo("Merge Complete", summary_msg)
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to merge PGN: {e}")
+            #  General error catching for file I/O or PGN parsing issues
+            messagebox.showerror("Merge Error", f"An error occurred while reading the PGN file:\n{e}")
 
     def _merge_game_comments(self, existing_game, new_game):
         """
